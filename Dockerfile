@@ -20,7 +20,7 @@ USER coder
 WORKDIR /home/coder
 
 # Configuración de code-server
-ENV PASSWORD=tu_password_segura
+ENV PASSWORD=mO*061119
 EXPOSE 8080
 
 CMD ["/usr/local/code-server/bin/code-server", "--bind-addr", "0.0.0.0:8080", "--auth", "password"]
