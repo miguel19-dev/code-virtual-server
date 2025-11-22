@@ -3,8 +3,15 @@ services:
     name: code-server
     env: docker
     plan: free
+    region: oregon
     dockerfilePath: ./Dockerfile
+    dockerCommand: "/home/coder/start.sh"
     autoDeploy: true
+    healthCheckPath: /
     envVars:
       - key: PASSWORD
-        value: mO*061119
+        value: "mO*061119"
+    disk:
+      name: code-server-data
+      mountPath: /home/coder
+      sizeGB: 1
