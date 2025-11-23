@@ -57,11 +57,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     try:
         if choice == 'video':
+            # OPCIONES MÁS FLEXIBLES PARA VIDEO
             ydl_opts = {
-                'format': 'best[height<=720]',
+                'format': 'best[height<=720]/best[height<=480]/best',
                 'outtmpl': 'temp_video.%(ext)s',
             }
         else:
+            # OPCIONES PARA AUDIO
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': 'temp_audio.%(ext)s',
@@ -86,7 +88,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await context.bot.send_video(
                     chat_id=query.message.chat_id,
                     video=video_file,
-                    caption="🎥 *Video descargado en 720p*",
+                    caption="🎥 *Video descargado*",
                     parse_mode='Markdown'
                 )
         else:
@@ -107,7 +109,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await query.edit_message_text("✅ *¡Descarga completada!*", parse_mode='Markdown')
         
     except Exception as e:
-        error_msg = f"❌ *Error:* {str(e)}"
+        error_msg = f"❌ *Error al descargar:*\n\n{str(e)}\n\n💡 *Posibles soluciones:*\n• El video puede ser privado\n• El enlace puede ser incorrecto\n• La plataforma no está soportada"
         await query.edit_message_text(error_msg, parse_mode='Markdown')
 
 async def invalid_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -120,7 +122,7 @@ def main():
     print("🤖 Iniciando bot de Telegram...")
     
     # Verificar que el token no sea el placeholder
-    if TOKEN == "TU_TOKEN_AQUI":
+    if TOKEN == "8304674517:AAHG-pU2R7ryf7gv0t1h2krWsllgCoU3sls":
         print("❌ ERROR: Debes reemplazar 'TU_TOKEN_AQUI' con tu token real")
         print("💡 Obtén tu token de @BotFather en Telegram")
         return
