@@ -3,3 +3,4 @@ requests
 urllib3
 gunicorn
 yt-dlp
+python-telegram-bot
