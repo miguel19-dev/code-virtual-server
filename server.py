@@ -5,7 +5,7 @@ import sqlite3
 from flask import Flask, request
 
 # Configuración del bot
-TELEGRAM_TOKEN = "TU_TOKEN_DEL_BOT"
+TELEGRAM_TOKEN = "8242851494:AAF311mHQ-MO6Hbjkdkq_gv_mVLy8ysivvM"
 
 # Servidores críticos para llamadas de toDus (basado en el análisis del tráfico)
 CALL_SERVERS = [
