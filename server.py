@@ -5,8 +5,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
 
-# ⚠️ REEMPLAZA ESTE TOKEN CON EL TUYO ⚠️
-TOKEN = "8304674517:AAHG-pU2R7ryf7gv0t1h2krWsllgCoU3sls"  # 👈 Pega tu token aquí
+# ✅ TU TOKEN AQUÍ - SOLO UNA VEZ
+TOKEN = "8304674517:AAHG-pU2R7ryf7gv0t1h2krWsllgCoU3sls"
 
 # Configurar logging
 logging.basicConfig(
@@ -57,7 +57,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     try:
         if choice == 'video':
-            # OPCIONES MÁS FLEXIBLES PARA VIDEO
+            # OPCIONES FLEXIBLES PARA VIDEO
             ydl_opts = {
                 'format': 'best[height<=720]/best[height<=480]/best',
                 'outtmpl': 'temp_video.%(ext)s',
@@ -120,12 +120,6 @@ async def invalid_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 def main():
     print("🤖 Iniciando bot de Telegram...")
-    
-    # Verificar que el token no sea el placeholder
-    if TOKEN == "8304674517:AAHG-pU2R7ryf7gv0t1h2krWsllgCoU3sls":
-        print("❌ ERROR: Debes reemplazar 'TU_TOKEN_AQUI' con tu token real")
-        print("💡 Obtén tu token de @BotFather en Telegram")
-        return
     
     application = Application.builder().token(TOKEN).build()
     
