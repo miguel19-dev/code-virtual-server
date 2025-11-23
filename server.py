@@ -3,15 +3,20 @@ import threading
 import requests
 import sqlite3
 from flask import Flask, request
+import os
 
-# Configuración del bot
+# Configuración del bot - REEMPLAZA CON TU TOKEN REAL
 TELEGRAM_TOKEN = "8242851494:AAF311mHQ-MO6Hbjkdkq_gv_mVLy8ysivvM"
 
-# Servidores críticos para llamadas de toDus (basado en el análisis del tráfico)
+# Obtener URL del servicio de Render
+RENDER_URL = os.getenv('RENDER_EXTERNAL_URL', 'https://tdusllamadas.onrender.com')
+WEBHOOK_URL = f"{RENDER_URL}/{TELEGRAM_TOKEN}"
+
+# Servidores críticos para llamadas de toDus
 CALL_SERVERS = [
-    {"ip": "152.207.206.92", "port": 3478, "proto": "STUN"},  # Servicio STUN principal
-    {"ip": "152.207.206.86", "port": 5443, "proto": "TLS"},   # Canal de comunicación
-    {"ip": "152.207.206.92", "port": 60374, "proto": "STUN"}  # Puerto P2P (debe responder)
+    {"ip": "152.207.206.92", "port": 3478, "proto": "STUN"},
+    {"ip": "152.207.206.86", "port": 5443, "proto": "TLS"},
+    {"ip": "152.207.206.92", "port": 60374, "proto": "STUN"}
 ]
 
 # Inicializar base de datos
@@ -49,36 +54,43 @@ def get_users_auto_enabled():
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
-        requests.post(url, data={
+        response = requests.post(url, data={
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML"
         })
+        print(f"Mensaje enviado a {chat_id}: {response.status_code}")
     except Exception as e:
         print(f"Error enviando mensaje: {e}")
 
-# Función mejorada para analizar específicamente el tráfico de llamadas
+def setup_webhook():
+    """Configurar el webhook en Telegram"""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setWebhook"
+    data = {"url": WEBHOOK_URL}
+    
+    try:
+        response = requests.post(url, data=data)
+        print(f"Webhook configurado: {response.status_code}")
+        print(f"Respuesta: {response.text}")
+    except Exception as e:
+        print(f"Error configurando webhook: {e}")
+
 def check_todus_calls():
-    """
-    Analiza específicamente los servidores críticos para llamadas
-    Basado en el análisis del tráfico STUN y TLS
-    """
+    """Verifica el estado de los servidores de llamadas"""
     results = {
-        "stun_main": False,    # STUN principal (3478)
-        "communication": False, # Canal TLS (5443) 
-        "p2p_connectivity": False, # Conectividad P2P (60374)
+        "stun_main": False,
+        "communication": False,
+        "p2p_connectivity": False,
         "details": []
     }
     
     for server in CALL_SERVERS:
         try:
             if server["proto"] == "STUN":
-                # Para STUN, intentamos conexión UDP (simplificado)
-                # En producción, usarías una librería STUN real
+                # Para STUN usamos un puerto común
                 response = requests.get(f"http://{server['ip']}:{server['port']}", 
                                       timeout=3, verify=False)
-                status = response.status_code in [200, 400, 500]  # Cualquier respuesta indica servidor activo
-                
+                status = response.status_code in [200, 400, 500]
             else:  # TLS
                 response = requests.get(f"https://{server['ip']}:{server['port']}", 
                                       timeout=5, verify=False)
@@ -91,7 +103,6 @@ def check_todus_calls():
                 "response_time": response.elapsed.total_seconds() if status else None
             })
             
-            # Actualizar estados específicos
             if server["port"] == 3478 and status:
                 results["stun_main"] = True
             elif server["port"] == 5443 and status:
@@ -104,17 +115,17 @@ def check_todus_calls():
                 "server": f"{server['ip']}:{server['port']}",
                 "protocol": server["proto"],
                 "status": "❌ Error",
-                "error": str(e)
+                "error": str(e)[:50]  # Limitar longitud del error
             })
     
-    # Determinar estado general de llamadas
+    # Determinar estado general
     if results["stun_main"] and results["communication"]:
         if results["p2p_connectivity"]:
-            return "✅ OPTIMO", results  # Todo funciona perfectamente
+            return "✅ OPTIMO", results
         else:
-            return "⚠️ LIMITADO", results  # Llamadas con posibles problemas P2P
+            return "⚠️ LIMITADO", results
     else:
-        return "❌ CRITICO", results  # Llamadas no funcionan
+        return "❌ CRITICO", results
 
 def get_detailed_call_status(status, results):
     """Genera mensaje detallado del estado de llamadas"""
@@ -146,76 +157,86 @@ def monitor():
     while True:
         try:
             status, detailed_results = check_todus_calls()
+            print(f"Monitor: Estado {status}")
             
             for chat_id, last_status in get_users_auto_enabled():
-                if status != last_status:  # Solo notifica si hay cambio
+                if status != last_status:
                     message = get_detailed_call_status(status, detailed_results)
                     send_message(chat_id, message)
                     update_last_status(chat_id, status)
+                    print(f"Notificación enviada a {chat_id}")
                     
         except Exception as e:
             print(f"Error en monitor: {e}")
             
-        time.sleep(60)  # Verificar cada minuto
+        time.sleep(60)
 
 # Flask para recibir mensajes
 app = Flask(__name__)
 
-@app.route(f"/{TELEGRAM_TOKEN}", methods=["POST"])
+@app.route('/')
+def home():
+    return "🤖 Bot de Llamadas toDus funcionando ✅"
+
+@app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
-    data = request.json
-    chat_id = data["message"]["chat"]["id"]
-    text = data["message"]["text"]
+    try:
+        data = request.json
+        print(f"Mensaje recibido: {data}")
+        
+        if 'message' not in data:
+            return "ok"
+            
+        chat_id = data["message"]["chat"]["id"]
+        text = data["message"]["text"]
 
-    if text == "/start":
-        add_user(chat_id)
-        welcome_text = (
-            "🔔 <b>Monitor de Llamadas toDus</b> ✅\n\n"
-            "Sistema especializado en analizar el tráfico REAL de llamadas\n\n"
-            "📖 <b>Comandos disponibles:</b>\n"
-            "/status - Estado detallado de llamadas\n"
-            "/auto - Notificaciones automáticas\n"
-            "/stop - Desactivar notificaciones\n"
-            "/unsubscribe - Cancelar suscripción\n"
-            "/help - Menú de ayuda\n\n"
-            "🔍 <i>Monitorizando servidores críticos de llamadas</i>"
-        )
-        send_message(chat_id, welcome_text)
+        if text == "/start":
+            add_user(chat_id)
+            welcome_text = (
+                "🔔 <b>Monitor de Llamadas toDus</b> ✅\n\n"
+                "Sistema especializado en analizar el tráfico REAL de llamadas\n\n"
+                "📖 <b>Comandos disponibles:</b>\n"
+                "/status - Estado detallado de llamadas\n"
+                "/auto - Notificaciones automáticas\n"
+                "/stop - Desactivar notificaciones\n"
+                "/unsubscribe - Cancelar suscripción\n"
+                "/help - Menú de ayuda"
+            )
+            send_message(chat_id, welcome_text)
 
-    elif text == "/status":
-        status, detailed_results = check_todus_calls()
-        message = get_detailed_call_status(status, detailed_results)
-        send_message(chat_id, message)
-        update_last_status(chat_id, status)
+        elif text == "/status":
+            status, detailed_results = check_todus_calls()
+            message = get_detailed_call_status(status, detailed_results)
+            send_message(chat_id, message)
+            update_last_status(chat_id, status)
 
-    elif text == "/auto":
-        set_auto_mode(chat_id, 1)
-        send_message(chat_id, "🔄 <b>Modo automático ACTIVADO</b>\nRecibirás alertas cuando cambie el estado de las llamadas.")
+        elif text == "/auto":
+            set_auto_mode(chat_id, 1)
+            send_message(chat_id, "🔄 <b>Modo automático ACTIVADO</b>")
 
-    elif text == "/stop":
-        set_auto_mode(chat_id, 0)
-        send_message(chat_id, "⏹️ <b>Modo automático DESACTIVADO</b>\nNo recibirás más notificaciones automáticas.")
+        elif text == "/stop":
+            set_auto_mode(chat_id, 0)
+            send_message(chat_id, "⏹️ <b>Modo automático DESACTIVADO</b>")
 
-    elif text == "/unsubscribe":
-        delete_user(chat_id)
-        send_message(chat_id, "❌ <b>Suscripción CANCELADA</b>\nTus datos han sido eliminados.")
+        elif text == "/unsubscribe":
+            delete_user(chat_id)
+            send_message(chat_id, "❌ <b>Suscripción CANCELADA</b>")
 
-    elif text == "/help":
-        help_text = (
-            "📖 <b>Monitor de Llamadas toDus</b>\n\n"
-            "<b>Comandos:</b>\n"
-            "/start - Registrarse en el sistema\n"
-            "/status - Estado detallado de llamadas\n"
-            "/auto - Notificaciones automáticas\n"
-            "/stop - Desactivar notificaciones\n"
-            "/unsubscribe - Cancelar suscripción\n"
-            "/help - Este menú\n\n"
-            "🌐 <b>Servidores monitorizados:</b>\n"
-            "• 152.207.206.92:3478 (STUN Principal)\n"
-            "• 152.207.206.86:5443 (Comunicación)\n"
-            "• 152.207.206.92:60374 (Conexiones P2P)"
-        )
-        send_message(chat_id, help_text)
+        elif text == "/help":
+            help_text = (
+                "📖 <b>Monitor de Llamadas toDus</b>\n\n"
+                "<b>Comandos:</b>\n"
+                "/start - Registrarse\n"
+                "/status - Estado de llamadas\n"
+                "/auto - Notificaciones automáticas\n"
+                "/stop - Desactivar notificaciones\n"
+                "/unsubscribe - Cancelar\n"
+                "/help - Este menú"
+            )
+            send_message(chat_id, help_text)
+
+    except Exception as e:
+        print(f"Error en webhook: {e}")
 
     return "ok"
 
@@ -225,6 +246,15 @@ if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
     print("Iniciando monitor especializado de llamadas toDus...")
+    print(f"Webhook URL: {WEBHOOK_URL}")
+    
+    # Configurar webhook al iniciar
+    setup_webhook()
+    
+    # Hilo para monitor
     t = threading.Thread(target=monitor, daemon=True)
     t.start()
-    app.run(host='0.0.0.0', port=5000)
+    
+    # Obtener puerto de Render
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
