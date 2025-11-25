@@ -30,8 +30,8 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     
     keyboard = [
         [
-            InlineKeyboardButton("🎥 Video (720p)", callback_data='video'),
-            InlineKeyboardButton("🎵 Audio MP3", callback_data='audio'),
+            InlineKeyboardButton("🎥 Video", callback_data='video'),
+            InlineKeyboardButton("🎵 Audio", callback_data='audio'),
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
