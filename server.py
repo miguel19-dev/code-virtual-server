@@ -14,6 +14,9 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+# Configuración de cookies
+COOKIES_FILE = "cookies.txt"
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = (
         "🤖 *¡Bienvenido al Bot Descargador!*\n\n"
@@ -27,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     url = update.message.text
     context.user_data['url'] = url
-    
+
     keyboard = [
         [
             InlineKeyboardButton("🎥 Video", callback_data='video'),
@@ -35,7 +38,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     await update.message.reply_text(
         "🔗 *Enlace recibido*\n¿Qué quieres descargar?",
         reply_markup=reply_markup,
@@ -45,44 +48,54 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    
+
     choice = query.data
     url = context.user_data.get('url')
-    
+
     if not url:
         await query.edit_message_text("❌ Error: No se encontró el enlace.")
         return
-    
+
     await query.edit_message_text("⏳ *Descargando...* Esto puede tomar unos segundos.", parse_mode='Markdown')
-    
+
     try:
+        # Configuración base con cookies
+        base_ydl_opts = {
+            'cookiefile': COOKIES_FILE,
+            'outtmpl': 'temp_%(id)s.%(ext)s',
+            'quiet': True,
+            'no_warnings': False,
+        }
+
         if choice == 'video':
-            # OPCIONES FLEXIBLES PARA VIDEO
+            # OPCIONES FLEXIBLES PARA VIDEO CON COOKIES
             ydl_opts = {
-                'format': 'best[height<=720]/best[height<=480]/best',
-                'outtmpl': 'temp_video.%(ext)s',
+                **base_ydl_opts,
+                'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
+                'merge_output_format': 'mp4',
             }
         else:
-            # OPCIONES PARA AUDIO
+            # OPCIONES PARA AUDIO CON COOKIES
             ydl_opts = {
+                **base_ydl_opts,
                 'format': 'bestaudio/best',
-                'outtmpl': 'temp_audio.%(ext)s',
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }],
             }
-        
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            
+
             if choice == 'audio':
-                filename = 'temp_audio.mp3'
-        
+                # Para audio, cambiamos la extensión a mp3
+                filename = os.path.splitext(filename)[0] + '.mp3'
+
         await query.edit_message_text("📤 *Enviando archivo...*", parse_mode='Markdown')
-        
+
         if choice == 'video':
             with open(filename, 'rb') as video_file:
                 await context.bot.send_video(
@@ -99,17 +112,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     caption="🎵 *Audio descargado en MP3*",
                     parse_mode='Markdown'
                 )
-        
-        # Limpiar archivo
+
+        # Limpiar archivo temporal
         try:
             os.remove(filename)
-        except:
-            pass
-            
+        except Exception as e:
+            logging.warning(f"No se pudo eliminar el archivo temporal: {e}")
+
         await query.edit_message_text("✅ *¡Descarga completada!*", parse_mode='Markdown')
-        
+
+    except yt_dlp.utils.DownloadError as e:
+        error_msg = f"❌ *Error de descarga:*\n\n{str(e)}\n\n💡 *Posibles soluciones:*\n• El video puede ser privado/eliminado\n• Problemas con las cookies de autenticación\n• Restricciones geográficas"
+        await query.edit_message_text(error_msg, parse_mode='Markdown')
     except Exception as e:
-        error_msg = f"❌ *Error al descargar:*\n\n{str(e)}\n\n💡 *Posibles soluciones:*\n• El video puede ser privado\n• El enlace puede ser incorrecto\n• La plataforma no está soportada"
+        error_msg = f"❌ *Error inesperado:*\n\n{str(e)}"
         await query.edit_message_text(error_msg, parse_mode='Markdown')
 
 async def invalid_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -118,17 +134,39 @@ async def invalid_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         parse_mode='Markdown'
     )
 
+def check_cookies_file():
+    """Verifica que el archivo de cookies exista y tenga contenido"""
+    if not os.path.exists(COOKIES_FILE):
+        logging.error(f"❌ Archivo de cookies '{COOKIES_FILE}' no encontrado")
+        return False
+    
+    with open(COOKIES_FILE, 'r', encoding='utf-8') as f:
+        content = f.read().strip()
+    
+    if not content:
+        logging.error(f"❌ Archivo de cookies '{COOKIES_FILE}' está vacío")
+        return False
+    
+    logging.info(f"✅ Archivo de cookies cargado correctamente")
+    return True
+
 def main():
     print("🤖 Iniciando bot de Telegram...")
     
+    # Verificar archivo de cookies
+    if not check_cookies_file():
+        print("⚠️  Advertencia: No se encontró el archivo de cookies o está vacío")
+        print("💡 El bot funcionará pero puede tener problemas con videos restringidos")
+
     application = Application.builder().token(TOKEN).build()
-    
+
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & filters.Entity("url"), handle_url))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, invalid_message))
     application.add_handler(CallbackQueryHandler(button_handler))
-    
+
     print("✅ Bot iniciado correctamente!")
+    print(f"📁 Usando cookies de: {COOKIES_FILE}")
     application.run_polling()
 
 if __name__ == '__main__':
