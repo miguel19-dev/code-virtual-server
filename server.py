@@ -1,9 +1,6 @@
 import os
 import logging
 import asyncio
-import aiohttp
-import threading
-import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
@@ -19,8 +16,6 @@ logging.basicConfig(
 
 # Configuración de cookies
 COOKIES_FILE = "cookies.txt"
-PING_URL = "https://tdusllamadas.onrender.com"
-PING_INTERVAL = 300  # 5 minutos en segundos
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = (
@@ -155,35 +150,6 @@ def check_cookies_file():
     logging.info(f"✅ Archivo de cookies cargado correctamente")
     return True
 
-async def ping_server():
-    """Función para hacer ping al servidor y mantenerlo activo"""
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(PING_URL) as response:
-                if response.status == 200:
-                    logging.info(f"✅ Ping exitoso a {PING_URL} - Servidor activo")
-                else:
-                    logging.warning(f"⚠️ Ping a {PING_URL} devolvió estado: {response.status}")
-        except Exception as e:
-            logging.error(f"❌ Error al hacer ping a {PING_URL}: {e}")
-
-async def scheduled_ping():
-    """Tarea programada para hacer ping cada 5 minutos"""
-    while True:
-        await ping_server()
-        await asyncio.sleep(PING_INTERVAL)
-
-def start_ping_scheduler():
-    """Inicia el planificador de ping en un hilo separado"""
-    def run_scheduler():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(scheduled_ping())
-    
-    ping_thread = threading.Thread(target=run_scheduler, daemon=True)
-    ping_thread.start()
-    logging.info(f"🔄 Iniciado auto-ping cada {PING_INTERVAL} segundos a {PING_URL}")
-
 def main():
     print("🤖 Iniciando bot de Telegram...")
     
@@ -191,9 +157,6 @@ def main():
     if not check_cookies_file():
         print("⚠️  Advertencia: No se encontró el archivo de cookies o está vacío")
         print("💡 El bot funcionará pero puede tener problemas con videos restringidos")
-
-    # Iniciar el planificador de ping
-    start_ping_scheduler()
 
     application = Application.builder().token(TOKEN).build()
 
@@ -204,8 +167,6 @@ def main():
 
     print("✅ Bot iniciado correctamente!")
     print(f"📁 Usando cookies de: {COOKIES_FILE}")
-    print(f"🔄 Auto-ping activado cada {PING_INTERVAL} segundos a {PING_URL}")
-    
     application.run_polling()
 
 if __name__ == '__main__':
