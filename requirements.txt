@@ -2,5 +2,6 @@ flask
 requests
 urllib3
 gunicorn
+aiohttp
 yt-dlp
 python-telegram-bot
