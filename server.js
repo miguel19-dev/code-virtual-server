@@ -51,6 +51,7 @@ app.post('/api/register', async (req, res) => {
         name: name.trim(),
         password: await bcrypt.hash(password, 10),
         avatar: '/default-avatar.png',
+        bio: "¡Yo uso SecureChat!",
         createdAt: new Date().toISOString()
     };
     
@@ -92,6 +93,29 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
     }
 });
 
+// API para actualizar perfil
+app.put('/api/profile/:userId', async (req, res) => {
+    const { userId } = req.params;
+    const { name, bio } = req.body;
+    
+    const userIndex = users.findIndex(u => u.id === userId);
+    if (userIndex === -1) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    
+    // Actualizar datos del usuario
+    users[userIndex].name = name;
+    users[userIndex].bio = bio;
+    saveUsers();
+    
+    const { password, ...updatedUser } = users[userIndex];
+    
+    // Notificar a todos los clientes sobre la actualización
+    io.emit('user_updated', updatedUser);
+    
+    res.json({ user: updatedUser });
+});
+
 // Socket.IO para mensajería en tiempo real
 const onlineUsers = new Map();
 
@@ -101,7 +125,14 @@ io.on('connection', (socket) => {
     // Usuario se conecta
     socket.on('user_online', (user) => {
         onlineUsers.set(socket.id, { ...user, socketId: socket.id });
+        
+        // Enviar lista actualizada de usuarios en línea a todos
         io.emit('users_online', Array.from(onlineUsers.values()));
+        
+        // Enviar al usuario conectado la lista completa de usuarios
+        const safeUsers = users.map(({ password, ...user }) => user);
+        socket.emit('all_users', safeUsers);
+        
         console.log('Usuario en línea:', user.name);
     });
 
@@ -129,13 +160,23 @@ io.on('connection', (socket) => {
         saveMessages();
         
         // Enviar al destinatario si está en línea
-        const recipient = Array.from(onlineUsers.values()).find(u => u.id === to.id);
-        if (recipient) {
-            io.to(recipient.socketId).emit('new_message', messageData);
+        const recipientEntry = Array.from(onlineUsers.entries()).find(([_, u]) => u.id === to.id);
+        if (recipientEntry) {
+            const [recipientSocketId, recipient] = recipientEntry;
+            io.to(recipientSocketId).emit('new_message', messageData);
+            
+            // Enviar notificación de mensaje no leído
+            io.to(recipientSocketId).emit('unread_count_update', {
+                userId: from.id,
+                count: getUnreadCount(recipient.id, from.id)
+            });
         }
         
         // Confirmar al remitente
         socket.emit('message_sent', messageData);
+        
+        // Actualizar contadores para ambos usuarios
+        updateUnreadCounts(from.id, to.id);
     });
 
     // Marcar mensajes como leídos
@@ -144,13 +185,57 @@ io.on('connection', (socket) => {
         const chatId = [userId, otherUserId].sort().join('_');
         
         if (messages[chatId]) {
+            let updated = false;
             messages[chatId].forEach(msg => {
                 if (msg.to === userId && !msg.read) {
                     msg.read = true;
+                    updated = true;
                 }
             });
-            saveMessages();
+            
+            if (updated) {
+                saveMessages();
+                
+                // Notificar al remitente que sus mensajes fueron leídos
+                const senderEntry = Array.from(onlineUsers.entries()).find(([_, u]) => u.id === otherUserId);
+                if (senderEntry) {
+                    const [senderSocketId, sender] = senderEntry;
+                    io.to(senderSocketId).emit('messages_read', {
+                        userId: userId,
+                        otherUserId: otherUserId
+                    });
+                }
+                
+                // Actualizar contadores
+                updateUnreadCounts(userId, otherUserId);
+            }
         }
+    });
+
+    // Actualización de perfil
+    socket.on('profile_update', (userData) => {
+        const userIndex = users.findIndex(u => u.id === userData.id);
+        if (userIndex !== -1) {
+            users[userIndex].name = userData.name;
+            users[userIndex].bio = userData.bio;
+            saveUsers();
+            
+            // Notificar a todos los clientes sobre la actualización
+            io.emit('user_updated', users[userIndex]);
+        }
+    });
+
+    // Obtener contadores de mensajes no leídos
+    socket.on('get_unread_counts', (userId) => {
+        const unreadCounts = {};
+        
+        users.forEach(user => {
+            if (user.id !== userId) {
+                unreadCounts[user.id] = getUnreadCount(userId, user.id);
+            }
+        });
+        
+        socket.emit('unread_counts', unreadCounts);
     });
 
     // Usuario desconectado
@@ -162,6 +247,37 @@ io.on('connection', (socket) => {
             io.emit('users_online', Array.from(onlineUsers.values()));
         }
     });
+
+    // Función para obtener mensajes no leídos
+    function getUnreadCount(userId, otherUserId) {
+        const chatId = [userId, otherUserId].sort().join('_');
+        if (!messages[chatId]) return 0;
+        
+        return messages[chatId].filter(msg => 
+            msg.to === userId && !msg.read
+        ).length;
+    }
+
+    // Función para actualizar contadores de mensajes no leídos
+    function updateUnreadCounts(userId1, userId2) {
+        const usersToUpdate = [userId1, userId2];
+        
+        usersToUpdate.forEach(userId => {
+            const userEntry = Array.from(onlineUsers.entries()).find(([_, u]) => u.id === userId);
+            if (userEntry) {
+                const [socketId, user] = userEntry;
+                const unreadCounts = {};
+                
+                users.forEach(u => {
+                    if (u.id !== userId) {
+                        unreadCounts[u.id] = getUnreadCount(userId, u.id);
+                    }
+                });
+                
+                io.to(socketId).emit('unread_counts', unreadCounts);
+            }
+        });
+    }
 });
 
 const PORT = process.env.PORT || 10000;
