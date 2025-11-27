@@ -1,1417 +1,339 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CallApp - Sistema de Llamadas</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #2d3748;
-        }
-
-        .screen {
-            display: none;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .screen.active {
-            display: block;
-        }
-
-        /* Header Styles */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            color: white;
-        }
-
-        .header h2 {
-            font-size: 1.5em;
-            font-weight: 600;
-        }
-
-        .btn-icon {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            padding: 12px;
-            border-radius: 12px;
-            color: white;
-            cursor: pointer;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .btn-icon:hover {
-            background: rgba(255,255,255,0.3);
-            transform: translateY(-2px);
-        }
-
-        .btn-icon svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        /* User List Styles */
-        .users-container {
-            display: grid;
-            gap: 15px;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-
-        .user-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-        }
-
-        .user-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-
-        .user-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            margin-right: 15px;
-            background: #667eea;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 1.2em;
-        }
-
-        .user-info {
-            flex: 1;
-            text-align: left;
-        }
-
-        .user-name {
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: #2d3748;
-        }
-
-        .user-status {
-            font-size: 0.85em;
-            color: #718096;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #48bb78;
-        }
-
-        .user-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn-call {
-            padding: 10px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-call:hover {
-            background: #5a6fd8;
-            transform: translateY(-2px);
-        }
-
-        .btn-call:disabled {
-            background: #cbd5e0;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .btn-call svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        /* Call Screens */
-        .call-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .call-screen.active {
-            display: flex;
-        }
-
-        .call-container {
-            text-align: center;
-            color: white;
-            padding: 40px;
-            max-width: 400px;
-            width: 100%;
-        }
-
-        .call-avatar {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: #667eea;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5em;
-            color: white;
-            font-weight: 600;
-        }
-
-        .call-container h3 {
-            font-size: 1.5em;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-
-        .call-container p {
-            font-size: 1.1em;
-            margin-bottom: 20px;
-            color: #e2e8f0;
-        }
-
-        .call-timer {
-            font-size: 1.8em;
-            font-weight: 600;
-            margin: 20px 0;
-            color: #48bb78;
-        }
-
-        .call-buttons, .call-controls {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin-top: 30px;
-        }
-
-        .btn-answer, .btn-reject, .btn-control, .btn-end {
-            padding: 15px;
-            border: none;
-            border-radius: 50%;
-            width: 70px;
-            height: 70px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .btn-answer {
-            background: #48bb78;
-            color: white;
-        }
-
-        .btn-answer:hover {
-            background: #38a169;
-            transform: scale(1.1);
-        }
-
-        .btn-reject, .btn-end {
-            background: #e53e3e;
-            color: white;
-        }
-
-        .btn-reject:hover, .btn-end:hover {
-            background: #c53030;
-            transform: scale(1.1);
-        }
-
-        .btn-control {
-            background: #4a5568;
-            color: white;
-        }
-
-        .btn-control:hover, .btn-control.active {
-            background: #667eea;
-            transform: scale(1.1);
-        }
-
-        .btn-control svg, .btn-answer svg, .btn-reject svg, .btn-end svg {
-            width: 24px;
-            height: 24px;
-        }
-
-        /* Audio Elements - Ocultos pero funcionales */
-        .audio-elements {
-            display: none;
-        }
-
-        /* History Screen */
-        .history-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            max-height: 70vh;
-            overflow-y: auto;
-        }
-
-        .history-item {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            border-bottom: 1px solid #e2e8f0;
-            transition: background 0.3s ease;
-        }
-
-        .history-item:hover {
-            background: #f7fafc;
-        }
-
-        .history-item:last-child {
-            border-bottom: none;
-        }
-
-        .history-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #667eea;
-            margin-right: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 0.9em;
-        }
-
-        .history-info {
-            flex: 1;
-            text-align: left;
-        }
-
-        .history-name {
-            font-weight: 600;
-            color: #2d3748;
-        }
-
-        .history-details {
-            font-size: 0.8em;
-            color: #718096;
-        }
-
-        .history-status {
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            font-weight: 600;
-        }
-
-        .status-completed {
-            background: #c6f6d5;
-            color: #276749;
-        }
-
-        .status-rejected {
-            background: #fed7d7;
-            color: #c53030;
-        }
-
-        .status-missed {
-            background: #feebc8;
-            color: #744210;
-        }
-
-        /* Notification */
-        .notification {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #e53e3e;
-            color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            z-index: 1000;
-            text-align: center;
-            font-weight: 500;
-            display: none;
-        }
-
-        .notification.active {
-            display: block;
-        }
-
-        .notification.success {
-            background: #48bb78;
-        }
-
-        .notification.error {
-            background: #e53e3e;
-        }
-
-        .notification.info {
-            background: #4299e1;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            color: white;
-            padding: 40px 20px;
-        }
-
-        .empty-state svg {
-            width: 80px;
-            height: 80px;
-            margin-bottom: 20px;
-            opacity: 0.7;
-        }
-
-        .empty-state h3 {
-            font-size: 1.3em;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-
-        .empty-state p {
-            color: #e2e8f0;
-            font-size: 0.95em;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .screen {
-                padding: 15px;
-            }
-
-            .call-buttons, .call-controls {
-                gap: 15px;
-            }
-
-            .btn-answer, .btn-reject, .btn-control, .btn-end {
-                width: 60px;
-                height: 60px;
-            }
-
-            .btn-control svg, .btn-answer svg, .btn-reject svg, .btn-end svg {
-                width: 20px;
-                height: 20px;
-            }
-
-            .call-container {
-                padding: 30px 20px;
-            }
-
-            .call-avatar {
-                width: 100px;
-                height: 100px;
-                font-size: 2em;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .user-card {
-                padding: 15px;
-            }
-
-            .user-avatar {
-                width: 45px;
-                height: 45px;
-                font-size: 1.1em;
-            }
-
-            .history-container {
-                padding: 15px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport"content="width=device-width, initial-scale=1.0"/>
+  <title>CallApp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Poppins',sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;color:#1a202c}
+    .screen,.call-screen{display:none;min-height:100vh;padding:20px}
+    .active{display:flex;flex-direction:column}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;color:white}
+    .header h2{font-size:1.5em;font-weight:600}
+    .btn-icon{background:rgba(255,255,255,0.2);border:none;padding:12px;border-radius:12px;color:white;cursor:pointer}
+    .btn-icon:hover{background:rgba(255,255,255,0.3);transform:translateY(-2px)}
+
+    .users-container{display:grid;gap:15px;max-width:500px;margin:0 auto}
+    .user-card{background:white;border-radius:15px;padding:18px;display:flex;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,0.12);transition:.3s}
+    .user-card:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(0,0,0,0.18)}
+    .user-avatar{width:52px;height:52px;border-radius:50%;object-fit:cover;margin-right:15px}
+    .user-name{font-weight:600}
+    .user-status{font-size:0.85em;color:#718096;display:flex;align-items:center;gap:6px;margin-top:4px}
+    .status-dot{width:8px;height:8px;border-radius:50%;background:#48bb78}
+    .btn-call{background:#667eea;color:white;border:none;padding:12px;border-radius:12px;cursor:pointer}
+    .btn-call:hover{background:#5a6fd8}
+
+    .call-screen{position:fixed;inset:0;background:#0f172a;display:flex;align-items:center;justify-content:center;z-index:1000}
+    .call-container{text-align:center;color:white}
+    .call-avatar-big{width:130px;height:130px;border-radius:50%;object-fit:cover;margin-bottom:20px;border:4px solid #667eea}
+    .call-name{font-size:1.7em;font-weight:600;margin:10px 0}
+    .call-status{font-size:1.2em;color:#94a3b8;margin:15px 0}
+    .call-timer{font-size:2.2em;color:#48bb78;margin:30px 0;display:none}
+    .call-buttons{display:flex;gap:30px;justify-content:center;margin-top:40px}
+    .btn-circle{width:70px;height:70px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .btn-answer{background:#48bb78}
+    .btn-reject,.btn-end{background:#e53e3e;color:white}
+    .btn-circle:hover{transform:scale(1.1)}
+
+    .notification{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:14px 28px;border-radius:12px;color:white;font-weight:500;z-index:2000;display:none}
+    .notification.active{display:block;animation:n 0.4s}
+    .notification.success{background:#4299e1}
+    .notification.success{background:#48bb78}
+    .notification.error{background:#e53e3e}
+    @keyframes n{from{opacity:0;transform:translate(-50%,-20px)}}
+
+    .empty-state{text-align:center;color:white;padding:60px 20px}
+    .empty-state svg{width:80px;height:80px;opacity:0.7;margin-bottom:20px}
+  </style>
 </head>
 <body>
-    <!-- Elementos de audio ocultos -->
-    <div class="audio-elements">
-        <audio id="local-audio" muted playsinline></audio>
-        <audio id="remote-audio" autoplay playsinline></audio>
+
+<audio id="local-audio" muted playsinline></audio>
+<audio id="remote-audio" autoplay playsinline></audio>
+<div id="notification" class="notification"></div>
+
+<!-- Pantalla principal -->
+<div id="main-screen" class="screen active">
+  <div class="header">
+    <h2>Usuarios</h2>
+    <div style="display:flex;gap:12px">
+      <button id="show-history" class="btn-icon">Historial</button>
+      <button id="logout-btn" class="btn-icon">Salir</button>
     </div>
+  </div>
+  <div id="users-container" class="users-container"></div>
+</div>
 
-    <!-- Pantalla principal -->
-    <div id="main-screen" class="screen active">
-        <header class="header">
-            <h2>Usuarios Conectados</h2>
-            <div style="display: flex; gap: 10px;">
-                <button id="show-history" class="btn-icon" title="Historial">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
-                        <path d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                    </svg>
-                </button>
-                <button id="logout-btn" class="btn-icon" title="Cerrar sesión">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-                    </svg>
-                </button>
-            </div>
-        </header>
+<!-- Historial -->
+<div id="history-screen" class="screen">
+  <div class="header">
+    <button id="back-to-main" class="btn-icon">Atrás</button>
+    <h2>Historial</h2>
+    <div style="width:48px"></div>
+  </div>
+  <div id="call-history" style="max-width:600px;margin:0 auto;background:white;border-radius:15px;padding:20px;max-height:75vh;overflow-y:auto"></div>
+</div>
 
-        <div id="notification" class="notification"></div>
-
-        <div id="users-container" class="users-container">
-            <!-- Los usuarios se cargarán aquí -->
-        </div>
+<!-- Llamada entrante -->
+<div id="incoming-call-screen" class="call-screen">
+  <div class="call-container">
+    <img id="incoming-avatar" class="call-avatar-big" src="/default-avatar.png" alt="Avatar">
+    <div class="call-name" id="incoming-name">Usuario</div>
+    <div class="call-status">Llamada entrante...</div>
+    <div class="call-buttons">
+      <button id="answer-call" class="btn-circle btn-answer">Contestar</button>
+      <button id="reject-call" class="btn-circle btn-reject">Rechazar</button>
     </div>
+  </div>
+</div>
 
-    <!-- Pantalla de historial -->
-    <div id="history-screen" class="screen">
-        <header class="header">
-            <button id="back-to-main" class="btn-icon" title="Volver">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                </svg>
-            </button>
-            <h2>Registro de Llamadas</h2>
-            <div style="width: 48px;"></div>
-        </header>
-        <div id="call-history" class="history-container">
-            <!-- Historial de llamadas -->
-        </div>
+<!-- Llamada en curso -->
+<div id="outgoing-call-screen" class="call-screen">
+  <div class="call-container">
+    <img id="outgoing-avatar" class="call-avatar-big" src="/default-avatar.png" alt="Avatar">
+    <div class="call-name" id="outgoing-name">Conectando...</div>
+    <div class="call-status" id="call-status">Llamando...</div>
+    <div id="call-timer" class="call-timer">00:00</div>
+    <div class="call-buttons">
+      <button id="end-call" class="btn-circle btn-end">Colgar</button>
     </div>
+  </div>
+</div>
 
-    <!-- Pantalla de llamada entrante -->
-    <div id="incoming-call-screen" class="call-screen">
-        <div class="call-container">
-            <div class="call-avatar" id="incoming-avatar"></div>
-            <h3 id="incoming-name"></h3>
-            <p>Llamada entrante...</p>
-            <div class="call-buttons">
-                <button id="answer-call" class="btn-answer" title="Contestar">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.21c.28-.26.36-.65.25-1C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/>
-                    </svg>
-                </button>
-                <button id="reject-call" class="btn-reject" title="Rechazar">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  class CallApp {
+    constructor() {
+      this.socket = io();
+      this.currentUser = JSON.parse(localStorage.getItem('currentUser'));
+      if (!this.currentUser) location.href = '/';
+      this.activeCall = null;
+      this.callStartTime = null;
+      this.callTimer = null;
+      this.peerConnection = null;
+      this.localStream = null;
 
-    <!-- Pantalla de llamada saliente -->
-    <div id="outgoing-call-screen" class="call-screen">
-        <div class="call-container">
-            <div class="call-avatar" id="outgoing-avatar"></div>
-            <h3 id="outgoing-name"></h3>
-            <!-- ✅ ESTADO MEJORADO: "Llamando..." en lugar de "Conectando..." -->
-            <p id="call-status">Llamando...</p>
-            <div id="call-timer" class="call-timer" style="display: none;">00:00</div>
-            <div class="call-controls">
-                <button id="toggle-mic" class="btn-control" title="Micrófono">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-                    </svg>
-                </button>
-                <button id="toggle-speaker" class="btn-control" title="Altavoz">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                    </svg>
-                </button>
-                <button id="end-call" class="btn-end" title="Finalizar">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 00-2.67-1.85.996.996 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-        class CallApp {
-            constructor() {
-                this.socket = io();
-                this.currentUser = null;
-                this.activeCall = null;
-                this.callTimer = null;
-                this.callStartTime = null;
-                this.peerConnection = null;
-                this.localStream = null;
-                this.remoteStream = null;
-                this.isMuted = false;
-
-                this.checkAuthentication();
-                this.initializeEventListeners();
-            }
-
-            checkAuthentication() {
-                const userData = localStorage.getItem('currentUser');
-                if (!userData) {
-                    window.location.href = '/';
-                    return;
-                }
-
-                this.currentUser = JSON.parse(userData);
-                this.socket.emit('user-login', this.currentUser);
-            }
-
-            initializeEventListeners() {
-                // Navegación
-                document.getElementById('show-history').addEventListener('click', () => this.showHistory());
-                document.getElementById('back-to-main').addEventListener('click', () => this.showMainScreen());
-                document.getElementById('logout-btn').addEventListener('click', () => this.logout());
-
-                // Llamadas
-                document.getElementById('answer-call').addEventListener('click', () => this.answerCall());
-                document.getElementById('reject-call').addEventListener('click', () => this.rejectCall());
-                document.getElementById('end-call').addEventListener('click', () => this.endCall());
-                document.getElementById('toggle-mic').addEventListener('click', (e) => this.toggleMicrophone(e.target));
-                document.getElementById('toggle-speaker').addEventListener('click', (e) => this.toggleSpeaker(e.target));
-
-                // Socket events para WebRTC
-                this.socket.on('users-updated', (users) => this.updateUsersList(users));
-                this.socket.on('incoming-call', (data) => this.showIncomingCall(data));
-                this.socket.on('call-initiated', (data) => this.onCallInitiated(data));
-                this.socket.on('call-rejected', (data) => this.onCallRejected(data));
-                this.socket.on('call-ended', (data) => this.onCallEnded(data));
-                this.socket.on('call-error', (data) => this.showNotification(data.message, 'error'));
-                this.socket.on('call-connected', (data) => this.onCallConnected(data));
-
-                // WebRTC Signaling Events
-                this.socket.on('webrtc-offer', (data) => this.handleWebRTCOffer(data));
-                this.socket.on('webrtc-answer', (data) => this.handleWebRTCAnswer(data));
-                this.socket.on('webrtc-ice-candidate', (data) => this.handleWebRTCICECandidate(data));
-            }
-
-            async setupWebRTC() {
-    try {
-        const configuration = {
-            iceServers: [
-                // STUN servers (para conexiones directas)
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                
-                // ✅ TURN SERVER CON TUS CREDENCIALES
-                {
-                    urls: [
-                        'turn:relay1.expressturn.com:3480',
-                        'turn:relay1.expressturn.com:3480?transport=tcp',
-                        'turns:relay1.expressturn.com:5349'
-                    ],
-                    username: '000000002079624655',
-                    credential: 'IDRwv6Pt/dZCoN7zXyU8lpCpE4w='
-                }
-            ],
-            iceCandidatePoolSize: 15,
-            iceTransportPolicy: 'all' // ✅ Permite tanto STUN como TURN
-        };
-
-        this.peerConnection = new RTCPeerConnection(configuration);
-
-        console.log('✅ TURN Server configurado con ExpressTurn');
-
-        // Obtener stream local con mejor configuración
-        this.localStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                channelCount: 1,
-                sampleRate: 48000
-            }, 
-            video: false 
-        });
-
-        console.log('Stream local obtenido:', this.localStream);
-
-        // Configurar audio local
-        const localAudio = document.getElementById('local-audio');
-        localAudio.srcObject = this.localStream;
-
-        // Agregar tracks locales a la conexión
-        this.localStream.getTracks().forEach(track => {
-            this.peerConnection.addTrack(track, this.localStream);
-        });
-
-        // Manejar stream remoto
-        this.peerConnection.ontrack = (event) => {
-            console.log('✅ Stream remoto recibido:', event.streams[0]);
-            this.remoteStream = event.streams[0];
-            const remoteAudio = document.getElementById('remote-audio');
-            remoteAudio.srcObject = this.remoteStream;
-
-            // Intentar reproducir
-            remoteAudio.play().then(() => {
-                console.log('✅ Audio remoto reproduciéndose');
-            }).catch(e => {
-                console.error('❌ Error reproduciendo audio remoto:', e);
-            });
-        };
-
-        // Manejar candidatos ICE
-        this.peerConnection.onicecandidate = (event) => {
-            if (event.candidate && this.activeCall) {
-                console.log('📞 Enviando candidato ICE:', event.candidate.type);
-                this.socket.emit('webrtc-ice-candidate', {
-                    to: this.activeCall.targetSocketId,
-                    candidate: event.candidate,
-                    callId: this.activeCall.callId
-                });
-            }
-        };
-
-        // ✅ DETECCIÓN MEJORADA DE ESTADOS WEBCRTC CON DIAGNÓSTICO TURN
-        this.peerConnection.onconnectionstatechange = () => {
-            const state = this.peerConnection.connectionState;
-            console.log('WebRTC Connection State:', state);
-            
-            if (state === 'connected') {
-                // ✅ ESTADO FINAL: "Conectado" - Audio funcionando
-                console.log('✅✅✅ CONEXIÓN WEBCRTC ESTABLECIDA - AUDIO FUNCIONANDO');
-                this.showNotification('Conexión establecida - Audio activo', 'success');
-            } else if (state === 'connecting') {
-                // ✅ WebRTC está en proceso de conexión ICE
-                console.log('🔄 WebRTC conectando...');
-                document.getElementById('call-status').textContent = 'Sincronizando...';
-            } else if (state === 'failed') {
-                console.log('❌ Falló la conexión WebRTC');
-                this.showNotification('Error de conexión - Reintentando...', 'error');
-            }
-        };
-
-        this.peerConnection.oniceconnectionstatechange = () => {
-            const iceState = this.peerConnection.iceConnectionState;
-            console.log('WebRTC ICE State:', iceState);
-            
-            if (iceState === 'checking') {
-                console.log('🔍 Buscando conexión ICE...');
-                document.getElementById('call-status').textContent = 'Sincronizando...';
-            } else if (iceState === 'connected' || iceState === 'completed') {
-                console.log('✅ Conexión ICE establecida - TURN/STUN funcionando');
-            } else if (iceState === 'failed') {
-                console.log('❌ Falló la conexión ICE - Verificar servidores TURN');
-                this.showNotification('Problema de red - Verificando conexión...', 'error');
-            }
-        };
-
-        // ✅ DIAGNÓSTICO DETALLADO DE CANDIDATOS ICE
-        this.peerConnection.onicegatheringstatechange = () => {
-            console.log('ICE Gathering State:', this.peerConnection.iceGatheringState);
-            
-            if (this.peerConnection.iceGatheringState === 'complete') {
-                // Analizar estadísticas para ver qué tipo de conexión se estableció
-                this.analyzeIceConnection();
-            }
-        };
-
-        // Logs de diagnóstico
-        this.peerConnection.onsignalingstatechange = () => {
-            console.log('Signaling state:', this.peerConnection.signalingState);
-        };
-
-    } catch (error) {
-        console.error('❌ Error configurando WebRTC:', error);
-        this.showNotification('Error al acceder al micrófono', 'error');
+      this.socket.emit('user-login', this.currentUser);
+      this.initEvents();
     }
-}
 
-// ✅ NUEVO MÉTODO: Analizar el tipo de conexión ICE establecida
-async analyzeIceConnection() {
-    try {
-        const stats = await this.peerConnection.getStats();
-        let hasRelayCandidate = false;
-        let hasStunCandidate = false;
-        let hasHostCandidate = false;
+    initEvents() {
+      document.getElementById('show-history').onclick = () => this.showHistory();
+      document.getElementById('back-to-main').onclick = () => this.showScreen('main-screen');
+      document.getElementById('logout-btn').onclick = () => this.logout();
+      document.getElementById('answer-call').onclick = () => this.answerCall();
+      document.getElementById('reject-call').onclick = () => this.endCall();
+      document.getElementById('end-call').onclick = () => this.endCall();
 
-        stats.forEach(report => {
-            if (report.type === 'local-candidate' || report.type === 'remote-candidate') {
-                console.log('Candidato ICE:', report.protocol, report.candidateType, report.address);
-                
-                if (report.candidateType === 'relay') {
-                    hasRelayCandidate = true;
-                    console.log('✅ Usando conexión TURN (relay)');
-                } else if (report.candidateType === 'srflx') {
-                    hasStunCandidate = true;
-                    console.log('✅ Usando conexión STUN (server reflexive)');
-                } else if (report.candidateType === 'host') {
-                    hasHostCandidate = true;
-                    console.log('✅ Usando conexión directa (host)');
-                }
-            }
-            
-            if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-                console.log('✅ Par de candidatos exitoso:', report.localCandidateId, report.remoteCandidateId);
-            }
-        });
+      this.socket.on('users-updated', u => this.renderUsers(u));
+      this.socket.on('incoming-call', d => this.showIncomingCall(d));
+      this.socket.on('call-initiated', d => this.onCallInitiated(d));
+      this.socket.on('call-connected', () => this.onCallConnected());
+      this.socket.on('call-rejected', () => this.endCall('Rechazada'));
+      this.socket.on('call-ended', d => this.endCall(d?.duration > 0 ? `Finalizada · ${this.fmt(d.duration)}` : 'Cancelada'));
+      this.socket.on('call-error', m => this.notify(m, 'error'));
 
-        if (hasRelayCandidate) {
-            console.log('🎯 Conexión establecida a través de TURN Server');
-        } else if (hasStunCandidate) {
-            console.log('🎯 Conexión establecida a través de STUN Server');
-        } else if (hasHostCandidate) {
-            console.log('🎯 Conexión directa entre peers');
+      this.socket.on('webrtc-offer', d => this.handleOffer(d));
+      this.socket.on('webrtc-answer', d => this.handleAnswer(d));
+      this.socket.on('webrtc-ice-candidate', d => this.handleICECandidate(d));
+    }
+
+    async setupWebRTC() {
+      const cfg = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: ['turn:relay1.expressturn.com:3480?transport=tcp', 'turns:relay1.expressturn.com:5349'],
+            username: '000000002079624655',
+            credential: 'IDRwv6Pt/dZCoN7zXyU8lpCpE4w=' }
+        ]
+      };
+      this.peerConnection = new RTCPeerConnection(cfg);
+      this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.localStream.getTracks().forEach(t => this.peerConnection.addTrack(t, this.localStream));
+      document.getElementById('local-audio').srcObject = this.localStream;
+
+      this.peerConnection.ontrack = e => document.getElementById('remote-audio').srcObject = e.streams[0];
+      this.peerConnection.onicecandidate = e => {
+        if (e.candidate && this.activeCall) {
+          this.socket.emit('webrtc-ice-candidate', { to: this.activeCall.targetSocketId, candidate: e.candidate, callId: this.activeCall.callId });
         }
-
-    } catch (error) {
-        console.error('Error analizando conexión ICE:', error);
+      };
+      this.peerConnection.onconnectionstatechange = () => {
+        if (this.peerConnection.connectionState === 'connected') this.onCallConnected();
+      };
     }
-}
 
-async initiateCall(toUserId, callType) {
-    try {
-        await this.setupWebRTC();
+    async initiateCall(userId) {
+      await this.setupWebRTC();
+      this.activeCall = { callId: Date.now(), targetSocketId: userId };
+      this.socket.emit('initiate-call', { fromUser: this.currentUser, toUserId: userId, callType: 'audio' });
+      this.showScreen('outgoing-call-screen');
+      this.setStatus('Llamando...');
+    }
 
-        this.socket.emit('initiate-call', {
-            fromUser: this.currentUser,
-            toUserId: toUserId,
-            callType: callType
+    onCallInitiated(data) {
+      this.activeCall = { ...this.activeCall, ...data, targetSocketId: data.to.socketId };
+      this.setAvatar(data.to.avatar);
+      document.getElementById('outgoing-name').textContent = data.to.name;
+      this.createOffer();
+    }
+
+    async createOffer() {
+      const offer = await this.peerConnection.createOffer();
+      await this.peerConnection.setLocalDescription(offer);
+      this.socket.emit('webrtc-offer', { to: this.activeCall.targetSocketId, offer, callId: this.activeCall.callId });
+      this.setStatus('Conectando...');
+    }
+
+    async handleOffer(data) {
+      await this.setupWebRTC();
+      this.activeCall = { callId: data.callId, targetSocketId: data.from, fromUser: data.fromUser };
+      this.setAvatar(data.fromUser.avatar);
+      document.getElementById('outgoing-name').textContent = data.fromUser.name;
+      this.showScreen('outgoing-call-screen');
+      this.setStatus('Conectando...');
+
+      await this.peerConnection.setRemoteDescription(data.offer);
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
+      this.socket.emit('webrtc-answer', { to: data.from, answer, callId: data.callId });
+    }
+
+    async handleAnswer(data) { await this.peerConnection.setRemoteDescription(data.answer); }
+    async handleICECandidate(data) { if (data.candidate) await this.peerConnection.addIceCandidate(data.candidate); }
+
+    answerCall() {
+      this.socket.emit('answer-call', { callId: this.activeCall.callId });
+      this.showScreen('outgoing-call-screen');
+      this.setStatus('Conectando...');
+    }
+
+    onCallConnected() {
+      document.getElementById('call-status').style.display = 'none';
+      document.getElementById('call-timer').style.display = 'block';
+      this.startTimer();
+      this.notify('Conectado', 'success');
+    }
+
+    endCall(msg = 'Llamada finalizada') {
+      if (this.activeCall) this.socket.emit('end-call', { callId: this.activeCall.callId });
+      this.cleanup();
+      this.notify(msg, msg.includes('Rechazada') ? 'error' : 'info');
+    }
+
+    cleanup() {
+      if (this.callTimer) clearInterval(this.callTimer);
+      if (this.localStream) this.localStream.getTracks().forEach(t => t.stop());
+      if (this.peerConnection) this.peerConnection.close();
+      this.localStream = this.peerConnection = this.activeCall = null;
+      this.showScreen('main-screen');
+    }
+
+    startTimer() {
+      this.callStartTime = Date.now();
+      this.callTimer = setInterval(() => {
+        const diff = Math.floor((Date.now() - this.callStartTime) / 1000);
+        const m = String(Math.floor(diff / 60)).padStart(2, '0');
+        const s = String(diff % 60).padStart(2, '0');
+        document.getElementById('call-timer').textContent = `\( {m}: \){s}`;
+      }, 1000);
+    }
+
+    setStatus(text) { document.getElementById('call-status').textContent = text; }
+    setAvatar(src) {
+      const url = src || '/default-avatar.png';
+      document.getElementById('outgoing-avatar').src = url;
+      document.getElementById('incoming-avatar').src = url;
+    }
+
+    showIncomingCall(data) {
+      this.activeCall = { callId: data.callId, fromUser: data.fromUser };
+      this.setAvatar(data.fromUser.avatar);
+      document.getElementById('incoming-name').textContent = data.fromUser.name;
+      this.showScreen('incoming-call-screen');
+    }
+
+    showScreen(id) {
+      document.querySelectorAll('.screen,.call-screen').forEach(el => el.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    notify(msg, type='info') {
+      const n = document.getElementById('notification');
+      n.textContent = msg;
+      n.className = `notification ${type} active`;
+      setTimeout(() => n.classList.remove('active'), 3000);
+    }
+
+    renderUsers(users) {
+      const c = document.getElementById('users-container');
+      if (!users?.length) {
+        c.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><h3>Nadie conectado</h3></div>`;
+        return;
+      }
+      c.innerHTML = '';
+      users.forEach(u => {
+        if (u.id === this.currentUser.id) return;
+        const d = document.createElement('div');
+        d.className = 'user-card';
+        d.innerHTML = `
+          <img src="\( {u.avatar || '/default-avatar.png'}" class="user-avatar" alt=" \){u.name}">
+          <div style="flex:1">
+            <div class="user-name">${u.name}</div>
+            <div class="user-status"><div class="status-dot"></div>En línea</div>
+          </div>
+          <button class="btn-call" onclick="app.initiateCall('${u.id}')">Llamar</button>
+        `;
+        c.appendChild(d);
+      });
+    }
+
+    showHistory() {
+      fetch('/api/call-history')
+        .then(r => r.json())
+        .then(h => {
+          const c = document.getElementById('call-history');
+          if (!h.length) {
+            c.innerHTML = '<div class="empty-state" style="color:#718096"><h3>Sin historial</h3></div>';
+            this.showScreen('history-screen');
+            return;
+          }
+          c.innerHTML = '';
+          h.forEach(call => {
+            const i = document.createElement('div');
+            i.style.cssText = 'display:flex;align-items:center;padding:15px;border-bottom:1px solid #eee';
+            i.innerHTML = `
+              <img src="${call.from.avatar || '/default-avatar.png'}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;margin-right:15px">
+              <div style="flex:1">
+                <div style="font-weight:600">${call.from.name}</div>
+                <div style="font-size:0.85em;color:#718096">${new Date(call.startTime).toLocaleString()}</div>
+              </div>
+              <div style="color:${call.status==='completed'?'#48bb78':'#e53e3e'}">
+                \( {call.status==='completed'?'Completada':call.status==='rejected'?'Rechazada':'Perdida'} \){call.duration? '· '+this.fmt(call.duration):''}
+              </div>`;
+            c.appendChild(i);
+          });
+          this.showScreen('history-screen');
         });
-
-        // ✅ ESTADO: "Llamando..." 
-        this.showOutgoingCall({ 
-            callId: Date.now(), 
-            toUserId: toUserId 
-        });
-
-    } catch (error) {
-        console.error('Error iniciando llamada:', error);
-        this.showNotification('Error al iniciar llamada', 'error');
     }
-}
 
-// ✅ NUEVO MÉTODO: Cuando el servidor confirma que la llamada se inició
-onCallInitiated(data) {
-    if (this.activeCall && this.activeCall.callId === data.callId) {
-        // ✅ ACTUALIZAR INFORMACIÓN DEL USUARIO DESTINO
-        this.activeCall.toUser = data.toUser;
-        document.getElementById('outgoing-avatar').textContent = data.toUser.name.charAt(0).toUpperCase();
-        document.getElementById('outgoing-name').textContent = data.toUser.name;
-        
-        // ✅ CREAR OFFER INMEDIATAMENTE (solo el que inicia la llamada)
-        this.createAndSendOffer();
+    fmt(s) {
+      const m = Math.floor(s/60).toString().padStart(2,'0');
+      return `\( {m}: \){(s%60).toString().padStart(2,'0')}`;
     }
-}
 
-// ✅ NUEVO MÉTODO: Crear y enviar offer (solo para el que inicia)
-async createAndSendOffer() {
-    try {
-        const offer = await this.peerConnection.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: false
-        });
-        
-        await this.peerConnection.setLocalDescription(offer);
-
-        this.socket.emit('webrtc-offer', {
-            to: this.activeCall.targetSocketId,
-            offer: offer,
-            callId: this.activeCall.callId
-        });
-        
-        console.log('✅ Offer WebRTC creada y enviada');
-        
-        // ✅ CAMBIAR ESTADO A "Sincronizando..."
-        document.getElementById('call-status').textContent = 'Sincronizando...';
-        
-    } catch (error) {
-        console.error('Error creando offer WebRTC:', error);
+    logout() {
+      this.cleanup();
+      localStorage.removeItem('currentUser');
+      location.href = '/';
     }
-}
-
-async handleWebRTCOffer(data) {
-    try {
-        if (!this.peerConnection) {
-            await this.setupWebRTC();
-        }
-
-        await this.peerConnection.setRemoteDescription(data.offer);
-        
-        // ✅ CREAR ANSWER (no otra offer)
-        const answer = await this.peerConnection.createAnswer();
-        await this.peerConnection.setLocalDescription(answer);
-
-        this.socket.emit('webrtc-answer', {
-            to: data.from,
-            answer: answer,
-            callId: data.callId
-        });
-
-        console.log('✅ Answer WebRTC enviada');
-        
-        // ✅ CAMBIAR ESTADO A "Sincronizando..."
-        document.getElementById('call-status').textContent = 'Sincronizando...';
-
-    } catch (error) {
-        console.error('Error manejando offer WebRTC:', error);
-    }
-}
-
-async handleWebRTCAnswer(data) {
-    try {
-        await this.peerConnection.setRemoteDescription(data.answer);
-        console.log('✅ Answer WebRTC procesada - Esperando conexión ICE...');
-        
-        // ✅ CAMBIAR ESTADO A "Sincronizando..."
-        document.getElementById('call-status').textContent = 'Sincronizando...';
-        
-    } catch (error) {
-        console.error('Error manejando answer WebRTC:', error);
-    }
-}
-
-async handleWebRTCICECandidate(data) {
-    try {
-        await this.peerConnection.addIceCandidate(data.candidate);
-        console.log('✅ Candidato ICE agregado:', data.candidate.type);
-    } catch (error) {
-        console.error('Error agregando candidato ICE:', error);
-    }
-}
-
-                    // Obtener stream local con mejor configuración
-                    this.localStream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: {
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true,
-                            channelCount: 1,
-                            sampleRate: 48000
-                        }, 
-                        video: false 
-                    });
-
-                    console.log('Stream local obtenido:', this.localStream);
-
-                    // Configurar audio local
-                    const localAudio = document.getElementById('local-audio');
-                    localAudio.srcObject = this.localStream;
-
-                    // Agregar tracks locales a la conexión
-                    this.localStream.getTracks().forEach(track => {
-                        this.peerConnection.addTrack(track, this.localStream);
-                    });
-
-                    // Manejar stream remoto
-                    this.peerConnection.ontrack = (event) => {
-                        console.log('✅ Stream remoto recibido:', event.streams[0]);
-                        this.remoteStream = event.streams[0];
-                        const remoteAudio = document.getElementById('remote-audio');
-                        remoteAudio.srcObject = this.remoteStream;
-
-                        // Intentar reproducir
-                        remoteAudio.play().then(() => {
-                            console.log('✅ Audio remoto reproduciéndose');
-                        }).catch(e => {
-                            console.error('❌ Error reproduciendo audio remoto:', e);
-                        });
-                    };
-
-                    // Manejar candidatos ICE
-                    this.peerConnection.onicecandidate = (event) => {
-                        if (event.candidate && this.activeCall) {
-                            this.socket.emit('webrtc-ice-candidate', {
-                                to: this.activeCall.targetSocketId,
-                                candidate: event.candidate,
-                                callId: this.activeCall.callId
-                            });
-                        }
-                    };
-
-                    // ✅ DETECCIÓN MEJORADA DE ESTADOS WEBCRTC
-                    this.peerConnection.onconnectionstatechange = () => {
-                        const state = this.peerConnection.connectionState;
-                        console.log('WebRTC Connection State:', state);
-                        
-                        if (state === 'connected') {
-                            // ✅ ESTADO FINAL: "Conectado" - Audio funcionando
-                            console.log('✅✅✅ CONEXIÓN WEBCRTC ESTABLECIDA - AUDIO FUNCIONANDO');
-                        } else if (state === 'connecting') {
-                            // ✅ WebRTC está en proceso de conexión ICE
-                            console.log('🔄 WebRTC conectando...');
-                        }
-                    };
-
-                    this.peerConnection.oniceconnectionstatechange = () => {
-                        const iceState = this.peerConnection.iceConnectionState;
-                        console.log('WebRTC ICE State:', iceState);
-                    };
-
-                    // Logs de diagnóstico
-                    this.peerConnection.onsignalingstatechange = () => {
-                        console.log('Signaling state:', this.peerConnection.signalingState);
-                    };
-
-                } catch (error) {
-                    console.error('❌ Error configurando WebRTC:', error);
-                    this.showNotification('Error al acceder al micrófono', 'error');
-                }
-            }
-
-            async initiateCall(toUserId, callType) {
-                try {
-                    await this.setupWebRTC();
-
-                    this.socket.emit('initiate-call', {
-                        fromUser: this.currentUser,
-                        toUserId: toUserId,
-                        callType: callType
-                    });
-
-                    // ✅ ESTADO: "Llamando..." 
-                    this.showOutgoingCall({ 
-                        callId: Date.now(), 
-                        toUserId: toUserId 
-                    });
-
-                } catch (error) {
-                    console.error('Error iniciando llamada:', error);
-                    this.showNotification('Error al iniciar llamada', 'error');
-                }
-            }
-
-            // ✅ NUEVO MÉTODO: Cuando el servidor confirma que la llamada se inició
-            onCallInitiated(data) {
-                if (this.activeCall && this.activeCall.callId === data.callId) {
-                    // ✅ ACTUALIZAR INFORMACIÓN DEL USUARIO DESTINO
-                    this.activeCall.toUser = data.toUser;
-                    document.getElementById('outgoing-avatar').textContent = data.toUser.name.charAt(0).toUpperCase();
-                    document.getElementById('outgoing-name').textContent = data.toUser.name;
-                    
-                    // ✅ CREAR OFFER INMEDIATAMENTE (solo el que inicia la llamada)
-                    this.createAndSendOffer();
-                }
-            }
-
-            // ✅ NUEVO MÉTODO: Crear y enviar offer (solo para el que inicia)
-            async createAndSendOffer() {
-                try {
-                    const offer = await this.peerConnection.createOffer({
-                        offerToReceiveAudio: true,
-                        offerToReceiveVideo: false
-                    });
-                    
-                    await this.peerConnection.setLocalDescription(offer);
-
-                    this.socket.emit('webrtc-offer', {
-                        to: this.activeCall.targetSocketId,
-                        offer: offer,
-                        callId: this.activeCall.callId
-                    });
-                    
-                    console.log('✅ Offer WebRTC creada y enviada');
-                    
-                } catch (error) {
-                    console.error('Error creando offer WebRTC:', error);
-                }
-            }
-
-            async handleWebRTCOffer(data) {
-                try {
-                    if (!this.peerConnection) {
-                        await this.setupWebRTC();
-                    }
-
-                    await this.peerConnection.setRemoteDescription(data.offer);
-                    
-                    // ✅ CREAR ANSWER (no otra offer)
-                    const answer = await this.peerConnection.createAnswer();
-                    await this.peerConnection.setLocalDescription(answer);
-
-                    this.socket.emit('webrtc-answer', {
-                        to: data.from,
-                        answer: answer,
-                        callId: data.callId
-                    });
-
-                    console.log('✅ Answer WebRTC enviada');
-                    
-                    // ✅ CAMBIAR ESTADO A "Sincronizando..."
-                    document.getElementById('call-status').textContent = 'Sincronizando...';
-
-                } catch (error) {
-                    console.error('Error manejando offer WebRTC:', error);
-                }
-            }
-
-            async handleWebRTCAnswer(data) {
-                try {
-                    await this.peerConnection.setRemoteDescription(data.answer);
-                    console.log('✅ Answer WebRTC procesada - Esperando conexión ICE...');
-                    
-                    // ✅ CAMBIAR ESTADO A "Sincronizando..."
-                    document.getElementById('call-status').textContent = 'Sincronizando...';
-                    
-                } catch (error) {
-                    console.error('Error manejando answer WebRTC:', error);
-                }
-            }
-
-            async handleWebRTCICECandidate(data) {
-                try {
-                    await this.peerConnection.addIceCandidate(data.candidate);
-                } catch (error) {
-                    console.error('Error agregando candidato ICE:', error);
-                }
-            }
-
-            showIncomingCall(data) {
-                this.activeCall = {
-                    ...data,
-                    targetSocketId: this.socket.id
-                };
-
-                document.getElementById('incoming-avatar').textContent = data.fromUser.name.charAt(0).toUpperCase();
-                document.getElementById('incoming-name').textContent = data.fromUser.name;
-
-                document.getElementById('incoming-call-screen').classList.add('active');
-            }
-
-            showOutgoingCall(data) {
-                this.activeCall = {
-                    ...data,
-                    targetSocketId: data.toUserId
-                };
-
-                // ✅ Mostrar "Usuario" temporalmente hasta recibir info del servidor
-                document.getElementById('outgoing-avatar').textContent = 'U';
-                document.getElementById('outgoing-name').textContent = 'Usuario';
-                
-                // ✅ ESTADO MEJORADO: "Llamando..."
-                document.getElementById('call-status').textContent = 'Llamando...';
-                document.getElementById('call-status').style.display = 'block';
-                document.getElementById('call-timer').style.display = 'none';
-
-                document.getElementById('outgoing-call-screen').classList.add('active');
-            }
-
-            async answerCall() {
-                try {
-                    if (!this.peerConnection) {
-                        await this.setupWebRTC();
-                    }
-
-                    this.socket.emit('answer-call', { callId: this.activeCall.callId });
-                    document.getElementById('incoming-call-screen').classList.remove('active');
-                    
-                    // ✅ MOSTRAR PANTALLA DE LLAMADA SALIENTE CON ESTADO "Sincronizando..."
-                    this.showOutgoingCall(this.activeCall);
-                    document.getElementById('call-status').textContent = 'Sincronizando...';
-
-                    // ❌ NO crear offer aquí - esperar la offer del otro usuario
-
-                } catch (error) {
-                    console.error('Error contestando llamada:', error);
-                    this.showNotification('Error al contestar llamada', 'error');
-                }
-            }
-
-            rejectCall() {
-                this.socket.emit('reject-call', { callId: this.activeCall.callId });
-                document.getElementById('incoming-call-screen').classList.remove('active');
-                this.cleanupWebRTC();
-                this.activeCall = null;
-            }
-
-            endCall() {
-                if (this.activeCall) {
-                    this.socket.emit('end-call', { callId: this.activeCall.callId });
-                    
-                    // Limpiar inmediatamente en el cliente local
-                    this.hideCallScreens();
-                    this.stopCallTimer();
-                    this.cleanupWebRTC();
-                    
-                    // Calcular duración si la llamada estaba en curso
-                    if (this.callStartTime) {
-                        const duration = Math.floor((new Date() - this.callStartTime) / 1000);
-                        this.showNotification(`Llamada finalizada - ${this.formatTime(duration)}`, 'info');
-                    } else {
-                        this.showNotification('Llamada cancelada', 'info');
-                    }
-                    
-                    this.activeCall = null;
-                    this.callStartTime = null;
-                } else {
-                    this.hideCallScreens();
-                    this.cleanupWebRTC();
-                }
-            }
-
-            onCallConnected(data) {
-                if (this.activeCall && this.activeCall.callId === data.callId) {
-                    // ✅ ACTUALIZAR INFORMACIÓN DEL OTRO USUARIO
-                    if (data.connectedUser) {
-                        document.getElementById('outgoing-avatar').textContent = data.connectedUser.name.charAt(0).toUpperCase();
-                        document.getElementById('outgoing-name').textContent = data.connectedUser.name;
-                    }
-                    
-                    // ✅ ESTADO FINAL MEJORADO
-                    document.getElementById('call-status').textContent = 'Conectado';
-                    document.getElementById('call-status').style.display = 'none';
-                    document.getElementById('call-timer').style.display = 'block';
-                    this.startCallTimer();
-                    this.showNotification('Llamada conectada', 'success');
-                }
-            }
-
-            onCallRejected(data) {
-                this.showNotification('Llamada rechazada', 'error');
-                this.hideCallScreens();
-                this.cleanupWebRTC();
-                this.activeCall = null;
-            }
-
-            onCallEnded(data) {
-                const duration = data.duration || 0;
-                if (duration > 0) {
-                    this.showNotification(`Llamada finalizada - ${this.formatTime(duration)}`, 'info');
-                } else {
-                    this.showNotification('Llamada finalizada', 'info');
-                }
-                this.hideCallScreens();
-                this.stopCallTimer();
-                this.cleanupWebRTC();
-                this.activeCall = null;
-            }
-
-            toggleMicrophone(button) {
-                this.isMuted = !this.isMuted;
-                button.classList.toggle('active', this.isMuted);
-
-                if (this.localStream) {
-                    this.localStream.getAudioTracks().forEach(track => {
-                        track.enabled = !this.isMuted;
-                    });
-                }
-
-                if (this.activeCall) {
-                    this.socket.emit('toggle-audio', { 
-                        callId: this.activeCall.callId, 
-                        muted: this.isMuted 
-                    });
-                }
-            }
-
-            toggleSpeaker(button) {
-                button.classList.toggle('active');
-                // En una implementación real, esto controlaría el volumen del audio remoto
-            }
-
-            cleanupWebRTC() {
-                if (this.localStream) {
-                    this.localStream.getTracks().forEach(track => track.stop());
-                    this.localStream = null;
-                }
-
-                if (this.peerConnection) {
-                    this.peerConnection.close();
-                    this.peerConnection = null;
-                }
-
-                // Limpiar elementos de audio
-                document.getElementById('local-audio').srcObject = null;
-                document.getElementById('remote-audio').srcObject = null;
-            }
-
-            startCallTimer() {
-                this.callStartTime = new Date();
-                this.callTimer = setInterval(() => {
-                    const now = new Date();
-                    const duration = Math.floor((now - this.callStartTime) / 1000);
-                    document.getElementById('call-timer').textContent = this.formatTime(duration);
-                }, 1000);
-            }
-
-            stopCallTimer() {
-                if (this.callTimer) {
-                    clearInterval(this.callTimer);
-                    this.callTimer = null;
-                }
-            }
-
-            formatTime(seconds) {
-                const mins = Math.floor(seconds / 60);
-                const secs = seconds % 60;
-                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-            }
-
-            hideCallScreens() {
-                document.getElementById('incoming-call-screen').classList.remove('active');
-                document.getElementById('outgoing-call-screen').classList.remove('active');
-                document.getElementById('call-timer').style.display = 'none';
-                document.getElementById('call-status').style.display = 'block';
-                document.getElementById('call-status').textContent = 'Llamando...';
-            }
-
-            logout() {
-                this.cleanupWebRTC();
-                localStorage.removeItem('currentUser');
-                this.socket.disconnect();
-                window.location.href = '/';
-            }
-
-            updateUsersList(onlineUsers) {
-                const container = document.getElementById('users-container');
-
-                if (!onlineUsers || onlineUsers.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                            </svg>
-                            <h3>No hay usuarios conectados</h3>
-                            <p>Espera a que otros usuarios se conecten</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                container.innerHTML = '';
-
-                onlineUsers.forEach(user => {
-                    if (user.id !== this.currentUser.id) {
-                        const userCard = document.createElement('div');
-                        userCard.className = 'user-card';
-                        userCard.innerHTML = `
-                            <div class="user-avatar">${user.name.charAt(0).toUpperCase()}</div>
-                            <div class="user-info">
-                                <div class="user-name">${user.name}</div>
-                                <div class="user-status">
-                                    <div class="status-dot"></div>
-                                    En línea
-                                </div>
-                            </div>
-                            <div class="user-actions">
-                                <button class="btn-call" onclick="app.initiateCall('${user.id}', 'audio')" title="Llamar">
-                                    <svg viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.21c.28-.26.36-.65.25-1C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        `;
-                        container.appendChild(userCard);
-                    }
-                });
-            }
-
-            showHistory() {
-                fetch('/api/call-history')
-                    .then(response => response.json())
-                    .then(history => {
-                        this.displayHistory(history);
-                    })
-                    .catch(error => {
-                        console.error('Error loading history:', error);
-                        this.displayHistory([]);
-                    });
-            }
-
-            displayHistory(history) {
-                const container = document.getElementById('call-history');
-
-                if (!history || history.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state" style="color: #718096;">
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                            </svg>
-                            <h3>No hay llamadas en el historial</h3>
-                            <p>Realiza tu primera llamada para ver el registro aquí</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                container.innerHTML = '';
-
-                history.forEach(call => {
-                    const historyItem = document.createElement('div');
-                    historyItem.className = 'history-item';
-
-                    const statusClass = call.status === 'completed' ? 'status-completed' : 
-                                      call.status === 'rejected' ? 'status-rejected' : 'status-missed';
-                    const statusText = call.status === 'completed' ? 'Completada' : 
-                                     call.status === 'rejected' ? 'Rechazada' : 'Perdida';
-
-                    historyItem.innerHTML = `
-                        <div class="history-avatar">${call.from.name.charAt(0).toUpperCase()}</div>
-                        <div class="history-info">
-                            <div class="history-name">${call.from.name}</div>
-                            <div class="history-details">
-                                ${new Date(call.startTime).toLocaleString()} - 
-                                ${call.duration ? this.formatTime(call.duration) : '0:00'}
-                            </div>
-                        </div>
-                        <div class="history-status ${statusClass}">
-                            ${statusText}
-                        </div>
-                    `;
-                    container.appendChild(historyItem);
-                });
-
-                document.getElementById('main-screen').classList.remove('active');
-                document.getElementById('history-screen').classList.add('active');
-            }
-
-            showMainScreen() {
-                document.getElementById('history-screen').classList.remove('active');
-                document.getElementById('main-screen').classList.add('active');
-            }
-
-            showNotification(message, type) {
-                const notification = document.getElementById('notification');
-                notification.textContent = message;
-                notification.className = `notification ${type} active`;
-
-                setTimeout(() => {
-                    notification.classList.remove('active');
-                }, 3000);
-            }
-        }
-
-        let app;
-        document.addEventListener('DOMContentLoaded', () => {
-            app = new CallApp();
-        });
-    </script>
+  }
+
+  const app = new CallApp();
+  document.addEventListener('DOMContentLoaded', () => app = new CallApp());
+</script>
 </body>
 </html>
