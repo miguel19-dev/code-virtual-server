@@ -2,206 +2,57 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CallBlue – Iniciar sesión</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --primary: #6366f1;
-      --primary-dark: #4f46e5;
-      --bg: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-      --card: rgba(255, 255, 255, 0.08);
-      --text: #f1f5f9;
-      --text-light: #cbd5e1;
-      --success: #34d399;
-      --error: #f87171;
-    }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .auth-container {
-      background: var(--card);
-      backdrop-filter: blur(16px);
-      border-radius: 24px;
-      width: 100%;
-      max-width: 420px;
-      padding: 40px 32px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
-      border: 1px solid rgba(255,255,255,0.1);
-      position: relative;
-      overflow: hidden;
-    }
-    .auth-container::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle, rgba(96,165,250,0.15) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    header {
-      text-align: center;
-      margin-bottom: 32px;
-    }
-    header h1 {
-      font-size: 32px;
-      font-weight: 700;
-      background: linear-gradient(90deg, #60a5fa, #34d399);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 8px;
-    }
-    header p {
-      color: var(--text-light);
-      font-size: 15px;
-    }
-    .tab-switch {
-      display: flex;
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px;
-      padding: 4px;
-      margin-bottom: 28px;
-    }
-    .tab {
-      flex: 1;
-      padding: 12px;
-      text-align: center;
-      border-radius: 10px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-    .tab.active {
-      background: linear-gradient(45deg, #60a5fa, #34d399);
-      color: white;
-    }
-    form { display: none; }
-    form.active { display: block; animation: fade 0.4s; }
-    .input-group {
-      margin-bottom: 20px;
-      position: relative;
-    }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 14px;
-      color: var(--text-light);
-    }
-    input {
-      width: 100%;
-      padding: 14px 16px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 12px;
-      color: white;
-      font-size: 16px;
-      transition: all 0.3s;
-    }
-    input:focus {
-      outline: none;
-      border-color: #60a5fa;
-      box-shadow: 0 0 0 3px rgba(96,165,250,0.2);
-    }
-    input::placeholder { color: #94a3b8; }
-    .avatar-preview {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      object-fit: cover;
-      margin: 16px auto;
-      display: block;
-      border: 4px solid #60a5fa;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
-    }
-    .file-input {
-      display: none;
-    }
-    .file-label {
-      display: block;
-      text-align: center;
-      padding: 12px;
-      background: rgba(255,255,255,0.08);
-      border-radius: 12px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: all 0.3s;
-    }
-    .file-label:hover { background: rgba(255,255,255,0.15); }
-    button[type="submit"] {
-      width: 100%;
-      padding: 16px;
-      background: linear-gradient(45deg, #60a5fa, #34d399);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font-size: 17px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-top: 10px;
-      transition: all 0.3s;
-    }
-    button[type="submit"]:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(96,165,250,0.4); }
-    .message {
-      margin-top: 16px;
-      padding: 12px;
-      border-radius: 10px;
-      text-align: center;
-      font-size: 14px;
-      display: none;
-    }
-    .message.success { background: rgba(52,211,153,0.2); color: var(--success); border: 1px solid rgba(52,211,153,0.3); }
-    .message.error   { background: rgba(248,113,113,0.2); color: var(--error);   border: 1px solid rgba(248,113,113,0.3); }
-
-    @keyframes fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    :root{--primary:#6366f1;--bg:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);--card:rgba(255,255,255,0.08);--text:#f1f5f9;--text-light:#cbd5e1;--success:#34d399;--error:#f87171}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .auth-container{background:var(--card);backdrop-filter:blur(16px);border-radius:24px;max-width:420px;width:100%;padding:40px 32px;box-shadow:0 20px 50px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);position:relative;overflow:hidden}
+    .auth-container::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(96,165,250,0.15) 0%,transparent 70%);pointer-events:none}
+    header{text-align:center;margin-bottom:32px}
+    header h1{font-size:32px;font-weight:700;background:linear-gradient(90deg,#60a5fa,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+    header p{color:var(--text-light);font-size:15px}
+    .tab-switch{display:flex;background:rgba(255,255,255,0.05);border-radius:12px;padding:4px;margin-bottom:28px}
+    .tab{flex:1;padding:12px;text-align:center;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s}
+    .tab.active{background:linear-gradient(45deg,#60a5fa,#34d399);color:white}
+    form{display:none}
+    form.active{display:block;animation:fade .4s}
+    .input-group{margin-bottom:20px;position:relative}
+    label{display:block;margin-bottom:8px;font-size:14px;color:var(--text-light)}
+    input{width:100%;padding:14px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:12px;color:white;font-size:16px;transition:.3s}
+    input:focus{outline:none;border-color:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,0.2)}
+    .avatar-preview{width:100px;height:100px;border-radius:50%;object-fit:cover;margin:16px auto;display:block;border:4px solid #60a5fa;box-shadow:0 8px 25px rgba(0,0,0,0.4)}
+    .file-input{display:none}
+    .file-label{display:block;text-align:center;padding:12px;background:rgba(255,255,255,0.08);border-radius:12px;cursor:pointer;font-size:14px;transition:.3s}
+    .file-label:hover{background:rgba(255,255,255,0.15)}
+    button[type=submit]{width:100%;padding:16px;background:linear-gradient(45deg,#60a5fa,#34d399);color:white;border:none;border-radius:12px;font-size:17px;font-weight:600;cursor:pointer;margin-top:10px;transition:.3s}
+    button[type=submit]:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(96,165,250,0.4)}
+    .message{margin-top:16px;padding:12px;border-radius:10px;text-align:center;font-size:14px;display:none}
+    .message.success{background:rgba(52,211,153,0.2);color:var(--success);border:1px solid rgba(52,211,153,0.3)}
+    .message.error{background:rgba(248,113,113,0.2);color:var(--error);border:1px solid rgba(248,113,113,0.3)}
+    @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
   </style>
 </head>
 <body>
-
   <div class="auth-container">
-    <header>
-      <h1>CallBlue</h1>
-      <p>Llamadas de voz instantáneas</p>
-    </header>
-
+    <header><h1>CallBlue</h1><p>Llamadas de voz instantáneas</p></header>
     <div class="tab-switch">
       <div class="tab active" onclick="switchTab('login')">Iniciar sesión</div>
       <div class="tab" onclick="switchTab('register')">Registrarse</div>
     </div>
 
-    <!-- LOGIN -->
     <form id="login-form" class="active">
-      <div class="input-group">
-        <label>Usuario</label>
-        <input type="text" id="login-name" placeholder="Tu nombre de usuario" required />
-      </div>
-      <div class="input-group">
-        <label>Contraseña</label>
-        <input type="password" id="login-pass" placeholder="Mínimo 6 caracteres" required />
-      </div>
+      <div class="input-group"><label>Usuario</label><input type="text" id="login-name" placeholder="Tu nombre" required></div>
+      <div class="input-group"><label>Contraseña</label><input type="password" id="login-pass" placeholder="Mínimo 6 caracteres" required></div>
       <button type="submit">Entrar</button>
       <div class="message" id="login-msg"></div>
     </form>
 
-    <!-- REGISTRO -->
     <form id="register-form">
-      <div class="input-group">
-        <label>Nombre de usuario</label>
-        <input type="text" id="reg-name" placeholder="Elige un nombre" required />
-      </div>
-      <div class="input-group">
-        <label>Contraseña</label>
-        <input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres" required />
-      </div>
+      <div class="input-group"><label>Nombre de usuario</label><input type="text" id="reg-name" placeholder="Elige un nombre" required></div>
+      <div class="input-group"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres" required></div>
       <div class="input-group">
         <label>Foto de perfil (opcional)</label>
         <img id="avatar-preview" class="avatar-preview" src="/default-avatar.png" alt="Preview">
@@ -214,7 +65,6 @@
   </div>
 
   <script>
-    // Cambiar pestañas
     function switchTab(mode) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       event.target.classList.add('active');
@@ -222,70 +72,48 @@
       document.getElementById('register-form').classList.toggle('active', mode === 'register');
     }
 
-    // Preview de avatar
     document.getElementById('avatar-input').onchange = e => {
-      const file = e.target.files[0];
-      if (file) {
-        document.getElementById('avatar-preview').src = URL.createObjectURL(file);
+      if (e.target.files[0]) {
+        document.getElementById('avatar-preview').src = URL.createObjectURL(e.target.files[0]);
       }
     };
 
-    // LOGIN
     document.getElementById('login-form').onsubmit = async e => {
       e.preventDefault();
-      const name = document.getElementById('login-name').value.trim();
-      const pass = document.getElementById('login-pass').value;
-
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, password: pass })
+        body: JSON.stringify({ name: document.getElementById('login-name').value.trim(), password: document.getElementById('login-pass').value })
       });
-
       const data = await res.json();
       const msg = document.getElementById('login-msg');
       if (res.ok) {
         localStorage.setItem('currentUser', JSON.stringify(data.user));
-        msg.textContent = '¡Bienvenido!';
-        msg.className = 'message success';
-        msg.style.display = 'block';
+        msg.textContent = '¡Bienvenido!'; msg.className = 'message success'; msg.style.display = 'block';
         setTimeout(() => location.href = '/app', 800);
       } else {
-        msg.textContent = data.error || 'Error';
-        msg.className = 'message error';
-        msg.style.display = 'block';
+        msg.textContent = data.error; msg.className = 'message error'; msg.style.display = 'block';
       }
     };
 
-    // REGISTRO
     document.getElementById('register-form').onsubmit = async e => {
       e.preventDefault();
-      const name = document.getElementById('reg-name').value.trim();
-      const pass = document.getElementById('reg-pass').value;
-      const file = document.getElementById('avatar-input').files[0];
-
       const formData = new FormData();
-      formData.append('name', name);
-      formData.append('password', pass);
-      if (file) formData.append('avatar', file);
+      formData.append('name', document.getElementById('reg-name').value.trim());
+      formData.append('password', document.getElementById('reg-pass').value);
+      if (document.getElementById('avatar-input').files[0]) {
+        formData.append('avatar', document.getElementById('avatar-input').files[0]);
+      }
 
-      const res = await fetch('/api/register', {
-        method: 'POST',
-        body: formData
-      });
-
+      const res = await fetch('/api/register', { method: 'POST', body: formData });
       const data = await res.json();
       const msg = document.getElementById('reg-msg');
       if (res.ok) {
         localStorage.setItem('currentUser', JSON.stringify(data.user));
-        msg.textContent = '¡Cuenta creada!';
-        msg.className = 'message success';
-        msg.style.display = 'block';
+        msg.textContent = '¡Cuenta creada!'; msg.className = 'message success'; msg.style.display = 'block';
         setTimeout(() => location.href = '/app', 1000);
       } else {
-        msg.textContent = data.error || 'Error';
-        msg.className = 'message error';
-        msg.style.display = 'block';
+        msg.textContent = data.error; msg.className = 'message error'; msg.style.display = 'block';
       }
     };
   </script>
