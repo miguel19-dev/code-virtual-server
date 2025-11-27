@@ -1,173 +1,144 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CallBlue</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root{--bg:#0f172a;--glass:rgba(255,255,255,0.08);--accent:#60a5fa;--green:#34d399;--red:#ef4444;--text:#e2e8f0}
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#1e293b,#0f172a);color:white;min-height:100vh;overflow:hidden}
-    .main{max-width:420px;margin:0 auto;padding:20px;height:100vh;display:flex;flex-direction:column;position:relative}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px}
-    h1{font-size:32px;font-weight:700;background:linear-gradient(90deg,var(--accent),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    .logout{background:var(--glass);width:50px;height:50px;border-radius:50%;display:grid;place-items:center;cursor:pointer;transition:.3s}
-    .logout:hover{background:var(--red);transform:scale(1.1)}
-    .users{flex:1;overflow-y:auto;padding-bottom:20px}
-    .user{background:var(--glass);backdrop-filter:blur(16px);border-radius:24px;padding:18px;margin-bottom:16px;display:flex;align-items:center;gap:18px;border:1px solid rgba(255,255,255,0.1);transition:.3s}
-    .user:hover{transform:translateY(-6px);box-shadow:0 20px 40px rgba(0,0,0,0.4)}
-    .user img{width:64px;height:64px;border-radius:50%;object-fit:cover;border:4px solid var(--accent);box-shadow:0 8px 20px rgba(0,0,0,0.5)}
-    .name{font-size:18px;font-weight:600}
-    .online{color:#94a3b8;font-size:14px}
-    .call-btn{background:linear-gradient(45deg,var(--accent),var(--green));width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center;box-shadow:0 8px 25px rgba(96,165,250,0.5);transition:.3s}
-    .call-btn:hover{transform:scale(1.15)}
-
-    .call-screen{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:30px;z-index:999}
-    .call-screen.active{display:flex;animation:fade .5s}
-    @keyframes fade{from{opacity:0}to{opacity:1}}
-    .big-avatar{width:180px;height:180px;border-radius:50%;border:8px solid var(--accent);object-fit:cover;box-shadow:0 30px 60px rgba(0,0,0,0.7)}
-    .calling-name{font-size:36px;font-weight:700}
-    .status{font-size:20px;color:#94a3b8}
-    .timer{font-size:56px;color:var(--green);font-weight:700;display:none}
-    .actions{display:flex;gap:80px;margin-top:50px}
-    .btn{width:90px;height:90px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center;box-shadow:0 15px 35px rgba(0,0,0,0.6);transition:.3s}
-    .btn:hover{transform:scale(1.1)}
-    .accept{background:var(--green)}
-    .reject,.hangup{background:var(--red)}
-  </style>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CallBlue</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0f172a;--g:rgba(255,255,255,0.08);--a:#60a5fa;--v:#34d399;--r:#ef4444}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;min-height:100vh;overflow:hidden}
+  .main{max-width:420px;margin:0 auto;padding:20px;height:100vh;display:flex;flex-direction:column}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px}
+  h1{font-size:32px;background:linear-gradient(90deg,var(--a),var(--v));-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:700}
+  .logout{background:var(--g);width:50px;height:50px;border-radius:50%;display:grid;place-items:center;cursor:pointer}
+  .logout:hover{background:var(--r);transform:scale(1.1)}
+  .users{flex:1;overflow-y:auto}
+  .u{background:var(--g);backdrop-filter:blur(16px);border-radius:24px;padding:18px;margin-bottom:16px;display:flex;align-items:center;gap:18px;border:1px solid rgba(255,255,255,0.1);transition:.3s}
+  .u:hover{transform:translateY(-6px);box-shadow:0 20px 40px rgba(0,0,0,0.4)}
+  .u img{width:64px;height:64px;border-radius:50%;object-fit:cover;border:4px solid var(--a)}
+  .callb{background:linear-gradient(45deg,var(--a),var(--v));width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center;box-shadow:0 8px 25px rgba(96,165,250,0.5)}
+  .screen{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:30px;z-index:99}
+  .screen.active{display:flex;animation:f 0.4s}
+  @keyframes f{from{opacity:0}to{opacity:1}}
+  .big{width:180px;height:180px;border-radius:50%;border:8px solid var(--a);object-fit:cover;box-shadow:0 30px 60px #0009}
+  .cn{font-size:36px;font-weight:700}
+  .st{font-size:20px;color:#94a3b8}
+  .timer{font-size:56px;color:var(--v);font-weight:700;display:none}
+  .acts{display:flex;gap:80px;margin-top:50px}
+  .b{width:90px;height:90px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center;box-shadow:0 15px 35px #0009}
+  .b:hover{transform:scale(1.1)}
+  .acc{background:var(--v)}
+  .rej,.end{background:var(--r)}
+</style>
 </head>
 <body>
 
-<audio id="remoteAudio" autoplay playsinline></audio>
+<audio id="r" autoplay playsinline></audio>
 
 <div class="main">
   <header>
     <h1>CallBlue</h1>
     <div class="logout" onclick="localStorage.removeItem('currentUser');location.href='/'">
-      <svg width="28" height="28" fill="white" viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+      <svg width="28" height="28" fill="#fff" viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
     </div>
   </header>
-  <div class="users" id="usersList"></div>
+  <div class="users" id="l"></div>
 </div>
 
-<div id="incoming" class="call-screen">
-  <img id="inAvatar" class="big-avatar" src="">
-  <div class="calling-name" id="inName"></div>
-  <div class="status">Llamada entrante...</div>
-  <div class="actions">
-    <button class="btn accept" id="acceptBtn">Accept</button>
-    <button class="btn reject" id="rejectBtn">Reject</button>
+<div id="in" class="screen">
+  <img id="ia" class="big" src="">
+  <div class="cn" id="inm"></div>
+  <div class="st">Llamada entrante...</div>
+  <div class="acts">
+    <button class="b acc" id="ac">Aceptar</button>
+    <button class="b rej" id="re">Rechazar</button>
   </div>
 </div>
 
-<div id="activeCall" class="call-screen">
-  <img id="callAvatar" class="big-avatar" src="">
-  <div class="calling-name" id="callName"></div>
-  <div class="status" id="callStatus">Conectando...</div>
-  <div class="timer" id="timer">00:00</div>
-  <button class="btn hangup" id="hangupBtn">Hangup</button>
+<div id="out" class="screen">
+  <img id="oa" class="big" src="">
+  <div class="cn" id="on"></div>
+  <div class="st" id="st">Llamando...</div>
+  <div class="timer" id="t">00:00</div>
+  <button class="b end" id="en">Colgar</button>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
   const socket = io();
-  const user = JSON.parse(localStorage.getItem('currentUser') || 'null');
-  if (!user) location.href = '/';
+  const me = JSON.parse(localStorage.getItem('currentUser'));
+  if (!me) location.href = '/';
 
   let pc = null;
-  let callActive = false;
-  let timerSeconds = 0;
-  let timerInterval = null;
+  let timer = null;
 
-  socket.emit('login', user);
+  socket.emit('login', me);
 
-  socket.on('online-users', list => {
-    const container = document.getElementById('usersList');
-    container.innerHTML = '';
-    list.filter(u => u.id !== user.id).forEach(u => {
-      const div = document.createElement('div');
-      div.className = 'user';
-      div.innerHTML = `
-        <img src="${u.avatar}" onerror="this.src='/default-avatar.png'">
-        <div>
-          <div class="name">${u.name}</div>
-          <div class="online">En línea</div>
-        </div>
-        <button class="call-btn" onclick="callUser(\( {u.id}, ' \){u.name}', '${u.avatar}')">
-          <svg width="28" height="28" fill="white" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.045 15.045 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A10.95 10.95 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
-        </button>
-      `;
-      container.appendChild(div);
+  socket.on('users', list => {
+    const c = document.getElementById('l');
+    c.innerHTML = '';
+    list.filter(u => u.id !== me.id).forEach(u => {
+      const d = document.createElement('div');
+      d.className = 'u';
+      d.innerHTML = `
+        <img src="${u.avatar||'/default-avatar.png'}" onerror="this.src='/default-avatar.png'">
+        <div><div style="font-weight:600">${u.name}</div><small style="color:#94a3b8">En línea</small></div>
+        <button class="callb" onclick="call(\( {u.id},' \){u.name}','${u.avatar||'/default-avatar.png'}')">
+          <svg width="28" height="28" fill="#fff" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15 15 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A11 11 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
+        </button>`;
+      c.appendChild(d);
     });
   });
 
-  window.callUser = async (id, name, avatar) => {
-    pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]});
-    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-    stream.getTracks().forEach(t => pc.addTrack(t, stream));
-    pc.ontrack = e => document.getElementById('remoteAudio').srcObject = e.streams[0];
-    pc.onicecandidate = e => e.candidate && socket.emit('webrtc-ice', {target: id, candidate: e.candidate});
+  window.call = async (id, name, ava) => {
+    pc = new RTCPeerConnection({iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'},
+      {urls:'turn:relay1.expressturn.com:3478',username:'000000002079624655',credential:'IDRwv6Pt/dZCoN7zXyU8lpCpE4w='}
+    ]});
+
+    const s = await navigator.mediaDevices.getUserMedia({audio:true});
+    s.getTracks().forEach(t=>pc.addTrack(t,s));
+    pc.ontrack = e => document.getElementById('r').srcObject = e.streams[0];
+    pc.onicecandidate = e => e.candidate && socket.emit('ice',{to:online[id]?.socketId,candidate:e.candidate});
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    socket.emit('call-user', {to: {id}, from: user});
-    socket.emit('webrtc-offer', {target: id, offer});
+    socket.emit('call', {toId:id, fromUser:me});
+    socket.emit('offer', {to:online[id]?.socketId, offer});
 
-    document.getElementById('callAvatar').src = avatar || '/default-avatar.png';
-    document.getElementById('callName').textContent = name;
-    document.getElementById('callStatus').textContent = 'Llamando...';
-    document.getElementById('activeCall').classList.add('active');
-    callActive = true;
+    document.getElementById('oa').src = ava;
+    document.getElementById('on').textContent = name;
+    document.getElementById('out').classList.add('active');
   };
 
-  socket.on('incoming-call', data => {
-    document.getElementById('inAvatar').src = data.from.avatar || '/default-avatar.png';
-    document.getElementById('inName').textContent = data.from.name;
-    document.getElementById('incoming').classList.add('active');
+  socket.on('incoming', d => {
+    document.getElementById('ia').src = d.fromUser.avatar || '/default-avatar.png';
+    document.getElementById('inm').textContent = d.fromUser.name;
+    document.getElementById('in').classList.add('active');
   });
 
-  document.getElementById('acceptBtn').onclick = () => {
-    document.getElementById('incoming').classList.remove('active');
-    document.getElementById('activeCall').classList.add('active');
-    document.getElementById('callStatus').style.display = 'none';
-    document.getElementById('timer').style.display = 'block';
-    socket.emit('accept-call', user.id);
+  document.getElementById('ac').onclick = () => {
+    document.getElementById('in').classList.remove('active');
+    document.getElementById('out').classList.add('active');
+    document.getElementById('t').style.display = 'block';
+    socket.emit('accept');
     startTimer();
   };
 
-  document.getElementById('rejectBtn').onclick = () => {
-    document.getElementById('incoming').classList.remove('active');
-    socket.emit('end-call');
-  };
+  document.getElementById('re').onclick = () => { document.getElementById('in').classList.remove('active'); socket.emit('end'); };
+  document.getElementById('en').onclick = () => end();
 
-  document.getElementById('hangupBtn').onclick = () => {
-    endCall();
-  };
-
-  function startTimer() {
-    timerSeconds = 0;
-    timerInterval = setInterval(() => {
-      timerSeconds++;
-      const m = String(Math.floor(timerSeconds/60)).padStart(2,'0');
-      const s = String(timerSeconds%60).padStart(2,'0');
-      document.getElementById('timer').textContent = `\( {m}: \){s}`;
-    }, 1000);
+  function startTimer(){
+    let s=0; timer=setInterval(()=>{s++;document.getElementById('t').textContent=`\( {String(Math.floor(s/60)).padStart(2,'0')}: \){String(s%60).padStart(2,'0')}`;},1000);
   }
 
-  function endCall() {
-    if (timerInterval) clearInterval(timerInterval);
-    if (pc) pc.close();
-    callActive = false;
-    document.querySelectorAll('.call-screen').forEach(s => s.classList.remove('active'));
-    socket.emit('end-call');
+  function end(){
+    if(timer)clearInterval(timer);
+    if(pc)pc.close();
+    document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+    socket.emit('end');
   }
 
-  socket.on('call-accepted', () => {
-    document.getElementById('callStatus').style.display = 'none';
-    document.getElementById('timer').style.display = 'block';
-    startTimer();
-  });
+  socket.on('accepted',()=>{document.getElementById('t').style.display='block';startTimer();});
 </script>
 </body>
 </html>
