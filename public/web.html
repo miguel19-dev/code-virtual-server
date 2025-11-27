@@ -79,6 +79,7 @@
             color: white;
             font-size: 1.2em;
             border: 2px solid var(--primary);
+            position: relative;
         }
         
         .user-details {
@@ -152,6 +153,7 @@
             cursor: pointer;
             transition: background 0.3s ease;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
         }
         
         .user-item:hover {
@@ -177,6 +179,7 @@
             border: 2px solid var(--surface-light);
             cursor: pointer;
             transition: transform 0.2s ease;
+            position: relative;
         }
         
         .user-avatar-small:hover {
@@ -201,19 +204,48 @@
             max-width: 200px;
         }
         
-        .user-status-indicator {
-            width: 10px;
-            height: 10px;
+        /* Estado en línea - Movido a esquina inferior derecha del avatar */
+        .online-status {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             background: var(--text-secondary);
-            margin-left: auto;
+            border: 2px solid var(--surface);
         }
         
-        .user-status-indicator.online {
+        .online-status.online {
             background: var(--success);
         }
         
-        /* Chat Area - VERSIÓN CORREGIDA */
+        /* Contador de mensajes no leídos */
+        .unread-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--error);
+            color: white;
+            border-radius: 10px;
+            min-width: 18px;
+            height: 18px;
+            font-size: 0.7em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        /* Chat Area */
         .chat-area {
             flex: 1;
             display: flex;
@@ -251,6 +283,7 @@
             cursor: pointer;
             transition: transform 0.2s ease;
             border: 2px solid var(--primary);
+            position: relative;
         }
         
         .chat-user-avatar:hover {
@@ -287,6 +320,18 @@
             border-radius: 18px;
             position: relative;
             word-wrap: break-word;
+            animation: messageAppear 0.3s ease;
+        }
+        
+        @keyframes messageAppear {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .message.sent {
@@ -438,6 +483,7 @@
             font-size: 2.5em;
             margin-bottom: 20px;
             border: 4px solid var(--primary);
+            position: relative;
         }
         
         .profile-name {
@@ -581,7 +627,10 @@
         <div class="sidebar">
             <div class="sidebar-header" onclick="showMyProfile()">
                 <div class="user-info">
-                    <div class="user-avatar" id="current-user-avatar">U</div>
+                    <div class="user-avatar" id="current-user-avatar">
+                        U
+                        <div class="online-status online"></div>
+                    </div>
                     <div class="user-details">
                         <div class="user-name" id="current-user-name">Usuario</div>
                         <div class="user-status">En línea</div>
@@ -605,7 +654,7 @@
             </div>
         </div>
         
-        <!-- Área de Chat - ESTRUCTURA CORREGIDA -->
+        <!-- Área de Chat -->
         <div class="chat-area">
             <div id="welcome-screen" class="welcome-screen">
                 <div class="welcome-icon">
@@ -618,10 +667,13 @@
             <div id="chat-container" style="display: none;">
                 <!-- HEADER - Arriba -->
                 <div class="chat-header">
-                    <div class="chat-user-avatar" id="chat-user-avatar" onclick="showUserProfile()">U</div>
+                    <div class="chat-user-avatar" id="chat-user-avatar" onclick="showUserProfile()">
+                        U
+                        <div class="online-status" id="chat-user-online-status"></div>
+                    </div>
                     <div class="chat-user-info">
                         <h3 id="chat-user-name">Usuario</h3>
-                        <div class="status" id="chat-user-status">En línea</div>
+                        <div class="status" id="chat-user-status">Desconectado</div>
                     </div>
                 </div>
                 
@@ -656,7 +708,10 @@
                 <h2>Mi Perfil</h2>
             </div>
             <div class="profile-content">
-                <div class="profile-avatar" id="my-profile-avatar">U</div>
+                <div class="profile-avatar" id="my-profile-avatar">
+                    U
+                    <div class="online-status online"></div>
+                </div>
                 <div class="profile-name" id="my-profile-name">Usuario</div>
                 <div class="profile-bio" id="my-profile-bio">¡Yo uso SecureChat!</div>
                 
@@ -690,7 +745,10 @@
                 <h2>Perfil</h2>
             </div>
             <div class="profile-content">
-                <div class="profile-avatar" id="user-profile-avatar">U</div>
+                <div class="profile-avatar" id="user-profile-avatar">
+                    U
+                    <div class="online-status" id="user-profile-online-status"></div>
+                </div>
                 <div class="profile-name" id="user-profile-name">Usuario</div>
                 <div class="profile-bio" id="user-profile-bio">¡Yo uso SecureChat!</div>
                 <div class="profile-actions">
@@ -709,6 +767,7 @@
         let selectedUser = null;
         let onlineUsers = [];
         let allUsers = [];
+        let unreadCounts = {};
         
         // Inicializar la aplicación
         document.addEventListener('DOMContentLoaded', async function() {
@@ -735,6 +794,9 @@
             
             // Configurar eventos
             setupEventListeners();
+            
+            // Solicitar contadores de mensajes no leídos
+            socket.emit('get_unread_counts', currentUser.id);
         });
         
         // Cargar lista de usuarios
@@ -764,18 +826,20 @@
                     userItem.innerHTML = `
                         <div class="user-avatar-small" onclick="event.stopPropagation(); showOtherUserProfile('${user.id}')">
                             ${user.name.charAt(0).toUpperCase()}
+                            <div class="online-status" id="online-${user.id}"></div>
+                            <div class="unread-badge" id="unread-${user.id}" style="display: none;">0</div>
                         </div>
                         <div class="user-info-small" onclick="selectUser('${user.id}')">
                             <div class="user-name-small">${user.name}</div>
                             <div class="user-last-message" id="last-msg-${user.id}">Haz clic para chatear</div>
                         </div>
-                        <div class="user-status-indicator" id="status-${user.id}"></div>
                     `;
                     
                     usersList.appendChild(userItem);
                 });
                 
                 updateOnlineStatus();
+                updateUnreadBadges();
             } catch (error) {
                 console.error('Error cargando usuarios:', error);
             }
@@ -803,11 +867,24 @@
             // Actualizar header del chat
             document.getElementById('chat-user-name').textContent = user.name;
             document.getElementById('chat-user-avatar').textContent = user.name.charAt(0).toUpperCase();
-            document.getElementById('chat-user-status').textContent = 
-                onlineUsers.find(u => u.id === user.id) ? 'En línea' : 'Desconectado';
+            
+            // Actualizar estado en línea en el header
+            const isOnline = onlineUsers.find(u => u.id === user.id);
+            document.getElementById('chat-user-status').textContent = isOnline ? 'En línea' : 'Desconectado';
+            document.getElementById('chat-user-online-status').className = `online-status ${isOnline ? 'online' : ''}`;
             
             // Cargar mensajes
             loadMessages(user);
+            
+            // Marcar mensajes como leídos
+            socket.emit('mark_as_read', {
+                userId: currentUser.id,
+                otherUserId: user.id
+            });
+            
+            // Limpiar contador de no leídos
+            unreadCounts[user.id] = 0;
+            updateUnreadBadge(user.id, 0);
             
             // Enfocar input de mensaje
             setTimeout(() => {
@@ -830,12 +907,6 @@
                 
                 // Scroll al final
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                
-                // Marcar como leído
-                socket.emit('mark_as_read', {
-                    userId: currentUser.id,
-                    otherUserId: user.id
-                });
             } catch (error) {
                 console.error('Error cargando mensajes:', error);
             }
@@ -914,7 +985,7 @@
             // Actualizar display
             updateCurrentUserDisplay();
             
-            // Notificar al servidor (en una implementación real, aquí harías una llamada API)
+            // Notificar al servidor
             socket.emit('profile_update', currentUser);
             
             // Ocultar pantalla de perfil
@@ -931,6 +1002,11 @@
             document.getElementById('user-profile-avatar').textContent = user.name.charAt(0).toUpperCase();
             document.getElementById('user-profile-name').textContent = user.name;
             document.getElementById('user-profile-bio').textContent = user.bio;
+            
+            // Actualizar estado en línea en el perfil
+            const isOnline = onlineUsers.find(u => u.id === user.id);
+            document.getElementById('user-profile-online-status').className = `online-status ${isOnline ? 'online' : ''}`;
+            
             document.getElementById('user-profile-screen').classList.add('active');
         }
         
@@ -957,24 +1033,108 @@
             document.getElementById('my-profile-bio').textContent = currentUser.bio;
         }
         
+        // Actualizar estado en línea de usuarios
+        function updateOnlineStatus() {
+            // Limpiar todos los estados primero
+            document.querySelectorAll('.online-status').forEach(status => {
+                status.className = 'online-status';
+            });
+            
+            // Marcar usuarios en línea
+            onlineUsers.forEach(user => {
+                const statusElement = document.getElementById(`online-${user.id}`);
+                if (statusElement) {
+                    statusElement.classList.add('online');
+                }
+                
+                // Actualizar estado en el header del chat si es el usuario seleccionado
+                if (selectedUser && selectedUser.id === user.id) {
+                    document.getElementById('chat-user-status').textContent = 'En línea';
+                    document.getElementById('chat-user-online-status').classList.add('online');
+                }
+                
+                // Actualizar estado en el perfil si está abierto
+                const profileStatus = document.getElementById('user-profile-online-status');
+                if (profileStatus && selectedUser && selectedUser.id === user.id) {
+                    profileStatus.classList.add('online');
+                }
+            });
+        }
+        
+        // Actualizar badge de mensajes no leídos
+        function updateUnreadBadge(userId, count) {
+            const badge = document.getElementById(`unread-${userId}`);
+            if (badge) {
+                if (count > 0) {
+                    badge.textContent = count > 99 ? '99+' : count;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+        
+        // Actualizar todos los badges
+        function updateUnreadBadges() {
+            Object.keys(unreadCounts).forEach(userId => {
+                updateUnreadBadge(userId, unreadCounts[userId]);
+            });
+        }
+        
         // Configurar event listeners
         function setupEventListeners() {
-            // Socket events
+            // Socket events - USUARIOS EN LÍNEA
             socket.on('users_online', (users) => {
                 onlineUsers = users;
                 updateOnlineStatus();
-                
-                if (selectedUser) {
-                    const isOnline = onlineUsers.find(u => u.id === selectedUser.id);
-                    document.getElementById('chat-user-status').textContent = 
-                        isOnline ? 'En línea' : 'Desconectado';
-                }
             });
             
+            // TODOS LOS USUARIOS
+            socket.on('all_users', (users) => {
+                allUsers = users;
+                loadUsers();
+            });
+            
+            // ACTUALIZACIÓN DE USUARIO
+            socket.on('user_updated', (updatedUser) => {
+                // Actualizar en la lista local
+                const userIndex = allUsers.findIndex(u => u.id === updatedUser.id);
+                if (userIndex !== -1) {
+                    allUsers[userIndex] = updatedUser;
+                }
+                
+                // Si es el usuario actual, actualizar localStorage
+                if (updatedUser.id === currentUser.id) {
+                    currentUser = updatedUser;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    updateCurrentUserDisplay();
+                }
+                
+                // Si es el usuario seleccionado, actualizar header
+                if (selectedUser && selectedUser.id === updatedUser.id) {
+                    selectedUser = updatedUser;
+                    document.getElementById('chat-user-name').textContent = updatedUser.name;
+                    document.getElementById('chat-user-avatar').textContent = updatedUser.name.charAt(0).toUpperCase();
+                }
+                
+                // Recargar lista de usuarios
+                loadUsers();
+            });
+            
+            // NUEVO MENSAJE
             socket.on('new_message', (messageData) => {
+                // Si el mensaje es para el chat actual, mostrarlo
                 if (selectedUser && 
                     (messageData.from === selectedUser.id || messageData.from === currentUser.id)) {
                     addMessageToUI(messageData);
+                    
+                    // Si el mensaje es del usuario seleccionado, marcarlo como leído
+                    if (messageData.from === selectedUser.id) {
+                        socket.emit('mark_as_read', {
+                            userId: currentUser.id,
+                            otherUserId: selectedUser.id
+                        });
+                    }
                 }
                 
                 // Actualizar último mensaje en la lista
@@ -985,6 +1145,27 @@
                             ? messageData.message.substring(0, 30) + '...' 
                             : messageData.message;
                     }
+                }
+            });
+            
+            // CONTADORES DE MENSAJES NO LEÍDOS
+            socket.on('unread_counts', (counts) => {
+                unreadCounts = { ...unreadCounts, ...counts };
+                updateUnreadBadges();
+            });
+            
+            // ACTUALIZACIÓN DE CONTADOR INDIVIDUAL
+            socket.on('unread_count_update', (data) => {
+                unreadCounts[data.userId] = data.count;
+                updateUnreadBadge(data.userId, data.count);
+            });
+            
+            // MENSAJES MARCADOS COMO LEÍDOS
+            socket.on('messages_read', (data) => {
+                // Si somos el remitente y el lector es el usuario seleccionado, actualizar contador
+                if (data.otherUserId === currentUser.id && selectedUser && selectedUser.id === data.userId) {
+                    unreadCounts[data.userId] = 0;
+                    updateUnreadBadge(data.userId, 0);
                 }
             });
             
@@ -1015,16 +1196,6 @@
                         item.style.display = 'none';
                     }
                 });
-            });
-        }
-        
-        // Actualizar estado en línea
-        function updateOnlineStatus() {
-            onlineUsers.forEach(user => {
-                const statusElement = document.getElementById(`status-${user.id}`);
-                if (statusElement) {
-                    statusElement.classList.add('online');
-                }
             });
         }
         
