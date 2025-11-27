@@ -1,561 +1,293 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CallApp</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>CallBlue – Iniciar sesión</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --bg: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      --card: rgba(255, 255, 255, 0.08);
+      --text: #f1f5f9;
+      --text-light: #cbd5e1;
+      --success: #34d399;
+      --error: #f87171;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .auth-container {
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      border-radius: 24px;
+      width: 100%;
+      max-width: 420px;
+      padding: 40px 32px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    .auth-container::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(96,165,250,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #60a5fa, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    header p {
+      color: var(--text-light);
+      font-size: 15px;
+    }
+    .tab-switch {
+      display: flex;
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 28px;
+    }
+    .tab {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .tab.active {
+      background: linear-gradient(45deg, #60a5fa, #34d399);
+      color: white;
+    }
+    form { display: none; }
+    form.active { display: block; animation: fade 0.4s; }
+    .input-group {
+      margin-bottom: 20px;
+      position: relative;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--text-light);
+    }
+    input {
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px;
+      color: white;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+    input:focus {
+      outline: none;
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.2);
+    }
+    input::placeholder { color: #94a3b8; }
+    .avatar-preview {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: 16px auto;
+      display: block;
+      border: 4px solid #60a5fa;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+    }
+    .file-input {
+      display: none;
+    }
+    .file-label {
+      display: block;
+      text-align: center;
+      padding: 12px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    .file-label:hover { background: rgba(255,255,255,0.15); }
+    button[type="submit"] {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(45deg, #60a5fa, #34d399);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: all 0.3s;
+    }
+    button[type="submit"]:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(96,165,250,0.4); }
+    .message {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 14px;
+      display: none;
+    }
+    .message.success { background: rgba(52,211,153,0.2); color: var(--success); border: 1px solid rgba(52,211,153,0.3); }
+    .message.error   { background: rgba(248,113,113,0.2); color: var(--error);   border: 1px solid rgba(248,113,113,0.3); }
 
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .auth-container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 450px;
-            text-align: center;
-        }
-
-        .logo {
-            margin-bottom: 30px;
-        }
-
-        .logo h1 {
-            color: #667eea;
-            font-size: 2.2em;
-            margin-bottom: 10px;
-            font-weight: 700;
-        }
-
-        .logo p {
-            color: #718096;
-            font-size: 1.1em;
-            font-weight: 400;
-        }
-
-        .tabs {
-            display: flex;
-            margin-bottom: 30px;
-            background: #f7fafc;
-            border-radius: 12px;
-            padding: 5px;
-        }
-
-        .tab {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            background: transparent;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            color: #718096;
-            transition: all 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .tab.active {
-            background: white;
-            color: #667eea;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-        }
-
-        .form-container {
-            position: relative;
-            min-height: 350px;
-        }
-
-        .form {
-            position: absolute;
-            width: 100%;
-            opacity: 0;
-            transform: translateX(20px);
-            transition: all 0.3s ease;
-            pointer-events: none;
-        }
-
-        .form.active {
-            opacity: 1;
-            transform: translateX(0);
-            pointer-events: all;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-            text-align: left;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #4a5568;
-            font-weight: 500;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            font-size: 1em;
-            transition: all 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .avatar-section {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .avatar-preview {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            background: #f7fafc;
-            margin: 0 auto 15px;
-            border: 3px solid #e2e8f0;
-            overflow: hidden;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .avatar-preview:hover {
-            border-color: #667eea;
-        }
-
-        .avatar-preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .avatar-placeholder {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #a0aec0;
-            font-size: 2em;
-        }
-
-        .avatar-upload-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-            margin-bottom: 20px;
-        }
-
-        .avatar-upload-btn:hover {
-            background: #5a6fd8;
-            transform: translateY(-2px);
-        }
-
-        #avatar-input {
-            display: none;
-        }
-
-        .btn-primary {
-            width: 100%;
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 14px;
-            border-radius: 10px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 10px;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .btn-primary:hover {
-            background: #5a6fd8;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-primary:active {
-            transform: translateY(0);
-        }
-
-        .notification {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #e53e3e;
-            color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            z-index: 1000;
-            text-align: center;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .notification.show {
-            opacity: 1;
-        }
-
-        .notification.success {
-            background: #48bb78;
-        }
-
-        .notification.error {
-            background: #e53e3e;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
-        }
-
-        .loading-spinner {
-            width: 30px;
-            height: 30px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .forgot-password {
-            text-align: center;
-            margin-top: 20px;
-        }
-
-        .forgot-password a {
-            color: #667eea;
-            text-decoration: none;
-            font-size: 0.9em;
-        }
-
-        .forgot-password a:hover {
-            text-decoration: underline;
-        }
-
-        @media (max-width: 480px) {
-            .auth-container {
-                padding: 30px 20px;
-            }
-
-            .logo h1 {
-                font-size: 1.8em;
-            }
-
-            .avatar-preview {
-                width: 80px;
-                height: 80px;
-            }
-        }
-    </style>
+    @keyframes fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  </style>
 </head>
 <body>
-    <div class="auth-container">
-        <div class="logo">
-            <h1>📞 CallApp</h1>
-            <p>Conecta con tus contactos</p>
-        </div>
 
-        <div class="tabs">
-            <button class="tab active" data-tab="login">Iniciar Sesión</button>
-            <button class="tab" data-tab="register">Registrarse</button>
-        </div>
+  <div class="auth-container">
+    <header>
+      <h1>CallBlue</h1>
+      <p>Llamadas de voz instantáneas</p>
+    </header>
 
-        <div class="form-container">
-            <!-- Formulario de Login -->
-            <form id="login-form" class="form active">
-                <div class="form-group">
-                    <label for="login-name">Nombre de usuario</label>
-                    <input type="text" id="login-name" placeholder="Ingresa tu nombre" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="login-password">Contraseña</label>
-                    <input type="password" id="login-password" placeholder="Ingresa tu contraseña" required>
-                </div>
-
-                <button type="submit" class="btn-primary">Iniciar Sesión</button>
-
-                <div class="forgot-password">
-                    <a href="#" id="forgot-password">¿Olvidaste tu contraseña?</a>
-                </div>
-
-                <div class="loading" id="login-loading">
-                    <div class="loading-spinner"></div>
-                    <p>Iniciando sesión...</p>
-                </div>
-            </form>
-
-            <!-- Formulario de Registro -->
-            <form id="register-form" class="form">
-                <div class="avatar-section">
-                    <div class="avatar-preview" id="avatar-preview">
-                        <div class="avatar-placeholder">👤</div>
-                    </div>
-                    <input type="file" id="avatar-input" accept="image/*">
-                    <button type="button" class="avatar-upload-btn" id="avatar-upload-btn">
-                        Seleccionar Foto
-                    </button>
-                </div>
-
-                <div class="form-group">
-                    <label for="register-name">Nombre de usuario</label>
-                    <input type="text" id="register-name" placeholder="Elige un nombre de usuario" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="register-password">Contraseña</label>
-                    <input type="password" id="register-password" placeholder="Crea una contraseña segura" required>
-                </div>
-
-                <button type="submit" class="btn-primary">Crear Cuenta</button>
-
-                <div class="loading" id="register-loading">
-                    <div class="loading-spinner"></div>
-                    <p>Creando cuenta...</p>
-                </div>
-            </form>
-        </div>
+    <div class="tab-switch">
+      <div class="tab active" onclick="switchTab('login')">Iniciar sesión</div>
+      <div class="tab" onclick="switchTab('register')">Registrarse</div>
     </div>
 
-    <div class="notification" id="notification"></div>
+    <!-- LOGIN -->
+    <form id="login-form" class="active">
+      <div class="input-group">
+        <label>Usuario</label>
+        <input type="text" id="login-name" placeholder="Tu nombre de usuario" required />
+      </div>
+      <div class="input-group">
+        <label>Contraseña</label>
+        <input type="password" id="login-pass" placeholder="Mínimo 6 caracteres" required />
+      </div>
+      <button type="submit">Entrar</button>
+      <div class="message" id="login-msg"></div>
+    </form>
 
-    <script>
-        class AuthApp {
-            constructor() {
-                this.currentUser = null;
-                this.avatarFile = null;
-                this.initializeEventListeners();
-            }
+    <!-- REGISTRO -->
+    <form id="register-form">
+      <div class="input-group">
+        <label>Nombre de usuario</label>
+        <input type="text" id="reg-name" placeholder="Elige un nombre" required />
+      </div>
+      <div class="input-group">
+        <label>Contraseña</label>
+        <input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres" required />
+      </div>
+      <div class="input-group">
+        <label>Foto de perfil (opcional)</label>
+        <img id="avatar-preview" class="avatar-preview" src="/default-avatar.png" alt="Preview">
+        <label for="avatar-input" class="file-label">Seleccionar foto</label>
+        <input type="file" id="avatar-input" class="file-input" accept="image/*">
+      </div>
+      <button type="submit">Crear cuenta</button>
+      <div class="message" id="reg-msg"></div>
+    </form>
+  </div>
 
-            initializeEventListeners() {
-                // Tabs
-                document.querySelectorAll('.tab').forEach(tab => {
-                    tab.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
-                });
+  <script>
+    // Cambiar pestañas
+    function switchTab(mode) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('login-form').classList.toggle('active', mode === 'login');
+      document.getElementById('register-form').classList.toggle('active', mode === 'register');
+    }
 
-                // Avatar upload
-                document.getElementById('avatar-upload-btn').addEventListener('click', () => {
-                    document.getElementById('avatar-input').click();
-                });
+    // Preview de avatar
+    document.getElementById('avatar-input').onchange = e => {
+      const file = e.target.files[0];
+      if (file) {
+        document.getElementById('avatar-preview').src = URL.createObjectURL(file);
+      }
+    };
 
-                document.getElementById('avatar-input').addEventListener('change', (e) => {
-                    this.handleAvatarUpload(e.target.files[0]);
-                });
+    // LOGIN
+    document.getElementById('login-form').onsubmit = async e => {
+      e.preventDefault();
+      const name = document.getElementById('login-name').value.trim();
+      const pass = document.getElementById('login-pass').value;
 
-                // Forms
-                document.getElementById('login-form').addEventListener('submit', (e) => this.handleLogin(e));
-                document.getElementById('register-form').addEventListener('submit', (e) => this.handleRegister(e));
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, password: pass })
+      });
 
-                // Forgot password
-                document.getElementById('forgot-password').addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.showNotification('Función en desarrollo', 'error');
-                });
-            }
+      const data = await res.json();
+      const msg = document.getElementById('login-msg');
+      if (res.ok) {
+        localStorage.setItem('currentUser', JSON.stringify(data.user));
+        msg.textContent = '¡Bienvenido!';
+        msg.className = 'message success';
+        msg.style.display = 'block';
+        setTimeout(() => location.href = '/app', 800);
+      } else {
+        msg.textContent = data.error || 'Error';
+        msg.className = 'message error';
+        msg.style.display = 'block';
+      }
+    };
 
-            switchTab(tabName) {
-                // Update tabs
-                document.querySelectorAll('.tab').forEach(tab => {
-                    tab.classList.remove('active');
-                });
-                document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    // REGISTRO
+    document.getElementById('register-form').onsubmit = async e => {
+      e.preventDefault();
+      const name = document.getElementById('reg-name').value.trim();
+      const pass = document.getElementById('reg-pass').value;
+      const file = document.getElementById('avatar-input').files[0];
 
-                // Update forms
-                document.querySelectorAll('.form').forEach(form => {
-                    form.classList.remove('active');
-                });
-                document.getElementById(`${tabName}-form`).classList.add('active');
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('password', pass);
+      if (file) formData.append('avatar', file);
 
-                // Reset forms when switching
-                if (tabName === 'login') {
-                    document.getElementById('login-form').reset();
-                } else {
-                    document.getElementById('register-form').reset();
-                    this.resetAvatar();
-                }
-            }
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        body: formData
+      });
 
-            handleAvatarUpload(file) {
-                if (!file) return;
-
-                if (!file.type.startsWith('image/')) {
-                    this.showNotification('Por favor, selecciona una imagen válida', 'error');
-                    return;
-                }
-
-                if (file.size > 5 * 1024 * 1024) {
-                    this.showNotification('La imagen debe ser menor a 5MB', 'error');
-                    return;
-                }
-
-                this.avatarFile = file;
-
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const avatarPreview = document.getElementById('avatar-preview');
-                    avatarPreview.innerHTML = `<img src="${e.target.result}" alt="Avatar preview">`;
-                };
-                reader.readAsDataURL(file);
-            }
-
-            resetAvatar() {
-                this.avatarFile = null;
-                const avatarPreview = document.getElementById('avatar-preview');
-                avatarPreview.innerHTML = '<div class="avatar-placeholder">👤</div>';
-            }
-
-            async handleLogin(e) {
-                e.preventDefault();
-
-                const name = document.getElementById('login-name').value.trim();
-                const password = document.getElementById('login-password').value;
-
-                if (!name || !password) {
-                    this.showNotification('Por favor, completa todos los campos', 'error');
-                    return;
-                }
-
-                this.showLoading('login', true);
-
-                try {
-                    const response = await fetch('/api/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, password })
-                    });
-
-                    const data = await response.json();
-
-                    if (!response.ok) {
-                        throw new Error(data.error);
-                    }
-
-                    this.currentUser = data.user;
-                    localStorage.setItem('currentUser', JSON.stringify(data.user));
-                    this.showNotification(`¡Bienvenido ${data.user.name}!`, 'success');
-
-                    setTimeout(() => {
-                        window.location.href = '/app';
-                    }, 1000);
-
-                } catch (error) {
-                    this.showNotification(error.message || 'Error al iniciar sesión', 'error');
-                } finally {
-                    this.showLoading('login', false);
-                }
-            }
-
-            async handleRegister(e) {
-                e.preventDefault();
-
-                const name = document.getElementById('register-name').value.trim();
-                const password = document.getElementById('register-password').value;
-
-                if (!name || !password) {
-                    this.showNotification('Por favor, completa todos los campos', 'error');
-                    return;
-                }
-
-                if (password.length < 6) {
-                    this.showNotification('La contraseña debe tener al menos 6 caracteres', 'error');
-                    return;
-                }
-
-                this.showLoading('register', true);
-
-                try {
-                    const formData = new FormData();
-                    formData.append('name', name);
-                    formData.append('password', password);
-                    if (this.avatarFile) {
-                        formData.append('avatar', this.avatarFile);
-                    }
-
-                    const response = await fetch('/api/register', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    const data = await response.json();
-
-                    if (!response.ok) {
-                        throw new Error(data.error);
-                    }
-
-                    this.showNotification(`¡Cuenta creada exitosamente, ${data.user.name}!`, 'success');
-
-                    setTimeout(() => {
-                        this.switchTab('login');
-                        document.getElementById('login-name').value = name;
-                    }, 1500);
-
-                } catch (error) {
-                    this.showNotification(error.message || 'Error al crear la cuenta', 'error');
-                } finally {
-                    this.showLoading('register', false);
-                }
-            }
-
-            showLoading(formType, show) {
-                const loadingElement = document.getElementById(`${formType}-loading`);
-                loadingElement.style.display = show ? 'block' : 'none';
-            }
-
-            showNotification(message, type) {
-                const notification = document.getElementById('notification');
-                notification.textContent = message;
-                notification.className = `notification ${type} show`;
-
-                setTimeout(() => {
-                    notification.classList.remove('show');
-                }, 4000);
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            new AuthApp();
-        });
-    </script>
+      const data = await res.json();
+      const msg = document.getElementById('reg-msg');
+      if (res.ok) {
+        localStorage.setItem('currentUser', JSON.stringify(data.user));
+        msg.textContent = '¡Cuenta creada!';
+        msg.className = 'message success';
+        msg.style.display = 'block';
+        setTimeout(() => location.href = '/app', 1000);
+      } else {
+        msg.textContent = data.error || 'Error';
+        msg.className = 'message error';
+        msg.style.display = 'block';
+      }
+    };
+  </script>
 </body>
 </html>
