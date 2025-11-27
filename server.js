@@ -1,0 +1,466 @@
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const bcrypt = require('bcryptjs');
+const cors = require('cors');
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+app.use('/uploads', express.static('uploads'));
+
+// Configuración de multer para avatares
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/avatars';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten archivos de imagen'));
+    }
+  }
+});
+
+// Archivos de datos
+const USERS_FILE = 'data/users.json';
+const CALLS_FILE = 'data/calls.json';
+
+// Crear directorios necesarios
+if (!fs.existsSync('data')) fs.mkdirSync('data');
+if (!fs.existsSync('uploads/avatars')) fs.mkdirSync('uploads/avatars', { recursive: true });
+
+// Funciones para manejar archivos JSON
+function readJSONFile(filename) {
+  try {
+    if (!fs.existsSync(filename)) return [];
+    const data = fs.readFileSync(filename, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error(`Error reading ${filename}:`, error);
+    return [];
+  }
+}
+
+function writeJSONFile(filename, data) {
+  try {
+    fs.writeFileSync(filename, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error(`Error writing ${filename}:`, error);
+    return false;
+  }
+}
+
+// Datos en memoria
+let users = readJSONFile(USERS_FILE);
+let callHistory = readJSONFile(CALLS_FILE);
+let activeCalls = [];
+let onlineUsers = [];
+
+// Inicializar usuarios de ejemplo si no existen
+if (users.length === 0) {
+  const defaultUsers = [
+    {
+      id: 1,
+      name: "Ana García",
+      password: bcrypt.hashSync("123456", 10),
+      avatar: "/default-avatar.png",
+      online: false,
+      socketId: null,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 2,
+      name: "Carlos López",
+      password: bcrypt.hashSync("123456", 10),
+      avatar: "/default-avatar.png",
+      online: false,
+      socketId: null,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 3,
+      name: "María Rodríguez",
+      password: bcrypt.hashSync("123456", 10),
+      avatar: "/default-avatar.png",
+      online: false,
+      socketId: null,
+      createdAt: new Date().toISOString()
+    }
+  ];
+  users = defaultUsers;
+  writeJSONFile(USERS_FILE, users);
+}
+
+// Routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'auth.html'));
+});
+
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// API Routes
+app.get('/api/users', (req, res) => {
+  const safeUsers = users.map(user => ({
+    id: user.id,
+    name: user.name,
+    avatar: user.avatar,
+    online: user.online
+  }));
+  res.json(safeUsers);
+});
+
+app.get('/api/call-history', (req, res) => {
+  res.json(callHistory);
+});
+
+// Registro de usuario
+app.post('/api/register', upload.single('avatar'), async (req, res) => {
+  try {
+    const { name, password } = req.body;
+
+    if (!name || !password) {
+      return res.status(400).json({ error: 'Nombre y contraseña son requeridos' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
+    const existingUser = users.find(user => user.name === name);
+    if (existingUser) {
+      return res.status(400).json({ error: 'El nombre de usuario ya existe' });
+    }
+
+    const newUser = {
+      id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
+      name: name.trim(),
+      password: await bcrypt.hash(password, 10),
+      avatar: req.file ? `/uploads/avatars/${req.file.filename}` : '/default-avatar.png',
+      online: false,
+      socketId: null,
+      createdAt: new Date().toISOString()
+    };
+
+    users.push(newUser);
+    writeJSONFile(USERS_FILE, users);
+
+    const { password: _, ...userWithoutPassword } = newUser;
+    res.status(201).json({ 
+      message: 'Usuario registrado exitosamente',
+      user: userWithoutPassword 
+    });
+
+  } catch (error) {
+    console.error('Error en registro:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// Login de usuario
+app.post('/api/login', async (req, res) => {
+  try {
+    const { name, password } = req.body;
+
+    if (!name || !password) {
+      return res.status(400).json({ error: 'Nombre y contraseña son requeridos' });
+    }
+
+    const user = users.find(u => u.name === name);
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+
+    user.online = true;
+    writeJSONFile(USERS_FILE, users);
+
+    const { password: _, ...userWithoutPassword } = user;
+    res.json({
+      message: 'Login exitoso',
+      user: userWithoutPassword
+    });
+
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// WebRTC Signaling con Socket.IO [citation:1][citation:3]
+io.on('connection', (socket) => {
+  console.log('Usuario conectado:', socket.id);
+
+  // Login via socket
+  socket.on('user-login', (userData) => {
+    const user = users.find(u => u.id === userData.id);
+    if (user) {
+      user.online = true;
+      user.socketId = socket.id;
+      
+      if (!onlineUsers.find(u => u.id === user.id)) {
+        onlineUsers.push({
+          id: user.id,
+          name: user.name,
+          avatar: user.avatar,
+          socketId: socket.id
+        });
+      }
+      
+      writeJSONFile(USERS_FILE, users);
+      io.emit('users-updated', onlineUsers);
+    }
+  });
+
+  // Iniciar llamada
+  socket.on('initiate-call', (data) => {
+    const { fromUser, toUserId, callType } = data;
+    const toUser = users.find(u => u.id === toUserId && u.online);
+    
+    if (toUser && toUser.socketId) {
+      const callData = {
+        id: Date.now(),
+        from: fromUser,
+        to: {
+          id: toUser.id,
+          name: toUser.name,
+          avatar: toUser.avatar,
+          socketId: toUser.socketId
+        },
+        type: callType,
+        status: 'calling',
+        startTime: null,
+        endTime: null
+      };
+      
+      activeCalls.push(callData);
+      
+      // Notificar al usuario destinatario
+      io.to(toUser.socketId).emit('incoming-call', {
+        callId: callData.id,
+        fromUser: fromUser,
+        callType: callType
+      });
+      
+      socket.emit('call-initiated', { 
+        callId: callData.id,
+        toUser: {
+          id: toUser.id,
+          name: toUser.name,
+          avatar: toUser.avatar
+        }
+      });
+    } else {
+      socket.emit('call-error', { message: 'Usuario no disponible' });
+    }
+  });
+
+  // WebRTC Signaling - Oferta [citation:1][citation:4]
+  socket.on('webrtc-offer', (data) => {
+    const { to, offer, callId } = data;
+    const toUser = onlineUsers.find(u => u.id === to);
+    if (toUser) {
+      io.to(toUser.socketId).emit('webrtc-offer', {
+        from: socket.id,
+        offer: offer,
+        callId: callId
+      });
+    }
+  });
+
+  // WebRTC Signaling - Respuesta [citation:1][citation:4]
+  socket.on('webrtc-answer', (data) => {
+    const { to, answer, callId } = data;
+    const toUser = onlineUsers.find(u => u.socketId === to);
+    if (toUser) {
+      io.to(toUser.socketId).emit('webrtc-answer', {
+        from: socket.id,
+        answer: answer,
+        callId: callId
+      });
+    }
+  });
+
+  // WebRTC Signaling - Candidatos ICE [citation:1][citation:4]
+  socket.on('webrtc-ice-candidate', (data) => {
+    const { to, candidate, callId } = data;
+    const toUser = onlineUsers.find(u => u.socketId === to);
+    if (toUser) {
+      io.to(toUser.socketId).emit('webrtc-ice-candidate', {
+        from: socket.id,
+        candidate: candidate,
+        callId: callId
+      });
+    }
+  });
+
+  // Contestar llamada
+  socket.on('answer-call', (data) => {
+    const { callId } = data;
+    const call = activeCalls.find(c => c.id === callId);
+    
+    if (call) {
+      call.status = 'connecting';
+      call.startTime = new Date().toISOString();
+      
+      io.to(call.from.socketId).emit('call-answered', { callId });
+      io.to(call.to.socketId).emit('call-answered', { callId });
+    }
+  });
+
+  // Rechazar llamada
+  socket.on('reject-call', (data) => {
+    const { callId } = data;
+    const call = activeCalls.find(c => c.id === callId);
+    
+    if (call) {
+      io.to(call.from.socketId).emit('call-rejected', { 
+        callId,
+        userName: call.to.name
+      });
+      
+      const callRecord = {
+        ...call,
+        status: 'rejected',
+        endTime: new Date().toISOString(),
+        duration: 0
+      };
+      callHistory.unshift(callRecord);
+      writeJSONFile(CALLS_FILE, callHistory);
+      
+      activeCalls = activeCalls.filter(c => c.id !== callId);
+    }
+  });
+
+  // Terminar llamada
+  socket.on('end-call', (data) => {
+    const { callId } = data;
+    const call = activeCalls.find(c => c.id === callId);
+    
+    if (call) {
+      const endTime = new Date();
+      const startTime = new Date(call.startTime);
+      const duration = Math.floor((endTime - startTime) / 1000);
+      
+      io.to(call.from.socketId).emit('call-ended', { callId, duration });
+      if (call.to.socketId) {
+        io.to(call.to.socketId).emit('call-ended', { callId, duration });
+      }
+      
+      const callRecord = {
+        ...call,
+        status: 'completed',
+        endTime: endTime.toISOString(),
+        duration: duration
+      };
+      callHistory.unshift(callRecord);
+      writeJSONFile(CALLS_FILE, callHistory);
+      
+      activeCalls = activeCalls.filter(c => c.id !== callId);
+    }
+  });
+
+  // Disconnect
+  socket.on('disconnect', () => {
+    console.log('Usuario desconectado:', socket.id);
+    
+    const user = users.find(u => u.socketId === socket.id);
+    if (user) {
+      user.online = false;
+      user.socketId = null;
+      writeJSONFile(USERS_FILE, users);
+    }
+    
+    onlineUsers = onlineUsers.filter(u => u.socketId !== socket.id);
+    
+    // Terminar llamadas activas del usuario
+    const userCalls = activeCalls.filter(c => 
+      c.from.socketId === socket.id || c.to.socketId === socket.id
+    );
+    
+    userCalls.forEach(call => {
+      const endTime = new Date();
+      const startTime = new Date(call.startTime);
+      const duration = Math.floor((endTime - startTime) / 1000);
+      
+      const otherSocketId = call.from.socketId === socket.id ? 
+        call.to.socketId : call.from.socketId;
+      
+      if (otherSocketId) {
+        io.to(otherSocketId).emit('call-ended', { 
+          callId: call.id, 
+          duration: duration 
+        });
+      }
+      
+      if (call.startTime) {
+        const callRecord = {
+          ...call,
+          status: 'completed',
+          endTime: endTime.toISOString(),
+          duration: duration
+        };
+        callHistory.unshift(callRecord);
+        writeJSONFile(CALLS_FILE, callHistory);
+      }
+    });
+    
+    activeCalls = activeCalls.filter(c => 
+      c.from.socketId !== socket.id && c.to.socketId !== socket.id
+    );
+    
+    io.emit('users-updated', onlineUsers);
+  });
+});
+
+// Manejo de errores
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'El archivo es demasiado grande' });
+    }
+  }
+  res.status(500).json({ error: 'Error interno del servidor' });
+});
+
+// Iniciar servidor
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);
+  console.log(`📞 Sistema de llamadas WebRTC activo`);
+  console.log(`🔐 Autenticación y registro funcionando`);
+});
