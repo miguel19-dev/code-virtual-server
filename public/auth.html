@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Sistema de Llamadas</title>
+    <title>Login - CallApp</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,7 +13,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Poppins', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -25,7 +26,7 @@
             background: white;
             border-radius: 20px;
             padding: 40px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
             width: 100%;
             max-width: 450px;
             text-align: center;
@@ -36,14 +37,16 @@
         }
 
         .logo h1 {
-            color: #4a5568;
-            font-size: 2em;
+            color: #667eea;
+            font-size: 2.2em;
             margin-bottom: 10px;
+            font-weight: 700;
         }
 
         .logo p {
             color: #718096;
             font-size: 1.1em;
+            font-weight: 400;
         }
 
         .tabs {
@@ -64,12 +67,13 @@
             font-weight: 600;
             color: #718096;
             transition: all 0.3s ease;
+            font-family: 'Poppins', sans-serif;
         }
 
         .tab.active {
             background: white;
             color: #667eea;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
         }
 
         .form-container {
@@ -101,7 +105,7 @@
             display: block;
             margin-bottom: 8px;
             color: #4a5568;
-            font-weight: 600;
+            font-weight: 500;
         }
 
         .form-group input {
@@ -111,6 +115,7 @@
             border-radius: 10px;
             font-size: 1em;
             transition: all 0.3s ease;
+            font-family: 'Poppins', sans-serif;
         }
 
         .form-group input:focus {
@@ -166,6 +171,7 @@
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s ease;
+            font-family: 'Poppins', sans-serif;
         }
 
         .avatar-upload-btn:hover {
@@ -189,6 +195,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
             margin-top: 10px;
+            font-family: 'Poppins', sans-serif;
         }
 
         .btn-primary:hover {
@@ -214,6 +221,7 @@
             text-align: center;
             opacity: 0;
             transition: opacity 0.3s ease;
+            font-family: 'Poppins', sans-serif;
         }
 
         .notification.show {
@@ -270,7 +278,7 @@
             }
             
             .logo h1 {
-                font-size: 1.7em;
+                font-size: 1.8em;
             }
             
             .avatar-preview {
@@ -415,13 +423,11 @@
             handleAvatarUpload(file) {
                 if (!file) return;
 
-                // Validar tipo de archivo
                 if (!file.type.startsWith('image/')) {
                     this.showNotification('Por favor, selecciona una imagen válida', 'error');
                     return;
                 }
 
-                // Validar tamaño (max 5MB)
                 if (file.size > 5 * 1024 * 1024) {
                     this.showNotification('La imagen debe ser menor a 5MB', 'error');
                     return;
@@ -429,7 +435,6 @@
 
                 this.avatarFile = file;
 
-                // Mostrar preview
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const avatarPreview = document.getElementById('avatar-preview');
@@ -458,34 +463,28 @@
                 this.showLoading('login', true);
 
                 try {
-                    // Simular llamada al servidor
-                    await this.simulateServerCall(1500);
-                    
-                    // En una implementación real, aquí harías:
-                    // const response = await fetch('/api/login', {
-                    //     method: 'POST',
-                    //     headers: { 'Content-Type': 'application/json' },
-                    //     body: JSON.stringify({ name, password })
-                    // });
-                    // const user = await response.json();
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, password })
+                    });
 
-                    const user = {
-                        id: Date.now(),
-                        name: name,
-                        avatar: 'default-avatar.png',
-                        token: 'simulated-token-' + Date.now()
-                    };
+                    const data = await response.json();
 
-                    this.currentUser = user;
-                    this.showNotification(`¡Bienvenido ${user.name}!`, 'success');
+                    if (!response.ok) {
+                        throw new Error(data.error);
+                    }
+
+                    this.currentUser = data.user;
+                    localStorage.setItem('currentUser', JSON.stringify(data.user));
+                    this.showNotification(`¡Bienvenido ${data.user.name}!`, 'success');
                     
-                    // Redirigir a la aplicación principal después del login
                     setTimeout(() => {
-                        window.location.href = 'index.html';
+                        window.location.href = '/app';
                     }, 1000);
 
                 } catch (error) {
-                    this.showNotification('Error al iniciar sesión. Verifica tus credenciales.', 'error');
+                    this.showNotification(error.message || 'Error al iniciar sesión', 'error');
                 } finally {
                     this.showLoading('login', false);
                 }
@@ -498,7 +497,6 @@
                 const password = document.getElementById('register-password').value;
                 const confirmPassword = document.getElementById('confirm-password').value;
 
-                // Validaciones
                 if (!name || !password || !confirmPassword) {
                     this.showNotification('Por favor, completa todos los campos', 'error');
                     return;
@@ -517,61 +515,36 @@
                 this.showLoading('register', true);
 
                 try {
-                    let avatarUrl = 'default-avatar.png';
-
-                    // Subir avatar si se seleccionó uno
+                    const formData = new FormData();
+                    formData.append('name', name);
+                    formData.append('password', password);
                     if (this.avatarFile) {
-                        // En una implementación real, aquí subirías el archivo:
-                        // const formData = new FormData();
-                        // formData.append('avatar', this.avatarFile);
-                        // const uploadResponse = await fetch('/api/upload-avatar', {
-                        //     method: 'POST',
-                        //     body: formData
-                        // });
-                        // const uploadResult = await uploadResponse.json();
-                        // avatarUrl = uploadResult.avatarUrl;
-
-                        avatarUrl = `avatar-${Date.now()}.jpg`; // Simulado
+                        formData.append('avatar', this.avatarFile);
                     }
 
-                    // Simular registro en servidor
-                    await this.simulateServerCall(2000);
+                    const response = await fetch('/api/register', {
+                        method: 'POST',
+                        body: formData
+                    });
 
-                    // En una implementación real:
-                    // const response = await fetch('/api/register', {
-                    //     method: 'POST',
-                    //     headers: { 'Content-Type': 'application/json' },
-                    //     body: JSON.stringify({ name, password, avatar: avatarUrl })
-                    // });
-                    // const user = await response.json();
+                    const data = await response.json();
 
-                    const user = {
-                        id: Date.now(),
-                        name: name,
-                        avatar: avatarUrl,
-                        token: 'simulated-token-' + Date.now()
-                    };
+                    if (!response.ok) {
+                        throw new Error(data.error);
+                    }
 
-                    this.currentUser = user;
-                    this.showNotification(`¡Cuenta creada exitosamente, ${user.name}!`, 'success');
+                    this.showNotification(`¡Cuenta creada exitosamente, ${data.user.name}!`, 'success');
                     
-                    // Cambiar a pestaña de login después del registro
                     setTimeout(() => {
                         this.switchTab('login');
                         document.getElementById('login-name').value = name;
                     }, 1500);
 
                 } catch (error) {
-                    this.showNotification('Error al crear la cuenta. Inténtalo de nuevo.', 'error');
+                    this.showNotification(error.message || 'Error al crear la cuenta', 'error');
                 } finally {
                     this.showLoading('register', false);
                 }
-            }
-
-            simulateServerCall(duration) {
-                return new Promise((resolve) => {
-                    setTimeout(resolve, duration);
-                });
             }
 
             showLoading(formType, show) {
@@ -590,7 +563,6 @@
             }
         }
 
-        // Inicializar la aplicación cuando se carga la página
         document.addEventListener('DOMContentLoaded', () => {
             new AuthApp();
         });
