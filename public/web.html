@@ -2,166 +2,42 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CallBlue</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --primary: #6366f1;
-      --primary-dark: #4f46e5;
-      --bg: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-      --card: rgba(255, 255, 255, 0.08);
-      --text: #e2dd4bf;
-      --text-light: #cbd5e1;
-    }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: white;
-      min-height: 100vh;
-      overflow: hidden;
-    }
-    .container {
-      max-width: 420px;
-      margin: 0 auto;
-      padding: 20px;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    header {
-      text-align: center;
-      margin-bottom: 30px;
-      padding-top: 20px;
-    }
-    header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      background: linear-gradient(90deg, #60a5fa, #34d399);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .users-list {
-      flex: 1;
-      overflow-y: auto;
-      padding-bottom: 20px;
-    }
-    .user-card {
-      background: var(--card);
-      backdrop-filter: blur(12px);
-      border-radius: 20px;
-      padding: 16px;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      transition: all 0.3s ease;
-      border: 1px solid rgba(255,255,255,0.1);
-    }
-    .user-card:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-    .avatar {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 3px solid #60a5fa;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    }
-    .info { flex: 1; }
-    .name { font-weight: 600; font-size: 17px; }
-    .status {
-      font-size: 13px;
-      color: var(--text-light);
-      margin-top: 4px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .dot {
-      width: 8px;
-      height: 8px;
-      background: #34d399;
-      border-radius: 50%;
-    }
-    .call-btn {
-      background: linear-gradient(45deg, #60a5fa, #34d399);
-      border: none;
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 15px rgba(96,165,250,0.4);
-      transition: all 0.3s;
-    }
-    .call-btn:hover { transform: scale(1.1); }
+    :root{--primary:#6366f1;--bg:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);--card:rgba(255,255,255,0.08);--text:#f1f5f9;--text-light:#cbd5e1;--success:#34d399;--danger:#ef4444}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:white;min-height:100vh;overflow:hidden}
+    .container{max-width:420px;margin:0 auto;padding:20px;height:100vh;display:flex;flex-direction:column;position:relative}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;padding-top:10px}
+    header h1{font-size:28px;font-weight:700;background:linear-gradient(90deg,#60a5fa,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .logout-btn{background:rgba(255,255,255,0.1);border:none;width:48px;height:48px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.3s}
+    .logout-btn:hover{background:rgba(239,68,68,0.3);transform:scale(1.1)}
+    .users-list{flex:1;overflow-y:auto;padding-bottom:20px}
+    .user-card{background:var(--card);backdrop-filter:blur(12px);border-radius:20px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:16px;border:1px solid rgba(255,255,255,0.1);transition:.3s}
+    .user-card:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(0,0,0,0.4)}
+    .avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;border:3px solid #60a5fa}
+    .info{flex:1}
+    .name{font-weight:600;font-size:17px}
+    .status{font-size:13px;color:var(--text-light);display:flex;align-items:center;gap:6px;margin-top:4px}
+    .dot{width:8px;height:8px;background:var(--success);border-radius:50%}
+    .call-btn{background:linear-gradient(45deg,#60a5fa,#34d399);border:none;width:52px;height:52px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(96,165,250,0.4);transition:.3s}
+    .call-btn:hover{transform:scale(1.1)}
 
-    /* Pantallas de llamada */
-    .call-screen {
-      position: fixed;
-      inset: 0;
-      background: var(--bg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      animation: fadeIn 0.4s;
-    }
-    .call-container {
-      text-align: center;
-      padding: 40px;
-    }
-    .call-avatar {
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 6px solid #60a5fa;
-      margin-bottom: 30px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-    }
-    .call-name {
-      font-size: 32px;
-      font-weight: 600;
-      margin-bottom: 10px;
-    }
-    .call-status {
-      font-size: 18px;
-      color: var(--text-light);
-      margin: 20px 0 30px;
-    }
-    .timer {
-      font-size: 48px;
-      font-weight: 700;
-      color: #34d399;
-      margin: 30px 0;
-    }
-    .call-actions {
-      display: flex;
-      justify-content: center;
-      gap: 50px;
-    }
-    .btn-large {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      border: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-      transition: all 0.3s;
-    }
-    .btn-answer { background: #34d399; }
-    .btn-reject, .btn-end { background: #ef4444; }
-    .btn-large:hover { transform: scale(1.1); }
-
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .hidden { display: none !important; }
+    .call-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:100;animation:fadeIn .4s}
+    .call-container{text-align:center;padding:40px}
+    .call-avatar{width:160px;height:160px;border-radius:50%;object-fit:cover;border:6px solid #60a5fa;margin-bottom:30px;box-shadow:0 20px 40px rgba(0,0,0,0.6)}
+    .call-name{font-size:32px;font-weight:600;margin-bottom:10px}
+    .call-status{font-size:18px;color:var(--text-light);margin:20px 0}
+    .timer{font-size:48px;font-weight:700;color:var(--success);margin:30px 0;display:none}
+    .call-actions{display:flex;justify-content:center;gap:60px}
+    .btn-large{width:80px;height:80px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 25px rgba(0,0,0,0.5);transition:.3s}
+    .btn-large:hover{transform:scale(1.1)}
+    .btn-answer{background:var(--success)}
+    .btn-reject,.btn-end{background:var(--danger)}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    .hidden{display:none!important}
   </style>
 </head>
 <body>
@@ -169,15 +45,18 @@
   <audio id="local-audio" muted playsinline></audio>
   <audio id="remote-audio" autoplay playsinline></audio>
 
-  <!-- Pantalla principal -->
   <div id="main" class="container">
     <header>
       <h1>CallBlue</h1>
+      <button id="logout-btn" class="logout-btn" title="Cerrar sesión">
+        <svg width="24" height="24" fill="white" viewBox="0 0 24 24">
+          <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+        </svg>
+      </button>
     </header>
     <div class="users-list" id="users-list"></div>
   </div>
 
-  <!-- Llamada entrante -->
   <div id="incoming" class="call-screen hidden">
     <div class="call-container">
       <img id="in-avatar" class="call-avatar" src="/default-avatar.png">
@@ -185,25 +64,24 @@
       <div class="call-status">Llamada entrante...</div>
       <div class="call-actions">
         <button id="answer-btn" class="btn-large btn-answer">
-          <svg width="32" height="32" fill="white" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.045 15.045 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A10.95 10.95 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
+          <svg width="36" height="36" fill="white" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.045 15.045 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A10.95 10.95 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
         </button>
         <button id="reject-btn" class="btn-large btn-reject">
-          <svg width="32" height="32" fill="white" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+          <svg width="36" height="36" fill="white" viewBox="0 0 24 24"><path d="M12 9c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm5 13.59L15.59 21 12 17.41 8.41 21 7 19.59 10.59 16 7 12.41 8.41 11 12 14.59 15.59 11 17 12.41 13.41 16 17 19.59 15.59 21z"/></svg>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Llamada activa -->
   <div id="active" class="call-screen hidden">
     <div class="call-container">
       <img id="active-avatar" class="call-avatar" src="/default-avatar.png">
       <div class="call-name" id="active-name">Conectando...</div>
       <div class="call-status" id="status-text">Llamando...</div>
-      <div class="timer hidden" id="timer">00:00</div>
+      <div class="timer" id="timer">00:00</div>
       <div class="call-actions">
         <button id="end-btn" class="btn-large btn-end">
-          <svg width="34" height="34" fill="white" viewBox="0 0 24 24"><path d="M12 9c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm5 13.59L15.59 21 12 17.41 8.41 21 7 19.59 10.59 16 7 12.41 8.41 11 12 14.59 15.59 11 17 12.41 13.41 16 17 19.59 15.59 21z"/></svg>
+          <svg width="38" height="38" fill="white" viewBox="0 0 24 24"><path d="M12 9c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm5 13.59L15.59 21 12 17.41 8.41 21 7 19.59 10.59 16 7 12.41 8.41 11 12 14.59 15.59 11 17 12.41 13.41 16 17 19.59 15.59 21z"/></svg>
         </button>
       </div>
     </div>
@@ -224,53 +102,58 @@
 
     socket.emit('user-login', user);
 
+    // Cerrar sesión
+    document.getElementById('logout-btn').onclick = () => {
+      localStorage.removeItem('currentUser');
+      location.href = '/';
+    };
+
+    // Lista de usuarios
     socket.on('users-updated', list => {
-      const container = document.getElementById('users-list');
-      container.innerHTML = '';
+      const c = document.getElementById('users-list');
+      c.innerHTML = '';
       list.filter(u => u.id !== user.id).forEach(u => {
-        const div = document.createElement('div');
-        div.className = 'user-card';
-        div.innerHTML = `
-          <img src="\( {u.avatar}" class="avatar" alt=" \){u.name}">
+        const d = document.createElement('div');
+        d.className = 'user-card';
+        d.innerHTML = `
+          <img src="\( {u.avatar || '/default-avatar.png'}" class="avatar" alt=" \){u.name}">
           <div class="info">
             <div class="name">${u.name}</div>
             <div class="status"><span class="dot"></span>En línea</div>
           </div>
-          <button class="call-btn" onclick="call(\( {u.id}, ' \){u.name}', '${u.avatar}')">
+          <button class="call-btn" onclick="call(\( {u.id}, ' \){u.name}', '${u.avatar || '/default-avatar.png'}')">
             <svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.045 15.045 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A10.95 10.95 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
-          </button>
-        `;
-        container.appendChild(div);
+          </button>`;
+        c.appendChild(d);
       });
     });
 
-    async function call(id, name, avatar) {
+    // Llamar
+    window.call = async (id, name, avatar) => {
       pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: ['turn:relay1.expressturn.com:3480?transport=tcp'], username: '000000002079624655', credential: 'IDRwv6Pt/dZCoN7zXyU8lpCpE4w=' }
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: ['turn:relay1.expressturn.com:3480?transport=tcp', 'turns:relay1.expressturn.com:5349'],
+            username: '000000002079624655',
+            credential: 'IDRwv6Pt/dZCoN7zXyU8lpCpE4w=' }
         ]
       });
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
       pc.ontrack = e => document.getElementById('remote-audio').srcObject = e.streams[0];
       pc.onicecandidate = e => e.candidate && socket.emit('webrtc-ice-candidate', { to: id, candidate: e.candidate, callId });
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
       socket.emit('initiate-call', { fromUser: user, toUserId: id });
       callId = Date.now();
       setupCallScreen(name, avatar, 'Llamando...');
-    }
-
-    socket.on('call-initiated', async data => {
-      callId = data.callId;
-      setupCallScreen(data.toUser.name, data.toUser.avatar, 'Llamando...');
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      socket.emit('webrtc-offer', { to: data.toUser.socketId, offer, callId });
-    });
+      socket.emit('webrtc-offer', { to: id, offer, callId });
+    };
 
+    // Llamada entrante
     socket.on('incoming-call', data => {
       callId = data.callId;
       document.getElementById('in-avatar').src = data.fromUser.avatar || '/default-avatar.png';
@@ -278,8 +161,9 @@
       incoming.classList.remove('hidden');
     });
 
+    // WebRTC
     socket.on('webrtc-offer', async data => {
-      pc = new RTCPeerConnection({ iceServers: [...] });
+      pc = new RTCPeerConnection({ iceServers: [/* mismo que arriba */] });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
       pc.ontrack = e => document.getElementById('remote-audio').srcObject = e.streams[0];
@@ -288,20 +172,14 @@
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('webrtc-answer', { to: data.from, answer, callId });
-      setupCallScreen(data.fromUser.name, data.fromUser.avatar, 'Conectando...');
+      setupCallScreen(data.fromUser.name, data.fromUser.avatar || '/default-avatar.png', 'Conectando...');
     });
 
-    socket.on('webrtc-answer', async data => {
-      await pc.setRemoteDescription(data.answer);
-    });
-
-    socket.on('webrtc-ice-candidate', async data => {
-      if (data.candidate) await pc.addIceCandidate(data.candidate);
-    });
-
+    socket.on('webrtc-answer', data => pc.setRemoteDescription(data.answer));
+    socket.on('webrtc-ice-candidate', data => data.candidate && pc.addIceCandidate(data.candidate));
     socket.on('call-connected', () => {
-      document.getElementById('status-text').classList.add('hidden');
-      document.getElementById('timer').classList.remove('hidden');
+      document.getElementById('status-text').style.display = 'none';
+      document.getElementById('timer').style.display = 'block';
       startTimer();
     });
 
@@ -309,8 +187,9 @@
       document.getElementById('active-avatar').src = avatar;
       document.getElementById('active-name').textContent = name;
       document.getElementById('status-text').textContent = status;
+      document.getElementById('status-text').style.display = 'block';
+      document.getElementById('timer').style.display = 'none';
       main.classList.add('hidden');
-      incoming.classList.add('hidden');
       active.classList.remove('hidden');
     }
 
@@ -326,7 +205,7 @@
 
     function endCall() {
       if (timerInterval) clearInterval(timerInterval);
-      if (pc) pc.close();
+      if (pc) { pc.close(); pc = null; }
       socket.emit('end-call', { callId });
       main.classList.remove('hidden');
       active.classList.add('hidden');
