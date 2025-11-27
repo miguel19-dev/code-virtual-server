@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Probador de Servidores TURN</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin: 20px 0 40px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .test-section {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .servers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .server-card {
+            background: rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.3);
+            transition: transform 0.3s;
+        }
+        .server-card:hover {
+            transform: translateY(-5px);
+        }
+        .server-card.testing {
+            background: rgba(255,193,7,0.2);
+            border-color: #ffc107;
+        }
+        .server-card.success {
+            background: rgba(40,167,69,0.2);
+            border-color: #28a745;
+        }
+        .server-card.error {
+            background: rgba(220,53,69,0.2);
+            border-color: #dc3545;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .status.pending { background: #6c757d; }
+        .status.testing { background: #ffc107; color: black; }
+        .status.success { background: #28a745; }
+        .status.error { background: #dc3545; }
+        .btn {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.4);
+        }
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .candidate-info {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .stat-item {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            flex: 1;
+            margin: 0 10px;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            display: block;
+        }
+        .custom-server {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 5px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            margin: 5px 0;
+        }
+        input::placeholder {
+            color: rgba(255,255,255,0.7);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Probador de Servidores TURN</h1>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <span class="stat-number" id="total-servers">0</span>
+                Servidores
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="working-servers">0</span>
+                Funcionando
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="failed-servers">0</span>
+                Fallados
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Servidores TURN Predefinidos</h2>
+            <button class="btn" onclick="testAllServers()">Probar Todos los Servidores</button>
+            <button class="btn" onclick="stopAllTests()">Detener Pruebas</button>
+            
+            <div class="servers-grid" id="servers-grid">
+                <!-- Los servidores se cargarán aquí -->
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Servidor TURN Personalizado</h2>
+            <div class="custom-server">
+                <div class="input-group">
+                    <input type="text" id="custom-url" placeholder="URL TURN (ej: turn:server.com:3478)">
+                </div>
+                <div class="input-group">
+                    <input type="text" id="custom-username" placeholder="Usuario (opcional)">
+                </div>
+                <div class="input-group">
+                    <input type="password" id="custom-credential" placeholder="Credencial (opcional)">
+                </div>
+                <button class="btn" onclick="testCustomServer()">Probar Servidor Personalizado</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Resultados en Tiempo Real</h2>
+            <div class="results" id="results">
+                <!-- Los resultados se mostrarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Servidores TURN para probar
+        const turnServers = [
+            {
+                name: "Google STUN",
+                urls: "stun:stun.l.google.com:19302",
+                username: null,
+                credential: null
+            },
+            {
+                name: "ExpressTurn Público",
+                urls: "turn:relay1.expressturn.com:3478",
+                username: "ef000002079624655",
+                credential: "IDRwv6Pt/dZCoN7zXyU8lpCpE4w="
+            },
+            {
+                name: "Twilio TURN",
+                urls: "turn:global.turn.twilio.com:3478?transport=udp",
+                username: "test",
+                credential: "test"
+            },
+            {
+                name: "Metered TURN",
+                urls: "turn:turn.metered.ca:80",
+                username: "test",
+                credential: "test"
+            },
+            {
+                name: "OpenRelay",
+                urls: "turn:openrelay.metered.ca:80",
+                username: "openrelayproject",
+                credential: "openrelayproject"
+            },
+            {
+                name: "NextCloud TURN",
+                urls: "turn:turn.nextcloud.com:443?transport=tcp",
+                username: "test",
+                credential: "test"
+            }
+        ];
+
+        let activeTests = new Set();
+        let workingServers = 0;
+        let failedServers = 0;
+
+        // Inicializar la interfaz
+        function initializeUI() {
+            const grid = document.getElementById('servers-grid');
+            grid.innerHTML = '';
+            
+            turnServers.forEach((server, index) => {
+                const card = document.createElement('div');
+                card.className = 'server-card';
+                card.id = `server-${index}`;
+                card.innerHTML = `
+                    <h3>${server.name}</h3>
+                    <div><small>${server.urls}</small></div>
+                    <div class="status pending">Pendiente</div>
+                    <button class="btn" onclick="testSingleServer(${index})" style="width: 100%">Probar</button>
+                    <div class="candidate-info" id="info-${index}" style="display: none;"></div>
+                `;
+                grid.appendChild(card);
+            });
+            
+            updateStats();
+        }
+
+        // Probar todos los servidores
+        async function testAllServers() {
+            workingServers = 0;
+            failedServers = 0;
+            updateStats();
+            
+            for (let i = 0; i < turnServers.length; i++) {
+                await testSingleServer(i);
+                // Esperar entre pruebas para no saturar
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+
+        // Probar un servidor individual
+        async function testSingleServer(index) {
+            if (activeTests.has(index)) return;
+            
+            activeTests.add(index);
+            const server = turnServers[index];
+            const card = document.getElementById(`server-${index}`);
+            const infoDiv = document.getElementById(`info-${index}`);
+            
+            card.className = 'server-card testing';
+            card.querySelector('.status').className = 'status testing';
+            card.querySelector('.status').textContent = 'Probando...';
+            infoDiv.style.display = 'block';
+            infoDiv.innerHTML = 'Iniciando prueba...';
+            
+            logResult(`🧪 Probando: ${server.name} (${server.urls})`);
+            
+            try {
+                const iceServers = [{
+                    urls: server.urls,
+                    username: server.username || undefined,
+                    credential: server.credential || undefined
+                }];
+                
+                const pc = new RTCPeerConnection({ iceServers });
+                let candidates = [];
+                let relayCandidate = null;
+                
+                pc.onicecandidate = (e) => {
+                    if (e.candidate) {
+                        candidates.push(e.candidate);
+                        infoDiv.innerHTML = `
+                            <strong>Candidato:</strong> ${e.candidate.type}<br>
+                            <strong>Protocolo:</strong> ${e.candidate.protocol}<br>
+                            <strong>Dirección:</strong> ${e.candidate.address || 'N/A'}<br>
+                            <strong>Puerto:</strong> ${e.candidate.port || 'N/A'}
+                        `;
+                        
+                        // Buscar candidatos relay (TURN)
+                        if (e.candidate.type === 'relay') {
+                            relayCandidate = e.candidate;
+                            logResult(`✅ ${server.name} - TURN FUNCIONANDO! Candidato relay encontrado`);
+                        }
+                    }
+                };
+                
+                pc.oniceconnectionstatechange = () => {
+                    infoDiv.innerHTML += `<br>Estado ICE: ${pc.iceConnectionState}`;
+                };
+                
+                // Crear oferta para activar la búsqueda de candidatos
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                
+                // Esperar máximo 10 segundos
+                await new Promise((resolve) => {
+                    setTimeout(() => {
+                        pc.close();
+                        resolve();
+                    }, 10000);
+                    
+                    // Comprobar periódicamente
+                    const checkInterval = setInterval(() => {
+                        if (pc.iceGatheringState === 'complete') {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 500);
+                });
+                
+                // Evaluar resultados
+                if (relayCandidate) {
+                    card.className = 'server-card success';
+                    card.querySelector('.status').className = 'status success';
+                    card.querySelector('.status').textContent = 'TURN Funcionando';
+                    workingServers++;
+                    logResult(`🎉 ${server.name} - TURN VERIFICADO: ${relayCandidate.address}:${relayCandidate.port}`);
+                } else if (candidates.length > 0) {
+                    card.className = 'server-card success';
+                    card.querySelector('.status').className = 'status success';
+                    card.querySelector('.status').textContent = 'STUN Funcionando';
+                    workingServers++;
+                    logResult(`⚠️ ${server.name} - Solo STUN funciona (sin TURN)`);
+                } else {
+                    card.className = 'server-card error';
+                    card.querySelector('.status').className = 'status error';
+                    card.querySelector('.status').textContent = 'Falló';
+                    failedServers++;
+                    logResult(`❌ ${server.name} - No se obtuvieron candidatos`);
+                }
+                
+                infoDiv.innerHTML += `<br><strong>Total candidatos:</strong> ${candidates.length}<br>
+                                    <strong>Candidatos relay:</strong> ${relayCandidate ? 'SÍ' : 'NO'}`;
+                
+            } catch (error) {
+                card.className = 'server-card error';
+                card.querySelector('.status').className = 'status error';
+                card.querySelector('.status').textContent = 'Error';
+                failedServers++;
+                logResult(`💥 ${server.name} - ERROR: ${error.message}`);
+                infoDiv.innerHTML = `Error: ${error.message}`;
+            }
+            
+            activeTests.delete(index);
+            updateStats();
+        }
+
+        // Probar servidor personalizado
+        async function testCustomServer() {
+            const url = document.getElementById('custom-url').value;
+            const username = document.getElementById('custom-username').value;
+            const credential = document.getElementById('custom-credential').value;
+            
+            if (!url) {
+                alert('Por favor ingresa una URL TURN');
+                return;
+            }
+            
+            logResult(`🧪 Probando servidor personalizado: ${url}`);
+            
+            try {
+                const iceServers = [{
+                    urls: url,
+                    username: username || undefined,
+                    credential: credential || undefined
+                }];
+                
+                const pc = new RTCPeerConnection({ iceServers });
+                let relayCandidate = null;
+                
+                pc.onicecandidate = (e) => {
+                    if (e.candidate) {
+                        logResult(`Candidato: ${e.candidate.type} - ${e.candidate.protocol} - ${e.candidate.address}:${e.candidate.port}`);
+                        if (e.candidate.type === 'relay') {
+                            relayCandidate = e.candidate;
+                            logResult(`🎉 TURN PERSONALIZADO FUNCIONANDO! Candidato relay encontrado`);
+                        }
+                    }
+                };
+                
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                
+                // Esperar 8 segundos
+                await new Promise(resolve => setTimeout(resolve, 8000));
+                pc.close();
+                
+                if (relayCandidate) {
+                    logResult(`✅ SERVICIO TURN PERSONALIZADO VERIFICADO: ${relayCandidate.address}:${relayCandidate.port}`);
+                } else {
+                    logResult(`❌ Servidor TURN personalizado no produjo candidatos relay`);
+                }
+                
+            } catch (error) {
+                logResult(`💥 ERROR en servidor personalizado: ${error.message}`);
+            }
+        }
+
+        // Detener todas las pruebas
+        function stopAllTests() {
+            activeTests.clear();
+            logResult('⏹️ Todas las pruebas detenidas');
+            initializeUI();
+        }
+
+        // Actualizar estadísticas
+        function updateStats() {
+            document.getElementById('total-servers').textContent = turnServers.length;
+            document.getElementById('working-servers').textContent = workingServers;
+            document.getElementById('failed-servers').textContent = failedServers;
+        }
+
+        // Log de resultados
+        function logResult(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            results.appendChild(entry);
+            results.scrollTop = results.scrollHeight;
+        }
+
+        // Inicializar al cargar
+        document.addEventListener('DOMContentLoaded', initializeUI);
+    </script>
+</body>
+</html>
