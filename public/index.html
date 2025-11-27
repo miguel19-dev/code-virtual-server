@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Llamadas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .screen {
+            display: none;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* Pantalla de login */
+        .login-container {
+            max-width: 400px;
+            margin: 50px auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .login-container h1 {
+            margin-bottom: 30px;
+            color: #4a5568;
+        }
+
+        .user-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .user-item:hover {
+            background: #edf2f7;
+            border-color: #667eea;
+        }
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 15px;
+            background: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .user-info {
+            flex: 1;
+            text-align: left;
+        }
+
+        .user-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .user-status {
+            font-size: 0.8em;
+            color: #718096;
+        }
+
+        /* Pantalla principal */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h2 {
+            font-size: 1.5em;
+        }
+
+        .btn-history, .btn-back {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #e53e3e;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            z-index: 1000;
+            text-align: center;
+        }
+
+        .notification.success {
+            background: #48bb78;
+        }
+
+        .notification.info {
+            background: #4299e1;
+        }
+
+        .notification.hidden {
+            display: none;
+        }
+
+        .users-container {
+            display: grid;
+            gap: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .user-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .btn-call {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .btn-audio {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-video {
+            background: #4299e1;
+            color: white;
+        }
+
+        .btn-call:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+
+        /* Pantallas de llamada */
+        .call-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .call-screen.hidden {
+            display: none;
+        }
+
+        .call-container {
+            text-align: center;
+            color: white;
+            padding: 40px;
+        }
+
+        .call-avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: #667eea;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3em;
+            color: white;
+        }
+
+        .call-container h3 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+
+        .call-container p {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            color: #e2e8f0;
+        }
+
+        .call-timer {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #48bb78;
+        }
+
+        .call-buttons, .call-controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .btn-answer, .btn-reject, .btn-control, .btn-end {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            cursor: pointer;
+            font-size: 1.5em;
+            transition: all 0.3s ease;
+        }
+
+        .btn-answer {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-reject {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-end {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-control {
+            background: #4a5568;
+            color: white;
+        }
+
+        .btn-control.active {
+            background: #4299e1;
+        }
+
+        /* Historial */
+        .history-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #667eea;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.8em;
+        }
+
+        .history-info {
+            flex: 1;
+            text-align: left;
+        }
+
+        .history-name {
+            font-weight: 600;
+        }
+
+        .history-details {
+            font-size: 0.8em;
+            color: #718096;
+        }
+
+        .history-status {
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-completed {
+            background: #c6f6d5;
+            color: #276749;
+        }
+
+        .status-rejected {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .screen {
+                padding: 10px;
+            }
+            
+            .login-container {
+                margin: 20px auto;
+                padding: 20px;
+            }
+            
+            .call-buttons, .call-controls {
+                gap: 10px;
+            }
+            
+            .btn-answer, .btn-reject, .btn-control, .btn-end {
+                width: 60px;
+                height: 60px;
+                font-size: 1.2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Pantalla de selección de usuario -->
+    <div id="login-screen" class="screen active">
+        <div class="login-container">
+            <h1>Selecciona tu usuario</h1>
+            <div id="user-list" class="user-list">
+                <!-- Los usuarios se cargarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla principal -->
+    <div id="main-screen" class="screen">
+        <header class="header">
+            <h2>Usuarios Conectados</h2>
+            <button id="show-history" class="btn-history">📋 Registro</button>
+        </header>
+        
+        <div id="notification" class="notification hidden"></div>
+        
+        <div id="users-container" class="users-container">
+            <!-- Lista de usuarios online -->
+        </div>
+    </div>
+
+    <!-- Pantalla de llamada entrante -->
+    <div id="incoming-call-screen" class="call-screen hidden">
+        <div class="call-container">
+            <div class="call-avatar" id="incoming-avatar">
+                <!-- Avatar se cargará aquí -->
+            </div>
+            <h3 id="incoming-name"></h3>
+            <p>Llamada entrante...</p>
+            <div class="call-buttons">
+                <button id="answer-call" class="btn-answer">📞</button>
+                <button id="reject-call" class="btn-reject">❌</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de llamada saliente -->
+    <div id="outgoing-call-screen" class="call-screen hidden">
+        <div class="call-container">
+            <div class="call-avatar" id="outgoing-avatar">
+                <!-- Avatar se cargará aquí -->
+            </div>
+            <h3 id="outgoing-name"></h3>
+            <p id="call-status">Conectando...</p>
+            <div id="call-timer" class="call-timer hidden">00:00</div>
+            <div class="call-controls">
+                <button id="toggle-mic" class="btn-control">🎤</button>
+                <button id="toggle-speaker" class="btn-control">🔊</button>
+                <button id="end-call" class="btn-end">📞</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de historial -->
+    <div id="history-screen" class="screen">
+        <header class="header">
+            <button id="back-to-main" class="btn-back">← Volver</button>
+            <h2>Registro de Llamadas</h2>
+        </header>
+        <div id="call-history" class="history-container">
+            <!-- Historial de llamadas -->
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        class CallApp {
+            constructor() {
+                this.socket = io();
+                this.currentUser = null;
+                this.activeCall = null;
+                this.callTimer = null;
+                this.callStartTime = null;
+                
+                this.initializeEventListeners();
+                this.loadUserSelection();
+            }
+
+            initializeEventListeners() {
+                // Navegación
+                document.getElementById('show-history').addEventListener('click', () => this.showHistory());
+                document.getElementById('back-to-main').addEventListener('click', () => this.showMainScreen());
+                
+                // Llamadas
+                document.getElementById('answer-call').addEventListener('click', () => this.answerCall());
+                document.getElementById('reject-call').addEventListener('click', () => this.rejectCall());
+                document.getElementById('end-call').addEventListener('click', () => this.endCall());
+                document.getElementById('toggle-mic').addEventListener('click', (e) => this.toggleMicrophone(e));
+                document.getElementById('toggle-speaker').addEventListener('click', (e) => this.toggleSpeaker(e));
+                
+                // Socket events
+                this.socket.on('users-updated', (users) => this.updateUsersList(users));
+                this.socket.on('incoming-call', (data) => this.showIncomingCall(data));
+                this.socket.on('call-initiated', (data) => this.showOutgoingCall(data));
+                this.socket.on('call-answered', (data) => this.onCallAnswered(data));
+                this.socket.on('call-connected', (data) => this.onCallConnected(data));
+                this.socket.on('call-rejected', (data) => this.onCallRejected(data));
+                this.socket.on('call-ended', (data) => this.onCallEnded(data));
+                this.socket.on('audio-toggled', (data) => this.onAudioToggled(data));
+            }
+
+            loadUserSelection() {
+                fetch('/api/users')
+                    .then(response => response.json())
+                    .then(users => {
+                        const userList = document.getElementById('user-list');
+                        userList.innerHTML = '';
+                        
+                        users.forEach(user => {
+                            const userElement = document.createElement('div');
+                            userElement.className = 'user-item';
+                            userElement.innerHTML = `
+                                <div class="user-avatar">${user.name.charAt(0)}</div>
+                                <div class="user-info">
+                                    <div class="user-name">${user.name}</div>
+                                    <div class="user-status">${user.online ? '🟢 En línea' : '⚫ Desconectado'}</div>
+                                </div>
+                            `;
+                            userElement.addEventListener('click', () => this.selectUser(user));
+                            userList.appendChild(userElement);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error loading users:', error);
+                        // Datos de prueba si falla la API
+                        const users = [
+                            { id: 1, name: "Ana García", avatar: "avatar1.png", online: true },
+                            { id: 2, name: "Carlos López", avatar: "avatar2.png", online: true },
+                            { id: 3, name: "María Rodríguez", avatar: "avatar3.png", online: false }
+                        ];
+                        const userList = document.getElementById('user-list');
+                        userList.innerHTML = '';
+                        users.forEach(user => {
+                            const userElement = document.createElement('div');
+                            userElement.className = 'user-item';
+                            userElement.innerHTML = `
+                                <div class="user-avatar">${user.name.charAt(0)}</div>
+                                <div class="user-info">
+                                    <div class="user-name">${user.name}</div>
+                                    <div class="user-status">${user.online ? '🟢 En línea' : '⚫ Desconectado'}</div>
+                                </div>
+                            `;
+                            userElement.addEventListener('click', () => this.selectUser(user));
+                            userList.appendChild(userElement);
+                        });
+                    });
+            }
+
+            selectUser(user) {
+                this.currentUser = user;
+                this.socket.emit('user-login', user);
+                
+                document.getElementById('login-screen').classList.remove('active');
+                document.getElementById('main-screen').classList.add('active');
+                
+                this.showNotification(`Conectado como ${user.name}`, 'success');
+            }
+
+            updateUsersList(onlineUsers) {
+                const container = document.getElementById('users-container');
+                container.innerHTML = '';
+                
+                if (onlineUsers && onlineUsers.length > 0) {
+                    onlineUsers.forEach(user => {
+                        if (user.id !== this.currentUser.id) {
+                            const userCard = document.createElement('div');
+                            userCard.className = 'user-card';
+                            userCard.innerHTML = `
+                                <div class="user-avatar">${user.name.charAt(0)}</div>
+                                <div class="user-info">
+                                    <div class="user-name">${user.name}</div>
+                                    <div class="user-status">🟢 En línea</div>
+                                </div>
+                                <div class="user-actions">
+                                    <button class="btn-call btn-audio" onclick="app.initiateCall(${user.id}, 'audio')">
+                                        📞 Audio
+                                    </button>
+                                </div>
+                            `;
+                            container.appendChild(userCard);
+                        }
+                    });
+                } else {
+                    container.innerHTML = '<p style="color: white; text-align: center;">No hay usuarios conectados</p>';
+                }
+            }
+
+            initiateCall(toUserId, callType) {
+                this.socket.emit('initiate-call', {
+                    fromUser: this.currentUser,
+                    toUserId: toUserId,
+                    callType: callType
+                });
+            }
+
+            showIncomingCall(data) {
+                this.activeCall = data;
+                
+                document.getElementById('incoming-avatar').textContent = data.fromUser.name.charAt(0);
+                document.getElementById('incoming-name').textContent = data.fromUser.name;
+                
+                document.getElementById('incoming-call-screen').classList.remove('hidden');
+            }
+
+            showOutgoingCall(data) {
+                this.activeCall = data;
+                
+                // Simular datos del usuario destino para la demo
+                const targetUser = { name: 'Usuario ' + data.callId };
+                
+                document.getElementById('outgoing-avatar').textContent = targetUser.name.charAt(0);
+                document.getElementById('outgoing-name').textContent = targetUser.name;
+                
+                document.getElementById('outgoing-call-screen').classList.remove('hidden');
+            }
+
+            answerCall() {
+                this.socket.emit('answer-call', { callId: this.activeCall.callId });
+                document.getElementById('incoming-call-screen').classList.add('hidden');
+                this.showOutgoingCall(this.activeCall);
+            }
+
+            rejectCall() {
+                this.socket.emit('reject-call', { callId: this.activeCall.callId });
+                document.getElementById('incoming-call-screen').classList.add('hidden');
+                this.activeCall = null;
+            }
+
+            endCall() {
+                if (this.activeCall) {
+                    this.socket.emit('end-call', { callId: this.activeCall.callId });
+                } else {
+                    this.hideCallScreens();
+                }
+            }
+
+            onCallAnswered(data) {
+                document.getElementById('call-status').textContent = 'Sincronizando...';
+            }
+
+            onCallConnected(data) {
+                document.getElementById('call-status').textContent = 'Conectado';
+                document.getElementById('call-status').classList.add('hidden');
+                document.getElementById('call-timer').classList.remove('hidden');
+                this.startCallTimer();
+            }
+
+            onCallRejected(data) {
+                this.showNotification(`Llamada rechazada`, 'error');
+                this.hideCallScreens();
+                this.activeCall = null;
+            }
+
+            onCallEnded(data) {
+                const duration = data.duration || 0;
+                this.showNotification(`Llamada finalizada - Duración: ${this.formatTime(duration)}`, 'info');
+                this.hideCallScreens();
+                this.stopCallTimer();
+                this.activeCall = null;
+            }
+
+            toggleMicrophone(button) {
+                const isMuted = button.target.classList.toggle('active');
+                if (this.activeCall) {
+                    this.socket.emit('toggle-audio', { 
+                        callId: this.activeCall.callId, 
+                        muted: isMuted 
+                    });
+                }
+                button.target.textContent = isMuted ? '🎤❌' : '🎤';
+            }
+
+            toggleSpeaker(button) {
+                button.target.classList.toggle('active');
+                button.target.textContent = button.target.classList.contains('active') ? '🔊🔛' : '🔊';
+            }
+
+            onAudioToggled(data) {
+                console.log('Audio toggled:', data.muted);
+            }
+
+            startCallTimer() {
+                this.callStartTime = new Date();
+                this.callTimer = setInterval(() => {
+                    const now = new Date();
+                    const duration = Math.floor((now - this.callStartTime) / 1000);
+                    document.getElementById('call-timer').textContent = this.formatTime(duration);
+                }, 1000);
+            }
+
+            stopCallTimer() {
+                if (this.callTimer) {
+                    clearInterval(this.callTimer);
+                    this.callTimer = null;
+                }
+            }
+
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            hideCallScreens() {
+                document.getElementById('incoming-call-screen').classList.add('hidden');
+                document.getElementById('outgoing-call-screen').classList.add('hidden');
+                document.getElementById('call-status').classList.remove('hidden');
+                document.getElementById('call-timer').classList.add('hidden');
+                document.getElementById('call-status').textContent = 'Conectando...';
+            }
+
+            showHistory() {
+                fetch('/api/call-history')
+                    .then(response => response.json())
+                    .then(history => {
+                        this.displayHistory(history);
+                    })
+                    .catch(error => {
+                        console.error('Error loading history:', error);
+                        // Datos de ejemplo para demo
+                        const sampleHistory = [
+                            {
+                                from: { name: "Ana García" },
+                                startTime: new Date(Date.now() - 3600000),
+                                duration: 125,
+                                status: 'completed'
+                            },
+                            {
+                                from: { name: "Carlos López" },
+                                startTime: new Date(Date.now() - 7200000),
+                                duration: 0,
+                                status: 'rejected'
+                            }
+                        ];
+                        this.displayHistory(sampleHistory);
+                    });
+            }
+
+            displayHistory(history) {
+                const container = document.getElementById('call-history');
+                container.innerHTML = '';
+                
+                if (history && history.length > 0) {
+                    history.forEach(call => {
+                        const historyItem = document.createElement('div');
+                        historyItem.className = 'history-item';
+                        historyItem.innerHTML = `
+                            <div class="history-avatar">${call.from.name.charAt(0)}</div>
+                            <div class="history-info">
+                                <div class="history-name">${call.from.name}</div>
+                                <div class="history-details">
+                                    ${new Date(call.startTime).toLocaleString()} - 
+                                    ${call.duration ? this.formatTime(call.duration) : '0:00'}
+                                </div>
+                            </div>
+                            <div class="history-status ${call.status === 'completed' ? 'status-completed' : 'status-rejected'}">
+                                ${call.status === 'completed' ? 'Completada' : 'Rechazada'}
+                            </div>
+                        `;
+                        container.appendChild(historyItem);
+                    });
+                } else {
+                    container.innerHTML = '<p style="text-align: center; color: #718096;">No hay llamadas en el historial</p>';
+                }
+                
+                document.getElementById('main-screen').classList.remove('active');
+                document.getElementById('history-screen').classList.add('active');
+            }
+
+            showMainScreen() {
+                document.getElementById('history-screen').classList.remove('active');
+                document.getElementById('main-screen').classList.add('active');
+            }
+
+            showNotification(message, type) {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.className = `notification ${type}`;
+                notification.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    notification.classList.add('hidden');
+                }, 3000);
+            }
+        }
+
+        // Inicializar la aplicación cuando se carga la página
+        let app;
+        document.addEventListener('DOMContentLoaded', () => {
+            app = new CallApp();
+        });
+    </script>
+</body>
+</html>
