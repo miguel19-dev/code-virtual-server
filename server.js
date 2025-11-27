@@ -85,41 +85,6 @@ let callHistory = readJSONFile(CALLS_FILE);
 let activeCalls = [];
 let onlineUsers = [];
 
-// Inicializar usuarios de ejemplo si no existen
-if (users.length === 0) {
-  const defaultUsers = [
-    {
-      id: 1,
-      name: "Ana García",
-      password: bcrypt.hashSync("123456", 10),
-      avatar: "/default-avatar.png",
-      online: false,
-      socketId: null,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 2,
-      name: "Carlos López",
-      password: bcrypt.hashSync("123456", 10),
-      avatar: "/default-avatar.png",
-      online: false,
-      socketId: null,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 3,
-      name: "María Rodríguez",
-      password: bcrypt.hashSync("123456", 10),
-      avatar: "/default-avatar.png",
-      online: false,
-      socketId: null,
-      createdAt: new Date().toISOString()
-    }
-  ];
-  users = defaultUsers;
-  writeJSONFile(USERS_FILE, users);
-}
-
 // Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'auth.html'));
@@ -311,6 +276,12 @@ io.on('connection', (socket) => {
         callType: callType
       });
 
+      // Notificar al que inicia la llamada con info del destino
+      io.to(socket.id).emit('call-initiated', {
+        callId: callData.id,
+        toUser: toUser
+      });
+
       console.log(`Llamada iniciada de ${fromUser.name} a ${toUser.name}`);
     } else {
       socket.emit('call-error', { message: 'Usuario no disponible' });
@@ -368,15 +339,21 @@ io.on('connection', (socket) => {
     if (call) {
       call.status = 'connected';
 
-      // Notificar a ambos usuarios
+      // Notificar a AMBOS usuarios
       if (call.from.socketId) {
-        io.to(call.from.socketId).emit('call-connected', { callId });
+        io.to(call.from.socketId).emit('call-connected', { 
+          callId: callId,
+          connectedUser: call.to
+        });
       }
       if (call.to.socketId) {
-        io.to(call.to.socketId).emit('call-connected', { callId });
+        io.to(call.to.socketId).emit('call-connected', { 
+          callId: callId,
+          connectedUser: call.from
+        });
       }
 
-      console.log(`Llamada ${callId} contestada`);
+      console.log(`Llamada ${callId} contestada - Ambos usuarios notificados`);
     }
   });
 
