@@ -53,23 +53,23 @@
             padding: 20px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(30, 41, 59, 0.8);
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .sidebar-header:hover {
+            background: rgba(255, 255, 255, 0.05);
         }
         
         .user-info {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        
-        .user-details {
             display: flex;
             align-items: center;
             gap: 12px;
         }
         
         .user-avatar {
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             display: flex;
@@ -77,26 +77,41 @@
             justify-content: center;
             font-weight: 600;
             color: white;
+            font-size: 1.2em;
+            border: 2px solid var(--primary);
+        }
+        
+        .user-details {
+            flex: 1;
         }
         
         .user-name {
             font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 4px;
         }
         
         .user-status {
-            font-size: 0.8em;
+            font-size: 0.85em;
             color: var(--success);
+        }
+        
+        .user-bio {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            margin-top: 2px;
         }
         
         .logout-btn {
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid var(--error);
             color: var(--error);
-            padding: 8px 12px;
+            padding: 8px 16px;
             border-radius: 8px;
             cursor: pointer;
             font-size: 0.9em;
             transition: all 0.3s ease;
+            margin-top: 10px;
         }
         
         .logout-btn:hover {
@@ -133,7 +148,7 @@
         .user-item {
             display: flex;
             align-items: center;
-            padding: 15px 20px;
+            padding: 12px 20px;
             cursor: pointer;
             transition: background 0.3s ease;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -159,6 +174,13 @@
             font-weight: 600;
             color: white;
             margin-right: 12px;
+            border: 2px solid var(--surface-light);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .user-avatar-small:hover {
+            transform: scale(1.05);
         }
         
         .user-info-small {
@@ -209,8 +231,8 @@
         }
         
         .chat-user-avatar {
-            width: 45px;
-            height: 45px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             display: flex;
@@ -218,6 +240,17 @@
             justify-content: center;
             font-weight: 600;
             color: white;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            border: 2px solid var(--primary);
+        }
+        
+        .chat-user-avatar:hover {
+            transform: scale(1.05);
+        }
+        
+        .chat-user-info {
+            flex: 1;
         }
         
         .chat-user-info h3 {
@@ -261,6 +294,7 @@
         
         .message-content {
             margin-bottom: 5px;
+            line-height: 1.4;
         }
         
         .message-time {
@@ -292,11 +326,16 @@
             resize: none;
             max-height: 120px;
             min-height: 50px;
+            font-family: inherit;
         }
         
         .message-input:focus {
             outline: none;
             border-color: var(--primary);
+        }
+        
+        .message-input::placeholder {
+            color: var(--text-secondary);
         }
         
         .send-button {
@@ -321,6 +360,161 @@
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
+        }
+        
+        /* Pantallas de Perfil */
+        .profile-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--background);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+        }
+        
+        .profile-screen.active {
+            display: flex;
+        }
+        
+        .profile-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(30, 41, 59, 0.8);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .back-button {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 1.2em;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+        
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .profile-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            max-width: 500px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .profile-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            border: 4px solid var(--primary);
+        }
+        
+        .profile-name {
+            font-size: 1.8em;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .profile-bio {
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        
+        .profile-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Formulario de Edición */
+        .edit-form {
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
         }
         
         .welcome-screen {
@@ -375,18 +569,14 @@
     <div class="app-container">
         <!-- Sidebar -->
         <div class="sidebar">
-            <div class="sidebar-header">
+            <div class="sidebar-header" onclick="showMyProfile()">
                 <div class="user-info">
+                    <div class="user-avatar" id="current-user-avatar">U</div>
                     <div class="user-details">
-                        <div class="user-avatar" id="current-user-avatar">U</div>
-                        <div>
-                            <div class="user-name" id="current-user-name">Usuario</div>
-                            <div class="user-status">En línea</div>
-                        </div>
+                        <div class="user-name" id="current-user-name">Usuario</div>
+                        <div class="user-status">En línea</div>
+                        <div class="user-bio" id="current-user-bio">¡Yo uso SecureChat!</div>
                     </div>
-                    <button class="logout-btn" onclick="logout()">
-                        <i class="fas fa-sign-out-alt"></i> Salir
-                    </button>
                 </div>
             </div>
             
@@ -396,6 +586,12 @@
             
             <div class="users-list" id="users-list">
                 <!-- Los usuarios se cargarán aquí -->
+            </div>
+            
+            <div style="padding: 20px;">
+                <button class="logout-btn" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                </button>
             </div>
         </div>
         
@@ -411,7 +607,7 @@
             
             <div id="chat-container" style="display: none;">
                 <div class="chat-header">
-                    <div class="chat-user-avatar" id="chat-user-avatar">U</div>
+                    <div class="chat-user-avatar" id="chat-user-avatar" onclick="showUserProfile()">U</div>
                     <div class="chat-user-info">
                         <h3 id="chat-user-name">Usuario</h3>
                         <div class="status" id="chat-user-status">En línea</div>
@@ -427,13 +623,67 @@
                         <textarea 
                             class="message-input" 
                             id="message-input" 
-                            placeholder="Escribe un mensaje..." 
+                            placeholder="Mensaje" 
                             rows="1"
                         ></textarea>
                         <button class="send-button" id="send-button" onclick="sendMessage()">
                             <i class="fas fa-paper-plane"></i>
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pantalla de Mi Perfil -->
+        <div class="profile-screen" id="my-profile-screen">
+            <div class="profile-header">
+                <button class="back-button" onclick="hideMyProfile()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Mi Perfil</h2>
+            </div>
+            <div class="profile-content">
+                <div class="profile-avatar" id="my-profile-avatar">U</div>
+                <div class="profile-name" id="my-profile-name">Usuario</div>
+                <div class="profile-bio" id="my-profile-bio">¡Yo uso SecureChat!</div>
+                
+                <div class="edit-form">
+                    <div class="form-group">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" class="form-input" id="edit-profile-name" placeholder="Tu nombre">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Información</label>
+                        <textarea class="form-input form-textarea" id="edit-profile-bio" placeholder="Cuéntanos sobre ti">¡Yo uso SecureChat!</textarea>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="btn btn-primary" onclick="saveMyProfile()">
+                            <i class="fas fa-save"></i> Guardar Cambios
+                        </button>
+                        <button class="btn btn-secondary" onclick="hideMyProfile()">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pantalla de Perfil de Usuario -->
+        <div class="profile-screen" id="user-profile-screen">
+            <div class="profile-header">
+                <button class="back-button" onclick="hideUserProfile()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Perfil</h2>
+            </div>
+            <div class="profile-content">
+                <div class="profile-avatar" id="user-profile-avatar">U</div>
+                <div class="profile-name" id="user-profile-name">Usuario</div>
+                <div class="profile-bio" id="user-profile-bio">¡Yo uso SecureChat!</div>
+                <div class="profile-actions">
+                    <button class="btn btn-secondary" onclick="hideUserProfile()">
+                        Cerrar
+                    </button>
                 </div>
             </div>
         </div>
@@ -445,6 +695,7 @@
         let currentUser = null;
         let selectedUser = null;
         let onlineUsers = [];
+        let allUsers = [];
         
         // Inicializar la aplicación
         document.addEventListener('DOMContentLoaded', async function() {
@@ -455,9 +706,13 @@
                 return;
             }
             
+            // Inicializar datos del perfil si no existen
+            if (!currentUser.bio) {
+                currentUser.bio = "¡Yo uso SecureChat!";
+            }
+            
             // Mostrar información del usuario actual
-            document.getElementById('current-user-name').textContent = currentUser.name;
-            document.getElementById('current-user-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+            updateCurrentUserDisplay();
             
             // Conectar al socket
             socket.emit('user_online', currentUser);
@@ -473,12 +728,12 @@
         async function loadUsers() {
             try {
                 const response = await fetch('/api/users');
-                const users = await response.json();
+                allUsers = await response.json();
                 
                 const usersList = document.getElementById('users-list');
                 usersList.innerHTML = '';
                 
-                const otherUsers = users.filter(user => user.id !== currentUser.id);
+                const otherUsers = allUsers.filter(user => user.id !== currentUser.id);
                 
                 if (otherUsers.length === 0) {
                     usersList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No hay otros usuarios registrados</div>';
@@ -486,19 +741,24 @@
                 }
                 
                 otherUsers.forEach(user => {
+                    if (!user.bio) {
+                        user.bio = "¡Yo uso SecureChat!";
+                    }
+                    
                     const userItem = document.createElement('div');
                     userItem.className = 'user-item';
                     userItem.dataset.userId = user.id;
                     userItem.innerHTML = `
-                        <div class="user-avatar-small">${user.name.charAt(0).toUpperCase()}</div>
-                        <div class="user-info-small">
+                        <div class="user-avatar-small" onclick="event.stopPropagation(); showOtherUserProfile('${user.id}')">
+                            ${user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="user-info-small" onclick="selectUser('${user.id}')">
                             <div class="user-name-small">${user.name}</div>
                             <div class="user-last-message" id="last-msg-${user.id}">Haz clic para chatear</div>
                         </div>
                         <div class="user-status-indicator" id="status-${user.id}"></div>
                     `;
                     
-                    userItem.addEventListener('click', () => selectUser(user));
                     usersList.appendChild(userItem);
                 });
                 
@@ -509,7 +769,10 @@
         }
         
         // Seleccionar usuario para chatear
-        function selectUser(user) {
+        function selectUser(userId) {
+            const user = allUsers.find(u => u.id === userId);
+            if (!user) return;
+            
             selectedUser = user;
             
             // Actualizar UI
@@ -570,6 +833,7 @@
             
             // Limpiar input
             messageInput.value = '';
+            messageInput.style.height = 'auto';
             
             // Enviar mensaje via socket
             socket.emit('private_message', {
@@ -599,6 +863,81 @@
             
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Mostrar mi perfil
+        function showMyProfile() {
+            document.getElementById('my-profile-screen').classList.add('active');
+            document.getElementById('edit-profile-name').value = currentUser.name;
+            document.getElementById('edit-profile-bio').value = currentUser.bio;
+        }
+        
+        // Ocultar mi perfil
+        function hideMyProfile() {
+            document.getElementById('my-profile-screen').classList.remove('active');
+        }
+        
+        // Guardar mi perfil
+        function saveMyProfile() {
+            const newName = document.getElementById('edit-profile-name').value.trim();
+            const newBio = document.getElementById('edit-profile-bio').value.trim();
+            
+            if (!newName) {
+                alert('El nombre no puede estar vacío');
+                return;
+            }
+            
+            // Actualizar datos del usuario
+            currentUser.name = newName;
+            currentUser.bio = newBio || "¡Yo uso SecureChat!";
+            
+            // Guardar en localStorage
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            
+            // Actualizar display
+            updateCurrentUserDisplay();
+            
+            // Notificar al servidor (en una implementación real, aquí harías una llamada API)
+            socket.emit('profile_update', currentUser);
+            
+            // Ocultar pantalla de perfil
+            hideMyProfile();
+            
+            alert('Perfil actualizado correctamente');
+        }
+        
+        // Mostrar perfil de otro usuario
+        function showOtherUserProfile(userId) {
+            const user = allUsers.find(u => u.id === userId);
+            if (!user) return;
+            
+            document.getElementById('user-profile-avatar').textContent = user.name.charAt(0).toUpperCase();
+            document.getElementById('user-profile-name').textContent = user.name;
+            document.getElementById('user-profile-bio').textContent = user.bio;
+            document.getElementById('user-profile-screen').classList.add('active');
+        }
+        
+        // Mostrar perfil del usuario seleccionado en el chat
+        function showUserProfile() {
+            if (selectedUser) {
+                showOtherUserProfile(selectedUser.id);
+            }
+        }
+        
+        // Ocultar perfil de usuario
+        function hideUserProfile() {
+            document.getElementById('user-profile-screen').classList.remove('active');
+        }
+        
+        // Actualizar display del usuario actual
+        function updateCurrentUserDisplay() {
+            document.getElementById('current-user-name').textContent = currentUser.name;
+            document.getElementById('current-user-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+            document.getElementById('current-user-bio').textContent = currentUser.bio;
+            
+            document.getElementById('my-profile-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+            document.getElementById('my-profile-name').textContent = currentUser.name;
+            document.getElementById('my-profile-bio').textContent = currentUser.bio;
         }
         
         // Configurar event listeners
@@ -643,7 +982,7 @@
             // Auto-resize del textarea
             document.getElementById('message-input').addEventListener('input', function() {
                 this.style.height = 'auto';
-                this.style.height = (this.scrollHeight) + 'px';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
             });
             
             // Búsqueda de usuarios
