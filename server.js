@@ -120,13 +120,13 @@ if (users.length === 0) {
   writeJSONFile(USERS_FILE, users);
 }
 
-// Routes
+// Routes - ACTUALIZAR ESTAS RUTAS
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'auth.html'));
 });
 
 app.get('/app', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'web.html'));
 });
 
 // API Routes
