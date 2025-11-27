@@ -450,45 +450,45 @@
             }
 
             async handleLogin(e) {
-                e.preventDefault();
-                
-                const name = document.getElementById('login-name').value.trim();
-                const password = document.getElementById('login-password').value;
+    e.preventDefault();
+    
+    const name = document.getElementById('login-name').value.trim();
+    const password = document.getElementById('login-password').value;
 
-                if (!name || !password) {
-                    this.showNotification('Por favor, completa todos los campos', 'error');
-                    return;
-                }
+    if (!name || !password) {
+        this.showNotification('Por favor, completa todos los campos', 'error');
+        return;
+    }
 
-                this.showLoading('login', true);
+    this.showLoading('login', true);
 
-                try {
-                    const response = await fetch('/api/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, password })
-                    });
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, password })
+        });
 
-                    const data = await response.json();
+        const data = await response.json();
 
-                    if (!response.ok) {
-                        throw new Error(data.error);
-                    }
+        if (!response.ok) {
+            throw new Error(data.error);
+        }
 
-                    this.currentUser = data.user;
-                    localStorage.setItem('currentUser', JSON.stringify(data.user));
-                    this.showNotification(`¡Bienvenido ${data.user.name}!`, 'success');
-                    
-                    setTimeout(() => {
-                        window.location.href = '/app';
-                    }, 1000);
+        this.currentUser = data.user;
+        localStorage.setItem('currentUser', JSON.stringify(data.user));
+        this.showNotification(`¡Bienvenido ${data.user.name}!`, 'success');
+        
+        setTimeout(() => {
+            window.location.href = '/app';
+        }, 1000);
 
-                } catch (error) {
-                    this.showNotification(error.message || 'Error al iniciar sesión', 'error');
-                } finally {
-                    this.showLoading('login', false);
-                }
-            }
+    } catch (error) {
+        this.showNotification(error.message || 'Error al iniciar sesión', 'error');
+    } finally {
+        this.showLoading('login', false);
+    }
+}
 
             async handleRegister(e) {
                 e.preventDefault();
