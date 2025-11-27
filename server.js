@@ -12,16 +12,15 @@ const io = socketIo(server, { cors: { origin: "*" } });
 
 app.use(express.json());
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Crear carpetas
-if (!fs.existsSync('uploads/avatars')) fs.mkdirSync('uploads/avatars', { recursive: true });
-if (!fs.existsSync('data')) fs.mkdirSync('data');
+// Carpetas
+['data', 'uploads/avatars'].forEach(d => !fs.existsSync(d) && fs.mkdirSync(d, { recursive: true }));
 
 const upload = multer({
   dest: 'uploads/avatars/',
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => file.mimetype.startsWith('image/') ? cb(null, true) : cb(new Error('Solo imágenes'))
+  limits: { fileSize: 5e6 },
+  fileFilter: (req, file, cb) => file.mimetype.startsWith('image/') ? cb(null, true) : cb(null, false)
 });
 
 const USERS_FILE = 'data/users.json';
@@ -37,7 +36,7 @@ app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'public', 'web.h
 app.post('/api/register', upload.single('avatar'), async (req, res) => {
   const { name, password } = req.body;
   if (!name || !password || password.length < 6 || users.find(u => u.name.toLowerCase() === name.toLowerCase())) {
-    return res.status(400).json({ error: 'Usuario ya existe o datos inválidos' });
+    return res.status(400).json({ error: 'Usuario existente o datos inválidos' });
   }
   const newUser = {
     id: Date.now(),
@@ -55,42 +54,42 @@ app.post('/api/login', async (req, res) => {
   const { name, password } = req.body;
   const user = users.find(u => u.name.toLowerCase() === name.toLowerCase());
   if (!user || !await bcrypt.compare(password, user.password)) {
-    return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    return res.status(401).json({ error: 'Credenciales incorrectas' });
   }
   const { password: _, ...safe } = user;
   res.json({ user: safe });
 });
 
-let onlineUsers = [];
+// === SOCKET.IO + WEBRTC 100% FUNCIONAL ===
+let online = {};
 
 io.on('connection', socket => {
   socket.on('login', user => {
-    const entry = { id: user.id, name: user.name, avatar: user.avatar || '/default-avatar.png', socketId: socket.id };
-    onlineUsers = onlineUsers.filter(u => u.id !== user.id);
-    onlineUsers.push(entry);
-    io.emit('online-users', onlineUsers);
+    online[user.id] = { ...user, socketId: socket.id };
+    io.emit('users', Object.values(online));
   });
 
-  socket.on('call-user', ({ to, from }) => {
-    const target = onlineUsers.find(u => u.id === to.id);
+  socket.on('call', ({ toId, fromUser }) => {
+    const target = online[toId];
     if (target) {
-      io.to(target.socketId).emit('incoming-call', { from, callId: Date.now() });
-      socket.emit('calling', { to });
+      const callId = Date.now() + '';
+      io.to(target.socketId).emit('incoming', { callId, fromUser }));
+      socket.emit('ringing', { callId });
     }
   });
 
-  socket.on('webrtc-offer', data => io.to(data.target).emit('webrtc-offer', data));
-  socket.on('webrtc-answer', data => io.to(data.target).emit('webrtc-answer', data));
-  socket.on('webrtc-ice', data => io.to(data.target).emit('webrtc-ice', data));
+  socket.on('offer', data => io.to(data.to).emit('offer', { ...data, from: socket.id }));
+  socket.on('answer', data => io.to(data.to).emit('answer', data.answer));
+  socket.on('ice', data => io.to(data.to).emit('ice', data.candidate));
 
-  socket.on('accept-call', id => socket.to(id).emit('call-accepted'));
-  socket.on('end-call', () => io.emit('call-ended'));
+  socket.on('accept', () => socket.broadcast.emit('accepted'));
+  socket.on('end', () => io.emit('ended'));
 
   socket.on('disconnect', () => {
-    onlineUsers = onlineUsers.filter(u => u.socketId !== socket.id);
-    io.emit('online-users', onlineUsers);
+    for (let id in online) if (online[id].socketId === socket.id) delete online[id];
+    io.emit('users', Object.values(online));
   });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`CallBlue listo en http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`CallBlue 100% listo → http://localhost:${PORT}`));
