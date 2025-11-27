@@ -1,225 +1,187 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CallBlue</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{--primary:#6366f1;--bg:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);--card:rgba(255,255,255,0.08);--text:#f1f5f9;--text-light:#cbd5e1;--success:#34d399;--danger:#ef4444}
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Inter',sans-serif;background:var(--bg);color:white;min-height:100vh;overflow:hidden}
-    .container{max-width:420px;margin:0 auto;padding:20px;height:100vh;display:flex;flex-direction:column;position:relative}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;padding-top:10px}
-    header h1{font-size:28px;font-weight:700;background:linear-gradient(90deg,#60a5fa,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    .logout-btn{background:rgba(255,255,255,0.1);border:none;width:48px;height:48px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.3s}
-    .logout-btn:hover{background:rgba(239,68,68,0.3);transform:scale(1.1)}
-    .users-list{flex:1;overflow-y:auto;padding-bottom:20px}
-    .user-card{background:var(--card);backdrop-filter:blur(12px);border-radius:20px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:16px;border:1px solid rgba(255,255,255,0.1);transition:.3s}
-    .user-card:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(0,0,0,0.4)}
-    .avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;border:3px solid #60a5fa}
-    .info{flex:1}
-    .name{font-weight:600;font-size:17px}
-    .status{font-size:13px;color:var(--text-light);display:flex;align-items:center;gap:6px;margin-top:4px}
-    .dot{width:8px;height:8px;background:var(--success);border-radius:50%}
-    .call-btn{background:linear-gradient(45deg,#60a5fa,#34d399);border:none;width:52px;height:52px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(96,165,250,0.4);transition:.3s}
-    .call-btn:hover{transform:scale(1.1)}
+    :root{--bg:#0f172a;--card:rgba(30,41,59,0.7);--accent:#60a5fa;--green:#34d399;--red:#ef4444}
+    body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;min-height:100vh;margin:0;overflow:hidden}
+    .container{max-width:420px;margin:0 auto;padding:20px;height:100vh;display:flex;flex-direction:column}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+    h1{font-size:28px;background:linear-gradient(90deg,var(--accent),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .logout{background:#ffffff22;padding:12px;border-radius:50%;cursor:pointer}
+    .users{flex:1;overflow-y:auto}
+    .user{background:var(--card);backdrop-filter:blur(12px);border-radius:16px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:16px}
+    .user img{width:56px;height:56px;border-radius:50%;object-fit:cover;border:3px solid var(--accent)}
+    .call-btn{background:linear-gradient(45deg,var(--accent),var(--green));width:52px;height:52px;border-radius:50%;border:none;cursor:pointer}
 
-    .call-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:100;animation:fadeIn .4s}
-    .call-container{text-align:center;padding:40px}
-    .call-avatar{width:160px;height:160px;border-radius:50%;object-fit:cover;border:6px solid #60a5fa;margin-bottom:30px;box-shadow:0 20px 40px rgba(0,0,0,0.6)}
-    .call-name{font-size:32px;font-weight:600;margin-bottom:10px}
-    .call-status{font-size:18px;color:var(--text-light);margin:20px 0}
-    .timer{font-size:48px;font-weight:700;color:var(--success);margin:30px 0;display:none}
-    .call-actions{display:flex;justify-content:center;gap:60px}
-    .btn-large{width:80px;height:80px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 25px rgba(0,0,0,0.5);transition:.3s}
-    .btn-large:hover{transform:scale(1.1)}
-    .btn-answer{background:var(--success)}
-    .btn-reject,.btn-end{background:var(--danger)}
-    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    .hidden{display:none!important}
+    .screen{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+    .screen.active{display:flex}
+    .big-avatar{width:160px;height:160px;border-radius:50%;border:6px solid var(--accent);object-fit:cover}
+    .timer{font-size:48px;color:var(--green)}
+    .btns{display:flex;gap:60px;margin-top:40px}
+    .btn-circle{width:80px;height:80px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center}
+    .accept{background:var(--green)}
+    .reject,.hangup{background:var(--red)}
   </style>
 </head>
 <body>
 
-  <audio id="local-audio" muted playsinline></audio>
-  <audio id="remote-audio" autoplay playsinline></audio>
+<audio id="remote" autoplay playsinline></audio>
 
-  <div id="main" class="container">
-    <header>
-      <h1>CallBlue</h1>
-      <button id="logout-btn" class="logout-btn" title="Cerrar sesión">
-        <svg width="24" height="24" fill="white" viewBox="0 0 24 24">
-          <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-        </svg>
-      </button>
-    </header>
-    <div class="users-list" id="users-list"></div>
-  </div>
-
-  <div id="incoming" class="call-screen hidden">
-    <div class="call-container">
-      <img id="in-avatar" class="call-avatar" src="/default-avatar.png">
-      <div class="call-name" id="in-name">Usuario</div>
-      <div class="call-status">Llamada entrante...</div>
-      <div class="call-actions">
-        <button id="answer-btn" class="btn-large btn-answer">
-          <svg width="36" height="36" fill="white" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.045 15.045 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A10.95 10.95 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
-        </button>
-        <button id="reject-btn" class="btn-large btn-reject">
-          <svg width="36" height="36" fill="white" viewBox="0 0 24 24"><path d="M12 9c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm5 13.59L15.59 21 12 17.41 8.41 21 7 19.59 10.59 16 7 12.41 8.41 11 12 14.59 15.59 11 17 12.41 13.41 16 17 19.59 15.59 21z"/></svg>
-        </button>
-      </div>
+<div class="container">
+  <header>
+    <h1>CallBlue</h1>
+    <div class="logout" onclick="localStorage.clear();location.href='/'">
+      <svg width="24" height="" fill="#fff" viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
     </div>
+  </header>
+  <div class="users" id="users"></div>
+</div>
+
+<div id="incoming" class="screen">
+  <img id="in-avatar" class="big-avatar" src="">
+  <h2 id="in-name"></h2>
+  <p>Llamada entrante...</p>
+  <div class="btns">
+    <button class="btn-circle accept" id="accept">
+      <svg width="36" height="36" fill="#fff" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15 15 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 0 .25-1.02A11 11 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
+    </button>
+    <button class="btn-circle reject" id="reject">
+      <svg width="36" height="36" fill="#fff" viewBox="0 0 24 24"><path d="M12 9c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm5 13.59L15.59 21 12 17.41 8.41 21 7 19.59 10.59 16 7 12.41 8.41 11 12 14.59 15.59 11 17 12.41 13.41 16 17 19.59 15.59 21z"/></svg>
+    </button>
   </div>
+</div>
 
-  <div id="active" class="call-screen hidden">
-    <div class="call-container">
-      <img id="active-avatar" class="call-avatar" src="/default-avatar.png">
-      <div class="call-name" id="active-name">Conectando...</div>
-      <div class="call-status" id="status-text">Llamando...</div>
-      <div class="timer" id="timer">00:00</div>
-      <div class="call-actions">
-        <button id="end-btn" class="btn-large btn-end">
-          <svg width="38" height="38" fill="white" viewBox="0 0 24 24"><path d="M12 9c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm5 13.59L15.59 21 12 17.41 8.41 21 7 19.59 10.59 16 7 12.41 8.41 11 12 14.59 15.59 11 17 12.41 13.41 16 17 19.59 15.59 21z"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
+<div id="call" class="screen">
+  <img id="call-avatar" class="big-avatar" src="">
+  <h2 id="call-name"></h2>
+  <div id="status">Llamando...</div>
+  <div id="timer" class="timer" style="display:none">00:00</div>
+  <button class="btn-circle hangup" id="hangup">
+    <svg width="38" height="38" fill="#fff" viewBox="0 0 24 24"><path d="M12 9c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm5 13.59L15.59 21 12 17.41 8.41 21 7 19.59 10.59 16 7 12.41 8.41 11 12 14.59 15.59 11 17 12.41 13.41 16 17 19.59 15.59 21z"/></svg>
+  </button>
+</div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
-    const user = JSON.parse(localStorage.getItem('currentUser'));
-    if (!user) location.href = '/';
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  const user = JSON.parse(localStorage.getItem('currentUser'));
+  if (!user) location.href = '/';
 
-    const main = document.getElementById('main');
-    const incoming = document.getElementById('incoming');
-    const active = document.getElementById('active');
-    let pc = null;
-    let callId = null;
-    let timerInterval = null;
+  let pc = null;
+  let callId = null;
+  let timerInt = null;
 
-    socket.emit('user-login', user);
+  socket.emit('user-login', user);
 
-    // Cerrar sesión
-    document.getElementById('logout-btn').onclick = () => {
-      localStorage.removeItem('currentUser');
-      location.href = '/';
-    };
+  socket.on('users-updated', list => {
+    const div = document.getElementById('users');
+    div.innerHTML = '';
+    list.filter(u => u.id !== user.id).forEach(u => {
+      const el = document.createElement('div');
+      el.className = 'user';
+      el.innerHTML = `
+        <img src="${u.avatar}" onerror="this.src='/default-avatar.png'">
+        <div>
+          <div style="font-weight:600">${u.name}</div>
+          <small style="color:#94a3b8">En línea</small>
+        </div>
+        <button class="call-btn" onclick="startCall(\( {u.id},' \){u.name}','${u.avatar}')">
+          <svg width="24" height="24" fill="#fff" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15 15 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A11 11 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
+        </button>`;
+      div.appendChild(el);
+    });
+  });
 
-    // Lista de usuarios
-    socket.on('users-updated', list => {
-      const c = document.getElementById('users-list');
-      c.innerHTML = '';
-      list.filter(u => u.id !== user.id).forEach(u => {
-        const d = document.createElement('div');
-        d.className = 'user-card';
-        d.innerHTML = `
-          <img src="\( {u.avatar || '/default-avatar.png'}" class="avatar" alt=" \){u.name}">
-          <div class="info">
-            <div class="name">${u.name}</div>
-            <div class="status"><span class="dot"></span>En línea</div>
-          </div>
-          <button class="call-btn" onclick="call(\( {u.id}, ' \){u.name}', '${u.avatar || '/default-avatar.png'}')">
-            <svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57a1 1 0 0 0-1.02.24l-2.2 2.2a15.045 15.045 0 0 1-6.59-6.59l2.2-2.2a1 1 0 0 0 .25-1.02A10.95 10.95 0 0 1 8.5 4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1c0 9.39 7.61 17 17 17a1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
-          </button>`;
-        c.appendChild(d);
-      });
+  window.startCall = async (id, name, avatar) => {
+    pc = new RTCPeerConnection({
+      iceServers: [
+        {urls:'stun:stun.l.google.com:19302'},
+        {urls:'stun:stun1.l.google.com:19302'},
+        {urls:['turn:relay1.expressturn.com:3480?transport=tcp','turns:relay1.expressturn.com:5349'],
+         username:'000000002079624655', credential:'IDRwv6Pt/dZCoN7zXyU8lpCpE4w='}
+      ]
     });
 
-    // Llamar
-    window.call = async (id, name, avatar) => {
-      pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: ['turn:relay1.expressturn.com:3480?transport=tcp', 'turns:relay1.expressturn.com:5349'],
-            username: '000000002079624655',
-            credential: 'IDRwv6Pt/dZCoN7zXyU8lpCpE4w=' }
-        ]
-      });
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    pc.ontrack = e => document.getElementById('remote').srcObject = e.streams[0];
+    pc.onicecandidate = e => e.candidate && socket.emit('webrtc-ice-candidate', {toSocketId: id, candidate: e.candidate, callId});
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => pc.addTrack(t, stream));
-      pc.ontrack = e => document.getElementById('remote-audio').srcObject = e.streams[0];
-      pc.onicecandidate = e => e.candidate && socket.emit('webrtc-ice-candidate', { to: id, candidate: e.candidate, callId });
+    socket.emit('initiate-call', {fromUser: user, toUserId: id});
+    callId = Date.now();
+    setupCallScreen(name, avatar, 'Llamando...');
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('webrtc-offer', {toSocketId: id, offer, callId});
+  };
 
-      socket.emit('initiate-call', { fromUser: user, toUserId: id });
-      callId = Date.now();
-      setupCallScreen(name, avatar, 'Llamando...');
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('webrtc-offer', { to: id, offer, callId });
-    };
+  socket.on('incoming-call', data => {
+    document.getElementById('in-avatar').src = data.fromUser.avatar || '/default-avatar.png';
+    document.getElementById('in-name').textContent = data.fromUser.name;
+    callId = data.callId;
+    document.getElementById('incoming').classList.add('active');
+  });
 
-    // Llamada entrante
-    socket.on('incoming-call', data => {
-      callId = data.callId;
-      document.getElementById('in-avatar').src = data.fromUser.avatar || '/default-avatar.png';
-      document.getElementById('in-name').textContent = data.fromUser.name;
-      incoming.classList.remove('hidden');
-    });
+  socket.on('webrtc-offer', async data => {
+    pc = new RTCPeerConnection({iceServers: [/* mismo que arriba */]});
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    pc.ontrack = e => document.getElementById('remote').srcObject = e.streams[0];
+    pc.onicecandidate = e => e.candidate && socket.emit('webrtc-ice-candidate', {toSocketId: data.from, candidate: e.candidate, callId});
+    await pc.setRemoteDescription(data.offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('webrtc-answer', {toSocketId: data.from, answer, callId});
+    setupCallScreen(data.fromUser.name, data.fromUser.avatar, 'Conectando...');
+  });
 
-    // WebRTC
-    socket.on('webrtc-offer', async data => {
-      pc = new RTCPeerConnection({ iceServers: [/* mismo que arriba */] });
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(t => pc.addTrack(t, stream));
-      pc.ontrack = e => document.getElementById('remote-audio').srcObject = e.streams[0];
-      pc.onicecandidate = e => e.candidate && socket.emit('webrtc-ice-candidate', { to: data.from, candidate: e.candidate, callId });
-      await pc.setRemoteDescription(data.offer);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('webrtc-answer', { to: data.from, answer, callId });
-      setupCallScreen(data.fromUser.name, data.fromUser.avatar || '/default-avatar.png', 'Conectando...');
-    });
+  socket.on('webrtc-answer', data => pc.setRemoteDescription(data.answer));
+  socket.on('webrtc-ice-candidate', data => data.candidate && pc.addIceCandidate(data.candidate));
 
-    socket.on('webrtc-answer', data => pc.setRemoteDescription(data.answer));
-    socket.on('webrtc-ice-candidate', data => data.candidate && pc.addIceCandidate(data.candidate));
-    socket.on('call-connected', () => {
-      document.getElementById('status-text').style.display = 'none';
-      document.getElementById('timer').style.display = 'block';
-      startTimer();
-    });
+  socket.on('call-connected', () => {
+    document.getElementById('status').style.display = 'none';
+    document.getElementById('timer').style.display = 'block';
+    startTimer();
+  });
 
-    function setupCallScreen(name, avatar, status) {
-      document.getElementById('active-avatar').src = avatar;
-      document.getElementById('active-name').textContent = name;
-      document.getElementById('status-text').textContent = status;
-      document.getElementById('status-text').style.display = 'block';
-      document.getElementById('timer').style.display = 'none';
-      main.classList.add('hidden');
-      active.classList.remove('hidden');
-    }
+  function setupCallScreen(name, avatar, status) {
+    document.getElementById('call-avatar').src = avatar || '/default-avatar.png';
+    document.getElementById('call-name').textContent = name;
+    document.getElementById('status').textContent = status;
+    document.getElementById('call').classList.add('active');
+  }
 
-    function startTimer() {
-      let s = 0;
-      timerInterval = setInterval(() => {
-        s++;
-        const m = String(Math.floor(s/60)).padStart(2,'0');
-        const sec = String(s%60).padStart(2,'0');
-        document.getElementById('timer').textContent = `\( {m}: \){sec}`;
-      }, 1000);
-    }
+  function startTimer() {
+    let s = 0;
+    timerInt = setInterval(() => {
+      s++;
+      const m = String(Math.floor(s/60)).padStart(2,'0');
+      document.getElementById('timer').textContent = `\( {m}: \){String(s%60).padStart(2,'0')}`;
+    }, 1000);
+  }
 
-    function endCall() {
-      if (timerInterval) clearInterval(timerInterval);
-      if (pc) { pc.close(); pc = null; }
-      socket.emit('end-call', { callId });
-      main.classList.remove('hidden');
-      active.classList.add('hidden');
-      incoming.classList.add('hidden');
-    }
+  function endCall() {
+    if (timerInt) clearInterval(timerInt);
+    if (pc) pc.close();
+    socket.emit('call-ended', {callId});
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  }
 
-    document.getElementById('answer-btn').onclick = () => {
-      socket.emit('answer-call', { callId });
-      incoming.classList.add('hidden');
-      active.classList.remove('hidden');
-      startTimer();
-    };
-    document.getElementById('reject-btn').onclick = endCall;
-    document.getElementById('end-btn').onclick = endCall;
-  </script>
+  document.getElementById('accept').onclick = () => {
+    socket.emit('call-accepted', {callId});
+    document.getElementById('incoming').classList.remove('active');
+    document.getElementById('call').classList.add('active');
+    startTimer();
+  };
+  document.getElementById('reject').onclick = () => {
+    socket.emit('call-rejected', {callId});
+    endCall();
+  };
+  document.getElementById('hangup').onclick = endCall;
+</script>
 </body>
 </html>
