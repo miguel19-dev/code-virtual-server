@@ -120,7 +120,7 @@ if (users.length === 0) {
   writeJSONFile(USERS_FILE, users);
 }
 
-// Routes - ACTUALIZAR ESTAS RUTAS
+// Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'auth.html'));
 });
@@ -141,9 +141,33 @@ app.get('/api/users', (req, res) => {
 });
 
 app.get('/api/call-history', (req, res) => {
-  // Devolver historial ordenado por fecha más reciente
-  const sortedHistory = callHistory.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
-  res.json(sortedHistory.slice(0, 50)); // Limitar a 50 registros
+  try {
+    // Incluir información completa de los usuarios en el historial
+    const completeHistory = callHistory.map(call => {
+      const fromUser = users.find(u => u.id === call.from.id) || call.from;
+      const toUser = users.find(u => u.id === call.to.id) || call.to;
+      
+      return {
+        ...call,
+        from: {
+          id: fromUser.id,
+          name: fromUser.name,
+          avatar: fromUser.avatar
+        },
+        to: {
+          id: toUser.id,
+          name: toUser.name,
+          avatar: toUser.avatar
+        }
+      };
+    });
+    
+    const sortedHistory = completeHistory.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+    res.json(sortedHistory.slice(0, 50));
+  } catch (error) {
+    console.error('Error getting call history:', error);
+    res.status(500).json({ error: 'Error al obtener el historial' });
+  }
 });
 
 // Registro de usuario
@@ -256,12 +280,15 @@ io.on('connection', (socket) => {
   // Iniciar llamada
   socket.on('initiate-call', (data) => {
     const { fromUser, toUserId, callType } = data;
-    const toUser = users.find(u => u.id === toUserId && u.online);
+    const toUser = onlineUsers.find(u => u.id == toUserId);
 
     if (toUser && toUser.socketId) {
       const callData = {
         id: Date.now(),
-        from: fromUser,
+        from: {
+          ...fromUser,
+          socketId: socket.id
+        },
         to: {
           id: toUser.id,
           name: toUser.name,
@@ -293,7 +320,9 @@ io.on('connection', (socket) => {
   // WebRTC Signaling - Oferta
   socket.on('webrtc-offer', (data) => {
     const { to, offer, callId } = data;
-    const toUser = onlineUsers.find(u => u.id === to);
+    console.log('📞 Oferta WebRTC enviada a:', to);
+    
+    const toUser = onlineUsers.find(u => u.socketId === to);
     if (toUser) {
       io.to(toUser.socketId).emit('webrtc-offer', {
         from: socket.id,
@@ -306,6 +335,8 @@ io.on('connection', (socket) => {
   // WebRTC Signaling - Respuesta
   socket.on('webrtc-answer', (data) => {
     const { to, answer, callId } = data;
+    console.log('📞 Respuesta WebRTC enviada a:', to);
+    
     const toUser = onlineUsers.find(u => u.socketId === to);
     if (toUser) {
       io.to(toUser.socketId).emit('webrtc-answer', {
@@ -336,11 +367,15 @@ io.on('connection', (socket) => {
 
     if (call) {
       call.status = 'connected';
-      
+
       // Notificar a ambos usuarios
-      io.to(call.from.socketId).emit('call-connected', { callId });
-      io.to(call.to.socketId).emit('call-connected', { callId });
-      
+      if (call.from.socketId) {
+        io.to(call.from.socketId).emit('call-connected', { callId });
+      }
+      if (call.to.socketId) {
+        io.to(call.to.socketId).emit('call-connected', { callId });
+      }
+
       console.log(`Llamada ${callId} contestada`);
     }
   });
@@ -355,10 +390,12 @@ io.on('connection', (socket) => {
       call.endTime = new Date().toISOString();
 
       // Notificar al usuario que inició la llamada
-      io.to(call.from.socketId).emit('call-rejected', { 
-        callId,
-        userName: call.to.name
-      });
+      if (call.from.socketId) {
+        io.to(call.from.socketId).emit('call-rejected', { 
+          callId,
+          userName: call.to.name
+        });
+      }
 
       // Guardar en historial
       const callRecord = {
@@ -388,10 +425,19 @@ io.on('connection', (socket) => {
       call.endTime = endTime.toISOString();
       call.duration = duration;
 
-      // Notificar a ambos usuarios
-      io.to(call.from.socketId).emit('call-ended', { callId, duration });
-      if (call.to.socketId) {
-        io.to(call.to.socketId).emit('call-ended', { callId, duration });
+      // Notificar a AMBOS usuarios si están conectados
+      if (call.from.socketId) {
+        io.to(call.from.socketId).emit('call-ended', { 
+          callId, 
+          duration
+        });
+      }
+      
+      if (call.to.socketId && call.to.socketId !== socket.id) {
+        io.to(call.to.socketId).emit('call-ended', { 
+          callId, 
+          duration
+        });
       }
 
       // Guardar en historial
@@ -401,7 +447,7 @@ io.on('connection', (socket) => {
 
       // Remover llamada activa
       activeCalls = activeCalls.filter(c => c.id !== callId);
-      console.log(`Llamada ${callId} finalizada, duración: ${duration}s`);
+      console.log(`Llamada ${callId} finalizada por ${socket.id}, duración: ${duration}s`);
     }
   });
 
@@ -409,12 +455,12 @@ io.on('connection', (socket) => {
   socket.on('toggle-audio', (data) => {
     const { callId, muted } = data;
     const call = activeCalls.find(c => c.id === callId);
-    
+
     if (call) {
       // Notificar al otro usuario
       const targetSocketId = call.from.socketId === socket.id ? 
                            call.to.socketId : call.from.socketId;
-      
+
       if (targetSocketId) {
         io.to(targetSocketId).emit('audio-toggled', { muted });
       }
