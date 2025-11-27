@@ -469,8 +469,8 @@
 <body>
     <!-- Elementos de audio ocultos -->
     <div class="audio-elements">
-        <audio id="local-audio" muted></audio>
-        <audio id="remote-audio" autoplay></audio>
+        <audio id="local-audio" muted playsinline></audio>
+        <audio id="remote-audio" autoplay playsinline></audio>
     </div>
 
     <!-- Pantalla principal -->
@@ -611,6 +611,7 @@
                 this.socket.on('call-rejected', (data) => this.onCallRejected(data));
                 this.socket.on('call-ended', (data) => this.onCallEnded(data));
                 this.socket.on('call-error', (data) => this.showNotification(data.message, 'error'));
+                this.socket.on('call-connected', (data) => this.onCallConnected(data));
 
                 // WebRTC Signaling Events
                 this.socket.on('webrtc-offer', (data) => this.handleWebRTCOffer(data));
@@ -623,21 +624,27 @@
                     const configuration = {
                         iceServers: [
                             { urls: 'stun:stun.l.google.com:19302' },
-                            { urls: 'stun:stun1.l.google.com:19302' }
-                        ]
+                            { urls: 'stun:stun1.l.google.com:19302' },
+                            { urls: 'stun:stun2.l.google.com:19302' }
+                        ],
+                        iceCandidatePoolSize: 10
                     };
 
                     this.peerConnection = new RTCPeerConnection(configuration);
 
-                    // Obtener stream local
+                    // Obtener stream local con mejor configuración
                     this.localStream = await navigator.mediaDevices.getUserMedia({ 
                         audio: {
                             echoCancellation: true,
                             noiseSuppression: true,
-                            autoGainControl: true
+                            autoGainControl: true,
+                            channelCount: 1,
+                            sampleRate: 48000
                         }, 
                         video: false 
                     });
+
+                    console.log('Stream local obtenido:', this.localStream);
 
                     // Configurar audio local
                     const localAudio = document.getElementById('local-audio');
@@ -650,10 +657,17 @@
 
                     // Manejar stream remoto
                     this.peerConnection.ontrack = (event) => {
-                        console.log('Stream remoto recibido');
+                        console.log('✅ Stream remoto recibido:', event.streams[0]);
                         this.remoteStream = event.streams[0];
                         const remoteAudio = document.getElementById('remote-audio');
                         remoteAudio.srcObject = this.remoteStream;
+                        
+                        // Intentar reproducir
+                        remoteAudio.play().then(() => {
+                            console.log('✅ Audio remoto reproduciéndose');
+                        }).catch(e => {
+                            console.error('❌ Error reproduciendo audio remoto:', e);
+                        });
                     };
 
                     // Manejar candidatos ICE
@@ -671,21 +685,28 @@
                     this.peerConnection.onconnectionstatechange = () => {
                         console.log('Estado de conexión:', this.peerConnection.connectionState);
                         if (this.peerConnection.connectionState === 'connected') {
-                            this.onCallConnected();
+                            console.log('✅ Conexión WebRTC establecida');
                         }
                     };
 
+                    // Logs de diagnóstico
+                    this.peerConnection.onsignalingstatechange = () => {
+                        console.log('Signaling state:', this.peerConnection.signalingState);
+                    };
+
+                    this.peerConnection.oniceconnectionstatechange = () => {
+                        console.log('ICE connection state:', this.peerConnection.iceConnectionState);
+                    };
+
                 } catch (error) {
-                    console.error('Error configurando WebRTC:', error);
+                    console.error('❌ Error configurando WebRTC:', error);
                     this.showNotification('Error al acceder al micrófono', 'error');
                 }
             }
 
             async initiateCall(toUserId, callType) {
                 try {
-                    if (!this.peerConnection) {
-                        await this.setupWebRTC();
-                    }
+                    await this.setupWebRTC(); // Siempre configurar WebRTC primero
 
                     this.socket.emit('initiate-call', {
                         fromUser: this.currentUser,
@@ -693,8 +714,11 @@
                         callType: callType
                     });
 
-                    // Mostrar pantalla de llamada saliente inmediatamente
-                    this.showOutgoingCall({ callId: Date.now(), toUserId });
+                    // Mostrar pantalla de llamada saliente
+                    this.showOutgoingCall({ 
+                        callId: Date.now(), 
+                        toUserId: toUserId 
+                    });
 
                 } catch (error) {
                     console.error('Error iniciando llamada:', error);
@@ -704,7 +728,11 @@
 
             async createWebRTCOffer() {
                 try {
-                    const offer = await this.peerConnection.createOffer();
+                    const offer = await this.peerConnection.createOffer({
+                        offerToReceiveAudio: true,
+                        offerToReceiveVideo: false
+                    });
+                    
                     await this.peerConnection.setLocalDescription(offer);
 
                     this.socket.emit('webrtc-offer', {
@@ -712,6 +740,8 @@
                         offer: offer,
                         callId: this.activeCall.callId
                     });
+                    
+                    console.log('✅ Oferta WebRTC creada y enviada');
                 } catch (error) {
                     console.error('Error creando oferta WebRTC:', error);
                 }
@@ -732,6 +762,9 @@
                         answer: answer,
                         callId: data.callId
                     });
+
+                    console.log('✅ Respuesta WebRTC enviada');
+
                 } catch (error) {
                     console.error('Error manejando oferta WebRTC:', error);
                 }
@@ -740,6 +773,7 @@
             async handleWebRTCAnswer(data) {
                 try {
                     await this.peerConnection.setRemoteDescription(data.answer);
+                    console.log('✅ Respuesta WebRTC procesada');
                 } catch (error) {
                     console.error('Error manejando respuesta WebRTC:', error);
                 }
@@ -768,7 +802,7 @@
             showOutgoingCall(data) {
                 this.activeCall = {
                     ...data,
-                    targetSocketId: data.toUserId // En una implementación real, esto vendría del servidor
+                    targetSocketId: data.toUserId
                 };
 
                 document.getElementById('outgoing-avatar').textContent = 'U';
@@ -788,7 +822,7 @@
                     document.getElementById('incoming-call-screen').classList.remove('active');
                     this.showOutgoingCall(this.activeCall);
 
-                    // Crear oferta WebRTC
+                    // Crear oferta WebRTC después de contestar
                     await this.createWebRTCOffer();
 
                 } catch (error) {
@@ -807,18 +841,36 @@
             endCall() {
                 if (this.activeCall) {
                     this.socket.emit('end-call', { callId: this.activeCall.callId });
+                    
+                    // Limpiar inmediatamente en el cliente local
+                    this.hideCallScreens();
+                    this.stopCallTimer();
+                    this.cleanupWebRTC();
+                    
+                    // Calcular duración si la llamada estaba en curso
+                    if (this.callStartTime) {
+                        const duration = Math.floor((new Date() - this.callStartTime) / 1000);
+                        this.showNotification(`Llamada finalizada - ${this.formatTime(duration)}`, 'info');
+                    } else {
+                        this.showNotification('Llamada cancelada', 'info');
+                    }
+                    
+                    this.activeCall = null;
+                    this.callStartTime = null;
                 } else {
                     this.hideCallScreens();
+                    this.cleanupWebRTC();
                 }
-                this.cleanupWebRTC();
             }
 
-            onCallConnected() {
-                document.getElementById('call-status').textContent = 'Conectado';
-                document.getElementById('call-status').style.display = 'none';
-                document.getElementById('call-timer').style.display = 'block';
-                this.startCallTimer();
-                this.showNotification('Llamada conectada', 'success');
+            onCallConnected(data) {
+                if (this.activeCall && this.activeCall.callId === data.callId) {
+                    document.getElementById('call-status').textContent = 'Conectado';
+                    document.getElementById('call-status').style.display = 'none';
+                    document.getElementById('call-timer').style.display = 'block';
+                    this.startCallTimer();
+                    this.showNotification('Llamada conectada', 'success');
+                }
             }
 
             onCallRejected(data) {
@@ -949,7 +1001,7 @@
                                 </div>
                             </div>
                             <div class="user-actions">
-                                <button class="btn-call" onclick="app.initiateCall(${user.id}, 'audio')" title="Llamar">
+                                <button class="btn-call" onclick="app.initiateCall('${user.id}', 'audio')" title="Llamar">
                                     <svg viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M20 15.5c-1.25 0-2.45-.2-3.57-.57-.35-.11-.74-.03-1.02.24l-2.2 2.2c-2.83-1.44-5.15-3.75-6.59-6.59l2.2-2.21c.28-.26.36-.65.25-1C8.7 6.45 8.5 5.25 8.5 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1z"/>
                                     </svg>
