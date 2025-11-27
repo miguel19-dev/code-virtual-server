@@ -64,8 +64,12 @@ app.post('/api/login', async (req, res) => {
 let online = {};
 
 io.on('connection', socket => {
+  console.log('Usuario conectado:', socket.id);
+  
   socket.on('login', user => {
+    console.log('Usuario logueado:', user.name, 'ID:', user.id);
     online[user.id] = { ...user, socketId: socket.id };
+    console.log('Online ahora:', Object.keys(online));
     io.emit('users', Object.values(online));
   });
 
@@ -73,8 +77,10 @@ io.on('connection', socket => {
     const target = online[toId];
     if (target) {
       const callId = Date.now() + '';
-      io.to(target.socketId).emit('incoming', { callId, fromUser }));
+      io.to(target.socketId).emit('incoming', { callId, fromUser });
       socket.emit('ringing', { callId });
+    } else {
+      socket.emit('error', { message: 'Usuario no disponible' });
     }
   });
 
@@ -86,7 +92,13 @@ io.on('connection', socket => {
   socket.on('end', () => io.emit('ended'));
 
   socket.on('disconnect', () => {
-    for (let id in online) if (online[id].socketId === socket.id) delete online[id];
+    console.log('Usuario desconectado:', socket.id);
+    for (let id in online) {
+      if (online[id].socketId === socket.id) {
+        delete online[id];
+        break;
+      }
+    }
     io.emit('users', Object.values(online));
   });
 });
