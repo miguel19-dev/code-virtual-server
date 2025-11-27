@@ -541,7 +541,8 @@
         <div class="call-container">
             <div class="call-avatar" id="outgoing-avatar"></div>
             <h3 id="outgoing-name"></h3>
-            <p id="call-status">Conectando...</p>
+            <!-- ✅ ESTADO MEJORADO: "Llamando..." en lugar de "Conectando..." -->
+            <p id="call-status">Llamando...</p>
             <div id="call-timer" class="call-timer" style="display: none;">00:00</div>
             <div class="call-controls">
                 <button id="toggle-mic" class="btn-control" title="Micrófono">
@@ -608,6 +609,7 @@
                 // Socket events para WebRTC
                 this.socket.on('users-updated', (users) => this.updateUsersList(users));
                 this.socket.on('incoming-call', (data) => this.showIncomingCall(data));
+                this.socket.on('call-initiated', (data) => this.onCallInitiated(data));
                 this.socket.on('call-rejected', (data) => this.onCallRejected(data));
                 this.socket.on('call-ended', (data) => this.onCallEnded(data));
                 this.socket.on('call-error', (data) => this.showNotification(data.message, 'error'));
@@ -661,7 +663,7 @@
                         this.remoteStream = event.streams[0];
                         const remoteAudio = document.getElementById('remote-audio');
                         remoteAudio.srcObject = this.remoteStream;
-                        
+
                         // Intentar reproducir
                         remoteAudio.play().then(() => {
                             console.log('✅ Audio remoto reproduciéndose');
@@ -681,21 +683,28 @@
                         }
                     };
 
-                    // Manejar cambios de estado de conexión
+                    // ✅ DETECCIÓN MEJORADA DE ESTADOS WEBCRTC
                     this.peerConnection.onconnectionstatechange = () => {
-                        console.log('Estado de conexión:', this.peerConnection.connectionState);
-                        if (this.peerConnection.connectionState === 'connected') {
-                            console.log('✅ Conexión WebRTC establecida');
+                        const state = this.peerConnection.connectionState;
+                        console.log('WebRTC Connection State:', state);
+                        
+                        if (state === 'connected') {
+                            // ✅ ESTADO FINAL: "Conectado" - Audio funcionando
+                            console.log('✅✅✅ CONEXIÓN WEBCRTC ESTABLECIDA - AUDIO FUNCIONANDO');
+                        } else if (state === 'connecting') {
+                            // ✅ WebRTC está en proceso de conexión ICE
+                            console.log('🔄 WebRTC conectando...');
                         }
+                    };
+
+                    this.peerConnection.oniceconnectionstatechange = () => {
+                        const iceState = this.peerConnection.iceConnectionState;
+                        console.log('WebRTC ICE State:', iceState);
                     };
 
                     // Logs de diagnóstico
                     this.peerConnection.onsignalingstatechange = () => {
                         console.log('Signaling state:', this.peerConnection.signalingState);
-                    };
-
-                    this.peerConnection.oniceconnectionstatechange = () => {
-                        console.log('ICE connection state:', this.peerConnection.iceConnectionState);
                     };
 
                 } catch (error) {
@@ -706,7 +715,7 @@
 
             async initiateCall(toUserId, callType) {
                 try {
-                    await this.setupWebRTC(); // Siempre configurar WebRTC primero
+                    await this.setupWebRTC();
 
                     this.socket.emit('initiate-call', {
                         fromUser: this.currentUser,
@@ -714,7 +723,7 @@
                         callType: callType
                     });
 
-                    // Mostrar pantalla de llamada saliente
+                    // ✅ ESTADO: "Llamando..." 
                     this.showOutgoingCall({ 
                         callId: Date.now(), 
                         toUserId: toUserId 
@@ -726,7 +735,21 @@
                 }
             }
 
-            async createWebRTCOffer() {
+            // ✅ NUEVO MÉTODO: Cuando el servidor confirma que la llamada se inició
+            onCallInitiated(data) {
+                if (this.activeCall && this.activeCall.callId === data.callId) {
+                    // ✅ ACTUALIZAR INFORMACIÓN DEL USUARIO DESTINO
+                    this.activeCall.toUser = data.toUser;
+                    document.getElementById('outgoing-avatar').textContent = data.toUser.name.charAt(0).toUpperCase();
+                    document.getElementById('outgoing-name').textContent = data.toUser.name;
+                    
+                    // ✅ CREAR OFFER INMEDIATAMENTE (solo el que inicia la llamada)
+                    this.createAndSendOffer();
+                }
+            }
+
+            // ✅ NUEVO MÉTODO: Crear y enviar offer (solo para el que inicia)
+            async createAndSendOffer() {
                 try {
                     const offer = await this.peerConnection.createOffer({
                         offerToReceiveAudio: true,
@@ -741,9 +764,10 @@
                         callId: this.activeCall.callId
                     });
                     
-                    console.log('✅ Oferta WebRTC creada y enviada');
+                    console.log('✅ Offer WebRTC creada y enviada');
+                    
                 } catch (error) {
-                    console.error('Error creando oferta WebRTC:', error);
+                    console.error('Error creando offer WebRTC:', error);
                 }
             }
 
@@ -754,6 +778,8 @@
                     }
 
                     await this.peerConnection.setRemoteDescription(data.offer);
+                    
+                    // ✅ CREAR ANSWER (no otra offer)
                     const answer = await this.peerConnection.createAnswer();
                     await this.peerConnection.setLocalDescription(answer);
 
@@ -763,19 +789,26 @@
                         callId: data.callId
                     });
 
-                    console.log('✅ Respuesta WebRTC enviada');
+                    console.log('✅ Answer WebRTC enviada');
+                    
+                    // ✅ CAMBIAR ESTADO A "Sincronizando..."
+                    document.getElementById('call-status').textContent = 'Sincronizando...';
 
                 } catch (error) {
-                    console.error('Error manejando oferta WebRTC:', error);
+                    console.error('Error manejando offer WebRTC:', error);
                 }
             }
 
             async handleWebRTCAnswer(data) {
                 try {
                     await this.peerConnection.setRemoteDescription(data.answer);
-                    console.log('✅ Respuesta WebRTC procesada');
+                    console.log('✅ Answer WebRTC procesada - Esperando conexión ICE...');
+                    
+                    // ✅ CAMBIAR ESTADO A "Sincronizando..."
+                    document.getElementById('call-status').textContent = 'Sincronizando...';
+                    
                 } catch (error) {
-                    console.error('Error manejando respuesta WebRTC:', error);
+                    console.error('Error manejando answer WebRTC:', error);
                 }
             }
 
@@ -805,11 +838,16 @@
                     targetSocketId: data.toUserId
                 };
 
+                // ✅ Mostrar "Usuario" temporalmente hasta recibir info del servidor
                 document.getElementById('outgoing-avatar').textContent = 'U';
                 document.getElementById('outgoing-name').textContent = 'Usuario';
+                
+                // ✅ ESTADO MEJORADO: "Llamando..."
+                document.getElementById('call-status').textContent = 'Llamando...';
+                document.getElementById('call-status').style.display = 'block';
+                document.getElementById('call-timer').style.display = 'none';
 
                 document.getElementById('outgoing-call-screen').classList.add('active');
-                document.getElementById('call-timer').style.display = 'none';
             }
 
             async answerCall() {
@@ -820,10 +858,12 @@
 
                     this.socket.emit('answer-call', { callId: this.activeCall.callId });
                     document.getElementById('incoming-call-screen').classList.remove('active');
+                    
+                    // ✅ MOSTRAR PANTALLA DE LLAMADA SALIENTE CON ESTADO "Sincronizando..."
                     this.showOutgoingCall(this.activeCall);
+                    document.getElementById('call-status').textContent = 'Sincronizando...';
 
-                    // Crear oferta WebRTC después de contestar
-                    await this.createWebRTCOffer();
+                    // ❌ NO crear offer aquí - esperar la offer del otro usuario
 
                 } catch (error) {
                     console.error('Error contestando llamada:', error);
@@ -865,6 +905,13 @@
 
             onCallConnected(data) {
                 if (this.activeCall && this.activeCall.callId === data.callId) {
+                    // ✅ ACTUALIZAR INFORMACIÓN DEL OTRO USUARIO
+                    if (data.connectedUser) {
+                        document.getElementById('outgoing-avatar').textContent = data.connectedUser.name.charAt(0).toUpperCase();
+                        document.getElementById('outgoing-name').textContent = data.connectedUser.name;
+                    }
+                    
+                    // ✅ ESTADO FINAL MEJORADO
                     document.getElementById('call-status').textContent = 'Conectado';
                     document.getElementById('call-status').style.display = 'none';
                     document.getElementById('call-timer').style.display = 'block';
@@ -959,7 +1006,7 @@
                 document.getElementById('outgoing-call-screen').classList.remove('active');
                 document.getElementById('call-timer').style.display = 'none';
                 document.getElementById('call-status').style.display = 'block';
-                document.getElementById('call-status').textContent = 'Conectando...';
+                document.getElementById('call-status').textContent = 'Llamando...';
             }
 
             logout() {
