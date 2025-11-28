@@ -260,6 +260,11 @@ function setupEventListeners() {
         // Actualizar contador de seguidores
         loadFollowData();
     });
+    
+    // Actualización de chats en tiempo real
+    socket.on('chats_updated', () => {
+        loadActiveChats();
+    });
 }
 
 // Mostrar skeletons de carga
@@ -367,8 +372,12 @@ async function loadUsers() {
                     </div>
                 `;
                 
-                // Agregar event listeners para el usuario
-                userItem.addEventListener('click', () => startChat(user.id));
+                // MEJORADO: Event listener corregido para iniciar chat
+                userItem.addEventListener('click', (e) => {
+                    console.log('Iniciando chat con:', user.name);
+                    startChat(user.id);
+                });
+                
                 userItem.querySelector('.user-avatar').addEventListener('click', (e) => {
                     e.stopPropagation();
                     showOtherUserProfile(user.id);
@@ -444,30 +453,46 @@ async function loadActiveChats() {
     }
 }
 
-// Iniciar chat con un usuario
+// MEJORADO: Función para iniciar chat con un usuario
 function startChat(userId) {
+    console.log('startChat llamado para usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
-    if (!user) return;
+    if (!user) {
+        console.error('Usuario no encontrado con ID:', userId);
+        return;
+    }
+    
+    console.log('Usuario encontrado:', user.name);
     
     // Agregar a chats activos si no existe
     if (!activeChats.find(chat => chat.user.id === userId)) {
         activeChats.push({
             user: user,
-            lastMessage: '',
-            lastTime: ''
+            lastMessage: 'Conversación iniciada',
+            lastTime: new Date().toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit'
+            })
         });
-        loadActiveChats();
+        console.log('Chat agregado a activos');
     }
     
     openChat(userId);
 }
 
-// Abrir chat existente
+// MEJORADO: Función para abrir chat existente
 function openChat(userId) {
+    console.log('openChat llamado para usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
-    if (!user) return;
+    if (!user) {
+        console.error('Usuario no encontrado en openChat:', userId);
+        return;
+    }
     
     selectedUser = user;
+    console.log('Mostrando pestaña de chat con:', user.name);
+    
+    // CORRECCIÓN CRÍTICA: Mostrar pestaña de chat
     showTab('chat');
     
     // Actualizar header del chat
@@ -492,7 +517,10 @@ function openChat(userId) {
     
     // Enfocar input de mensaje
     setTimeout(() => {
-        document.getElementById('message-input').focus();
+        const messageInput = document.getElementById('message-input');
+        if (messageInput) {
+            messageInput.focus();
+        }
     }, 300);
 }
 
@@ -659,8 +687,10 @@ function togglePanel() {
     overlay.classList.toggle('active');
 }
 
-// Cambiar pestaña
+// MEJORADO: Función para cambiar pestañas
 function showTab(tabName) {
+    console.log('Cambiando a pestaña:', tabName);
+    
     // Ocultar todas las pestañas
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
@@ -680,16 +710,21 @@ function showTab(tabName) {
     
     document.getElementById('edit-profile-screen').classList.remove('active');
     
-    // Mostrar pestaña seleccionada
+    // Mostrar pestaña seleccionada - CORRECCIÓN CRÍTICA
     if (tabName === 'users') {
         document.getElementById('users-tab').classList.add('active');
+        // Cargar usuarios si es necesario
+        loadUsers();
     } else if (tabName === 'chat') {
         document.getElementById('chat-tab').classList.add('active');
     } else {
+        // 'chats' por defecto
         document.getElementById('chats-tab').classList.add('active');
+        // Recargar chats activos
+        loadActiveChats();
     }
     
-    // Ocultar panel
+    // Ocultar panel lateral si está abierto
     const panel = document.getElementById('side-panel');
     const overlay = document.getElementById('panel-overlay');
     panel.classList.remove('active');
@@ -697,17 +732,22 @@ function showTab(tabName) {
     
     // Mostrar/ocultar FAB button - solo en pestaña de chats
     const fabButton = document.getElementById('fab-button');
-    if (tabName === 'chats') {
-        fabButton.style.display = 'flex';
-    } else {
-        fabButton.style.display = 'none';
+    if (fabButton) {
+        if (tabName === 'chats') {
+            fabButton.style.display = 'flex';
+        } else {
+            fabButton.style.display = 'none';
+        }
     }
     
     // Enfocar input de mensaje si estamos en el chat
-    if (tabName === 'chat') {
+    if (tabName === 'chat' && selectedUser) {
         setTimeout(() => {
-            document.getElementById('message-input').focus();
-        }, 300);
+            const messageInput = document.getElementById('message-input');
+            if (messageInput) {
+                messageInput.focus();
+            }
+        }, 500);
     }
 }
 
@@ -1095,3 +1135,30 @@ function logout() {
     localStorage.removeItem('currentUser');
     window.location.href = '/';
 }
+
+// Función de debug para verificar el estado
+function debugNavigation() {
+    console.log('=== DEBUG NAVIGATION ===');
+    console.log('Current User:', currentUser?.name);
+    console.log('Selected User:', selectedUser?.name);
+    console.log('All Users Count:', allUsers.length);
+    console.log('Active Chats Count:', activeChats.length);
+    console.log('Online Users Count:', onlineUsers.length);
+    
+    // Verificar elementos del DOM
+    const usersTab = document.getElementById('users-tab');
+    const chatTab = document.getElementById('chat-tab');
+    const chatsTab = document.getElementById('chats-tab');
+    
+    console.log('Users Tab visible:', usersTab?.classList.contains('active'));
+    console.log('Chat Tab visible:', chatTab?.classList.contains('active'));
+    console.log('Chats Tab visible:', chatsTab?.classList.contains('active'));
+}
+
+// Agregar event listener para debug (temporal)
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'd' && e.ctrlKey) {
+        e.preventDefault();
+        debugNavigation();
+    }
+});
