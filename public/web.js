@@ -12,6 +12,7 @@ let userLastSeen = {};
 let followers = [];
 let following = [];
 let currentProfileUser = null;
+let previousTab = 'chats'; // Para recordar la pestaña anterior
 
 // Inicializar la aplicación
 document.addEventListener('DOMContentLoaded', async function() {
@@ -62,7 +63,7 @@ function setupEventListeners() {
     // Navegación entre pestañas
     document.getElementById('fab-button').addEventListener('click', () => showTab('users'));
     document.getElementById('empty-chats-action').addEventListener('click', () => showTab('users'));
-    document.getElementById('chat-back-btn').addEventListener('click', () => showTab('chats'));
+    document.getElementById('chat-back-btn').addEventListener('click', handleChatBack);
     document.getElementById('users-back-btn').addEventListener('click', () => showTab('chats'));
     
     // Navegación de perfiles
@@ -126,25 +127,27 @@ function setupEventListeners() {
         }, 1000);
     });
     
-    // Socket events
+    // ========== SOCKET EVENTS EN TIEMPO REAL ==========
+    
+    // Usuarios en línea
     socket.on('users_online', (users) => {
         onlineUsers = users;
-        updateOnlineStatus();
+        updateUserStatuses();
     });
     
+    // Todos los usuarios
     socket.on('all_users', (users) => {
         allUsers = users;
         loadUsers();
     });
     
+    // Usuario actualizado
     socket.on('user_updated', (updatedUser) => {
-        // Actualizar en la lista local
         const userIndex = allUsers.findIndex(u => u.id === updatedUser.id);
         if (userIndex !== -1) {
             allUsers[userIndex] = updatedUser;
         }
         
-        // Si es el usuario actual, actualizar localStorage
         if (updatedUser.id === currentUser.id) {
             currentUser = updatedUser;
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
@@ -152,85 +155,52 @@ function setupEventListeners() {
             updateMyProfileDisplay();
         }
         
-        // Si es el usuario seleccionado, actualizar header
         if (selectedUser && selectedUser.id === updatedUser.id) {
             selectedUser = updatedUser;
             document.getElementById('current-chat-name').textContent = updatedUser.name;
             updateAvatarDisplay('current-chat-avatar', updatedUser.avatar, updatedUser.name);
         }
         
-        // Recargar datos
         loadUsers();
         loadActiveChats();
     });
     
+    // Nuevo mensaje
     socket.on('new_message', (messageData) => {
-        const sender = allUsers.find(u => u.id === messageData.from);
-        
-        // Agregar a chats activos si no existe
-        if (!activeChats.find(chat => chat.user.id === messageData.from)) {
-            activeChats.push({
-                user: sender,
-                lastMessage: messageData.message,
-                lastTime: new Date().toLocaleTimeString('es-ES', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })
-            });
-        }
-        
-        // Si el mensaje es para el chat actual, mostrarlo
-        if (selectedUser && selectedUser.id === messageData.from) {
-            addMessageToUI(messageData);
-            
-            // Marcar como leído automáticamente
-            socket.emit('mark_as_read', {
-                userId: currentUser.id,
-                otherUserId: selectedUser.id
-            });
-        }
-        
-        // Actualizar último mensaje en chats activos
-        const chat = activeChats.find(c => c.user.id === messageData.from);
-        if (chat) {
-            chat.lastMessage = messageData.message.length > 30 ? 
-                messageData.message.substring(0, 30) + '...' : messageData.message;
-            chat.lastTime = new Date().toLocaleTimeString('es-ES', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
-        
-        // Recargar lista de chats
-        loadActiveChats();
+        handleNewMessage(messageData);
     });
     
+    // Contadores de mensajes no leídos
     socket.on('unread_counts', (counts) => {
         unreadCounts = { ...unreadCounts, ...counts };
         updateUnreadBadges();
         loadActiveChats();
     });
     
+    // Actualización de contador individual
     socket.on('unread_count_update', (data) => {
         unreadCounts[data.userId] = data.count;
         updateUnreadBadge(data.userId, data.count);
         loadActiveChats();
     });
     
+    // Usuario desconectado
     socket.on('user_offline', (userData) => {
         userLastSeen[userData.id] = userData.lastSeen || new Date().toISOString();
         if (selectedUser && selectedUser.id === userData.id) {
             updateUserOnlineStatus(selectedUser);
         }
-        updateOnlineStatus();
+        updateUserStatuses();
     });
     
+    // Usuario escribiendo
     socket.on('user_typing', (data) => {
         if (data.from !== currentUser.id) {
             showTypingIndicator(data.from);
         }
     });
     
+    // Usuario dejó de escribir
     socket.on('user_stop_typing', (data) => {
         if (data.from !== currentUser.id) {
             hideTypingIndicator(data.from);
@@ -245,7 +215,6 @@ function setupEventListeners() {
     });
     
     socket.on('follow_updated', (data) => {
-        // Actualizar estado de seguimiento
         const userIndex = following.findIndex(u => u.id === data.followingId);
         if (data.isFollowing && userIndex === -1) {
             const user = allUsers.find(u => u.id === data.followingId);
@@ -257,19 +226,75 @@ function setupEventListeners() {
     });
     
     socket.on('follower_updated', (data) => {
-        // Actualizar contador de seguidores
         loadFollowData();
     });
     
-    // Actualización de chats en tiempo real
+    // Chats actualizados
     socket.on('chats_updated', () => {
         loadActiveChats();
     });
+    
+    // Mensaje enviado correctamente
+    socket.on('message_sent', (messageData) => {
+        console.log('Mensaje enviado confirmado');
+    });
+}
+
+// Función para manejar nuevos mensajes en tiempo real
+function handleNewMessage(messageData) {
+    const sender = allUsers.find(u => u.id === messageData.from);
+    if (!sender) return;
+    
+    if (selectedUser && selectedUser.id === messageData.from) {
+        addMessageToUI(messageData);
+        
+        socket.emit('mark_as_read', {
+            userId: currentUser.id,
+            otherUserId: selectedUser.id
+        });
+        
+        unreadCounts[selectedUser.id] = 0;
+        updateUnreadBadge(selectedUser.id, 0);
+    } else {
+        unreadCounts[messageData.from] = (unreadCounts[messageData.from] || 0) + 1;
+    }
+    
+    updateActiveChatsWithNewMessage(sender, messageData);
+}
+
+// Actualizar chats activos con nuevo mensaje en tiempo real
+function updateActiveChatsWithNewMessage(sender, messageData) {
+    const existingChatIndex = activeChats.findIndex(chat => chat.user.id === sender.id);
+    
+    if (existingChatIndex !== -1) {
+        activeChats[existingChatIndex].lastMessage = messageData.message.length > 30 ? 
+            messageData.message.substring(0, 30) + '...' : messageData.message;
+        activeChats[existingChatIndex].lastTime = new Date().toLocaleTimeString('es-ES', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        activeChats[existingChatIndex].unreadCount = unreadCounts[sender.id] || 0;
+        
+        const updatedChat = activeChats.splice(existingChatIndex, 1)[0];
+        activeChats.unshift(updatedChat);
+    } else {
+        activeChats.unshift({
+            user: sender,
+            lastMessage: messageData.message.length > 30 ? 
+                messageData.message.substring(0, 30) + '...' : messageData.message,
+            lastTime: new Date().toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit'
+            }),
+            unreadCount: unreadCounts[sender.id] || 0
+        });
+    }
+    
+    renderActiveChats();
 }
 
 // Mostrar skeletons de carga
 function showSkeletons() {
-    // Skeleton para chats
     const chatsSkeleton = document.getElementById('chats-skeleton');
     chatsSkeleton.innerHTML = '';
     for (let i = 0; i < 3; i++) {
@@ -285,7 +310,6 @@ function showSkeletons() {
         chatsSkeleton.appendChild(skeletonItem);
     }
     
-    // Skeleton para usuarios
     const usersSkeleton = document.getElementById('users-skeleton');
     usersSkeleton.innerHTML = '';
     for (let i = 0; i < 5; i++) {
@@ -319,8 +343,8 @@ function updateFollowCounts() {
     document.getElementById('following-count').textContent = following.length;
     
     if (currentProfileUser) {
-        document.getElementById('user-followers-count').textContent = '0'; // Actualizar con datos reales
-        document.getElementById('user-following-count').textContent = '0'; // Actualizar con datos reales
+        document.getElementById('user-followers-count').textContent = '0';
+        document.getElementById('user-following-count').textContent = '0';
     }
 }
 
@@ -358,23 +382,24 @@ async function loadUsers() {
                 const userItem = document.createElement('div');
                 userItem.className = 'user-item';
                 userItem.dataset.userId = user.id;
+                
+                const isOnline = onlineUsers.find(u => u.id === user.id);
+                const statusText = isOnline ? 'En línea' : getLastSeenText(user.id);
+                
                 userItem.innerHTML = `
                     <div class="user-avatar">
                         ${user.avatar !== '/default-avatar.png' ? 
                             `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
                             user.name.charAt(0).toUpperCase()
                         }
-                        <div class="user-online-status" id="user-online-${user.id}"></div>
                     </div>
                     <div class="user-info">
                         <div class="user-name">${user.name}</div>
-                        <div class="user-bio-small">${user.bio}</div>
+                        <div class="user-status ${isOnline ? 'online' : 'offline'}">${statusText}</div>
                     </div>
                 `;
                 
-                // MEJORADO: Event listener corregido para iniciar chat
                 userItem.addEventListener('click', (e) => {
-                    console.log('Iniciando chat con:', user.name);
                     startChat(user.id);
                 });
                 
@@ -386,113 +411,136 @@ async function loadUsers() {
                 usersList.appendChild(userItem);
             });
         }
-        
-        updateOnlineStatus();
     } catch (error) {
         console.error('Error cargando usuarios:', error);
         hideSkeletons();
     }
 }
 
-// Cargar chats activos
+// Obtener texto de última vez conectado
+function getLastSeenText(userId) {
+    const lastSeen = userLastSeen[userId];
+    if (lastSeen) {
+        const lastSeenTime = new Date(lastSeen);
+        const now = new Date();
+        const diffMinutes = Math.floor((now - lastSeenTime) / (1000 * 60));
+        
+        if (diffMinutes < 1) return 'Ahora mismo';
+        if (diffMinutes < 60) return `Hace ${diffMinutes} min`;
+        if (diffMinutes < 1440) return `Hace ${Math.floor(diffMinutes / 60)} h`;
+        
+        return `Últ. vez ${lastSeenTime.toLocaleDateString('es-ES')}`;
+    }
+    return 'Desconectado';
+}
+
+// Actualizar estados de usuarios en tiempo real
+function updateUserStatuses() {
+    const userItems = document.querySelectorAll('.user-item');
+    userItems.forEach(item => {
+        const userId = item.dataset.userId;
+        const user = allUsers.find(u => u.id === userId);
+        if (user) {
+            const isOnline = onlineUsers.find(u => u.id === userId);
+            const statusElement = item.querySelector('.user-status');
+            const statusText = isOnline ? 'En línea' : getLastSeenText(userId);
+            
+            if (statusElement) {
+                statusElement.textContent = statusText;
+                statusElement.className = `user-status ${isOnline ? 'online' : 'offline'}`;
+            }
+        }
+    });
+    
+    if (selectedUser) {
+        updateUserOnlineStatus(selectedUser);
+    }
+}
+
+// Cargar chats activos - SOLO usuarios con conversaciones iniciadas
 async function loadActiveChats() {
     try {
-        const chatsList = document.getElementById('chats-list');
-        const emptyState = document.getElementById('chats-empty');
-        
-        // Obtener chats del servidor
         const response = await fetch(`/api/chats?userId=${currentUser.id}`);
         const chatsData = await response.json();
         
-        activeChats = chatsData;
+        activeChats = chatsData.filter(chat => chat.lastMessage && chat.lastMessage !== 'Iniciar conversación');
         
-        if (activeChats.length === 0) {
-            chatsList.style.display = 'none';
-            emptyState.style.display = 'flex';
-        } else {
-            chatsList.style.display = 'block';
-            emptyState.style.display = 'none';
-            
-            chatsList.innerHTML = '';
-            activeChats.forEach(chat => {
-                const unreadCount = unreadCounts[chat.user.id] || 0;
-                const chatItem = document.createElement('div');
-                chatItem.className = 'chat-item';
-                chatItem.dataset.userId = chat.user.id;
-                chatItem.innerHTML = `
-                    <div class="chat-avatar">
-                        ${chat.user.avatar !== '/default-avatar.png' ? 
-                            `<img src="${chat.user.avatar}" alt="${chat.user.name}" onerror="this.style.display='none'">` : 
-                            chat.user.name.charAt(0).toUpperCase()
-                        }
-                        <div class="online-status" id="chat-online-${chat.user.id}"></div>
-                    </div>
-                    <div class="chat-info">
-                        <div class="chat-name">${chat.user.name}</div>
-                        <div class="chat-last-message">${chat.lastMessage || 'Haz clic para chatear'}</div>
-                        <div class="chat-time">${chat.lastTime || ''}</div>
-                    </div>
-                    ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
-                `;
-                
-                // Agregar event listeners
-                chatItem.addEventListener('click', () => openChat(chat.user.id));
-                chatItem.querySelector('.chat-avatar').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    showOtherUserProfile(chat.user.id);
-                });
-                
-                chatsList.appendChild(chatItem);
-            });
-        }
-        
-        updateOnlineStatus();
+        renderActiveChats();
     } catch (error) {
         console.error('Error cargando chats:', error);
         hideSkeletons();
     }
 }
 
-// MEJORADO: Función para iniciar chat con un usuario
-function startChat(userId) {
-    console.log('startChat llamado para usuario ID:', userId);
-    const user = allUsers.find(u => u.id === userId);
-    if (!user) {
-        console.error('Usuario no encontrado con ID:', userId);
-        return;
-    }
+// Renderizar chats activos en la UI
+function renderActiveChats() {
+    const chatsList = document.getElementById('chats-list');
+    const emptyState = document.getElementById('chats-empty');
     
-    console.log('Usuario encontrado:', user.name);
-    
-    // Agregar a chats activos si no existe
-    if (!activeChats.find(chat => chat.user.id === userId)) {
-        activeChats.push({
-            user: user,
-            lastMessage: 'Conversación iniciada',
-            lastTime: new Date().toLocaleTimeString('es-ES', {
-                hour: '2-digit',
-                minute: '2-digit'
-            })
+    if (activeChats.length === 0) {
+        chatsList.style.display = 'none';
+        emptyState.style.display = 'flex';
+    } else {
+        chatsList.style.display = 'block';
+        emptyState.style.display = 'none';
+        
+        chatsList.innerHTML = '';
+        activeChats.forEach(chat => {
+            const unreadCount = unreadCounts[chat.user.id] || 0;
+            const chatItem = document.createElement('div');
+            chatItem.className = 'chat-item';
+            chatItem.dataset.userId = chat.user.id;
+            chatItem.innerHTML = `
+                <div class="chat-avatar">
+                    ${chat.user.avatar !== '/default-avatar.png' ? 
+                        `<img src="${chat.user.avatar}" alt="${chat.user.name}" onerror="this.style.display='none'">` : 
+                        chat.user.name.charAt(0).toUpperCase()
+                    }
+                </div>
+                <div class="chat-info">
+                    <div class="chat-name">${chat.user.name}</div>
+                    <div class="chat-last-message">${chat.lastMessage || 'Haz clic para chatear'}</div>
+                </div>
+                <div class="chat-time">${chat.lastTime || ''}</div>
+                ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
+            `;
+            
+            chatItem.addEventListener('click', () => openChat(chat.user.id));
+            chatItem.querySelector('.chat-avatar').addEventListener('click', (e) => {
+                e.stopPropagation();
+                showOtherUserProfile(chat.user.id);
+            });
+            
+            chatsList.appendChild(chatItem);
         });
-        console.log('Chat agregado a activos');
     }
+    
+    hideSkeletons();
+}
+
+// Iniciar chat con un usuario
+function startChat(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
     
     openChat(userId);
 }
 
-// MEJORADO: Función para abrir chat existente
+// Abrir chat existente
 function openChat(userId) {
-    console.log('openChat llamado para usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
-    if (!user) {
-        console.error('Usuario no encontrado en openChat:', userId);
-        return;
-    }
+    if (!user) return;
     
     selectedUser = user;
-    console.log('Mostrando pestaña de chat con:', user.name);
     
-    // CORRECCIÓN CRÍTICA: Mostrar pestaña de chat
+    // Guardar la pestaña actual antes de abrir el chat
+    if (document.getElementById('users-tab').classList.contains('active')) {
+        previousTab = 'users';
+    } else {
+        previousTab = 'chats';
+    }
+    
+    // Mostrar pestaña de chat
     showTab('chat');
     
     // Actualizar header del chat
@@ -524,7 +572,13 @@ function openChat(userId) {
     }, 300);
 }
 
-// Actualizar estado en línea del usuario
+// Manejar el botón de regresar en el chat
+function handleChatBack() {
+    showTab(previousTab);
+    selectedUser = null;
+}
+
+// Actualizar estado en línea del usuario en el chat
 function updateUserOnlineStatus(user) {
     const isOnline = onlineUsers.find(u => u.id === user.id);
     const statusElement = document.getElementById('current-chat-status');
@@ -545,8 +599,6 @@ function updateUserOnlineStatus(user) {
         }
         statusElement.className = 'current-chat-status offline';
     }
-    
-    document.getElementById('current-chat-online-status').className = `online-status ${isOnline ? 'online' : ''}`;
 }
 
 // Cargar mensajes del chat
@@ -562,7 +614,6 @@ async function loadMessages(user) {
             addMessageToUI(message);
         });
         
-        // Scroll al final
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     } catch (error) {
         console.error('Error cargando mensajes:', error);
@@ -576,24 +627,9 @@ async function sendMessage() {
     
     if (!message || !selectedUser) return;
     
-    // Limpiar input
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
-    // Agregar a chats activos si no existe
-    if (!activeChats.find(chat => chat.user.id === selectedUser.id)) {
-        activeChats.push({
-            user: selectedUser,
-            lastMessage: message,
-            lastTime: new Date().toLocaleTimeString('es-ES', {
-                hour: '2-digit',
-                minute: '2-digit'
-            })
-        });
-        loadActiveChats();
-    }
-    
-    // Enviar mensaje via socket
     socket.emit('private_message', {
         to: selectedUser,
         message: message,
@@ -622,7 +658,6 @@ function addMessageToUI(messageData) {
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
     
-    // Animación suave
     setTimeout(() => {
         messageDiv.style.opacity = '1';
     }, 10);
@@ -649,17 +684,14 @@ function showTypingIndicator(userId) {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
     
-    // Actualizar estado en header
     const statusElement = document.getElementById('current-chat-status');
     statusElement.textContent = 'escribiendo...';
     statusElement.className = 'current-chat-status typing';
     
-    // Limpiar timeout anterior
     if (typingTimeouts[userId]) {
         clearTimeout(typingTimeouts[userId]);
     }
     
-    // Ocultar después de 3 segundos
     typingTimeouts[userId] = setTimeout(() => {
         hideTypingIndicator(userId);
     }, 3000);
@@ -672,7 +704,6 @@ function hideTypingIndicator(userId) {
         indicator.remove();
     }
     
-    // Restaurar estado normal
     if (selectedUser && selectedUser.id === userId) {
         updateUserOnlineStatus(selectedUser);
     }
@@ -687,11 +718,10 @@ function togglePanel() {
     overlay.classList.toggle('active');
 }
 
-// MEJORADO: Función para cambiar pestañas
+// Función para cambiar pestañas
 function showTab(tabName) {
     console.log('Cambiando a pestaña:', tabName);
     
-    // Ocultar todas las pestañas
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
@@ -710,27 +740,19 @@ function showTab(tabName) {
     
     document.getElementById('edit-profile-screen').classList.remove('active');
     
-    // Mostrar pestaña seleccionada - CORRECCIÓN CRÍTICA
     if (tabName === 'users') {
         document.getElementById('users-tab').classList.add('active');
-        // Cargar usuarios si es necesario
-        loadUsers();
     } else if (tabName === 'chat') {
         document.getElementById('chat-tab').classList.add('active');
     } else {
-        // 'chats' por defecto
         document.getElementById('chats-tab').classList.add('active');
-        // Recargar chats activos
-        loadActiveChats();
     }
     
-    // Ocultar panel lateral si está abierto
     const panel = document.getElementById('side-panel');
     const overlay = document.getElementById('panel-overlay');
     panel.classList.remove('active');
     overlay.classList.remove('active');
     
-    // Mostrar/ocultar FAB button - solo en pestaña de chats
     const fabButton = document.getElementById('fab-button');
     if (fabButton) {
         if (tabName === 'chats') {
@@ -740,7 +762,6 @@ function showTab(tabName) {
         }
     }
     
-    // Enfocar input de mensaje si estamos en el chat
     if (tabName === 'chat' && selectedUser) {
         setTimeout(() => {
             const messageInput = document.getElementById('message-input');
@@ -755,8 +776,6 @@ function showTab(tabName) {
 function showMyProfile() {
     document.getElementById('my-profile-screen').classList.add('active');
     updateMyProfileDisplay();
-    
-    // Ocultar panel
     togglePanel();
 }
 
@@ -771,8 +790,6 @@ function showEditProfile() {
     document.getElementById('edit-profile-name').value = currentUser.name;
     document.getElementById('edit-profile-bio').value = currentUser.bio;
     document.getElementById('edit-profile-password').value = '';
-    
-    // Resetear preview
     document.getElementById('avatar-preview').style.display = 'none';
     newAvatarFile = null;
 }
@@ -829,7 +846,6 @@ function loadFollowersList() {
                         `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
                         user.name.charAt(0).toUpperCase()
                     }
-                    <div class="user-online-status" id="follower-online-${user.id}"></div>
                 </div>
                 <div class="user-info">
                     <div class="user-name">${user.name}</div>
@@ -868,7 +884,6 @@ function loadFollowingList() {
                         `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
                         user.name.charAt(0).toUpperCase()
                     }
-                    <div class="user-online-status" id="following-online-${user.id}"></div>
                 </div>
                 <div class="user-info">
                     <div class="user-name">${user.name}</div>
@@ -884,13 +899,11 @@ function loadFollowingList() {
 
 // Mostrar seguidores de usuario
 function showUserFollowers() {
-    // Implementar lógica para mostrar seguidores del usuario
     alert('Mostrar seguidores de ' + currentProfileUser.name);
 }
 
 // Mostrar seguidos de usuario
 function showUserFollowing() {
-    // Implementar lógica para mostrar seguidos del usuario
     alert('Mostrar seguidos de ' + currentProfileUser.name);
 }
 
@@ -974,15 +987,12 @@ function showOtherUserProfile(userId) {
     document.getElementById('user-profile-bio').textContent = user.bio;
     updateAvatarDisplay('user-profile-avatar', user.avatar, user.name);
     
-    // Actualizar estado en línea en el perfil
     const isOnline = onlineUsers.find(u => u.id === user.id);
     document.getElementById('user-profile-online-status').className = `online-status ${isOnline ? 'online' : ''}`;
     
-    // Actualizar estadísticas del usuario
     document.getElementById('user-followers-count').textContent = '0';
     document.getElementById('user-following-count').textContent = '0';
     
-    // Actualizar botón de seguir
     const isFollowing = following.some(u => u.id === user.id);
     const followBtn = document.getElementById('follow-btn');
     followBtn.textContent = isFollowing ? 'Dejar de seguir' : 'Seguir';
@@ -1002,22 +1012,18 @@ function toggleFollow() {
         followingId: currentProfileUser.id
     });
     
-    // Actualizar UI inmediatamente
     const followBtn = document.getElementById('follow-btn');
     if (isFollowing) {
-        // Dejar de seguir
         following = following.filter(u => u.id !== currentProfileUser.id);
         followBtn.textContent = 'Seguir';
         followBtn.className = 'follow-btn';
     } else {
-        // Seguir
         const user = allUsers.find(u => u.id === currentProfileUser.id);
         if (user) following.push(user);
         followBtn.textContent = 'Dejar de seguir';
         followBtn.className = 'follow-btn following';
     }
     
-    // Actualizar contadores
     updateFollowCounts();
 }
 
@@ -1027,12 +1033,11 @@ function hideUserProfile() {
     currentProfileUser = null;
 }
 
-// Actualizar display del avatar
+// Actualizar display del avatar - SIN puntos verdes
 function updateAvatarDisplay(elementId, avatarUrl, userName) {
     const element = document.getElementById(elementId);
     if (avatarUrl && avatarUrl !== '/default-avatar.png') {
         element.innerHTML = `<img src="${avatarUrl}" alt="${userName}" onerror="this.style.display='none'">`;
-        // Si la imagen falla, mostrar la inicial
         const img = element.querySelector('img');
         img.onerror = function() {
             this.style.display = 'none';
@@ -1047,15 +1052,6 @@ function updateAvatarDisplay(elementId, avatarUrl, userName) {
         };
     } else {
         element.innerHTML = userName.charAt(0).toUpperCase();
-    }
-    
-    // Agregar elementos adicionales según el tipo de avatar
-    if (elementId === 'panel-user-avatar' || elementId === 'my-profile-avatar') {
-        element.innerHTML += '<div class="online-status online"></div>';
-    } else if (elementId === 'current-chat-avatar') {
-        element.innerHTML += '<div class="online-status" id="current-chat-online-status"></div>';
-    } else if (elementId === 'user-profile-avatar') {
-        element.innerHTML += '<div class="online-status" id="user-profile-online-status"></div>';
     }
 }
 
@@ -1072,42 +1068,6 @@ function updateMyProfileDisplay() {
     document.getElementById('my-profile-bio').textContent = currentUser.bio;
     updateAvatarDisplay('my-profile-avatar', currentUser.avatar, currentUser.name);
     updateFollowCounts();
-}
-
-// Actualizar estado en línea de usuarios
-function updateOnlineStatus() {
-    // Limpiar todos los estados primero
-    document.querySelectorAll('.online-status').forEach(status => {
-        status.className = 'online-status';
-    });
-    
-    document.querySelectorAll('.user-online-status').forEach(status => {
-        status.className = 'user-online-status';
-    });
-    
-    // Marcar usuarios en línea
-    onlineUsers.forEach(user => {
-        const userStatus = document.getElementById(`user-online-${user.id}`);
-        const chatStatus = document.getElementById(`chat-online-${user.id}`);
-        const followerStatus = document.getElementById(`follower-online-${user.id}`);
-        const followingStatus = document.getElementById(`following-online-${user.id}`);
-        
-        if (userStatus) userStatus.classList.add('online');
-        if (chatStatus) chatStatus.classList.add('online');
-        if (followerStatus) followerStatus.classList.add('online');
-        if (followingStatus) followingStatus.classList.add('online');
-        
-        // Actualizar estado en el chat actual
-        if (selectedUser && selectedUser.id === user.id) {
-            updateUserOnlineStatus(user);
-        }
-        
-        // Actualizar estado en el perfil si está abierto
-        const profileStatus = document.getElementById('user-profile-online-status');
-        if (profileStatus && currentProfileUser && currentProfileUser.id === user.id) {
-            profileStatus.classList.add('online');
-        }
-    });
 }
 
 // Actualizar badge de mensajes no leídos
@@ -1135,30 +1095,3 @@ function logout() {
     localStorage.removeItem('currentUser');
     window.location.href = '/';
 }
-
-// Función de debug para verificar el estado
-function debugNavigation() {
-    console.log('=== DEBUG NAVIGATION ===');
-    console.log('Current User:', currentUser?.name);
-    console.log('Selected User:', selectedUser?.name);
-    console.log('All Users Count:', allUsers.length);
-    console.log('Active Chats Count:', activeChats.length);
-    console.log('Online Users Count:', onlineUsers.length);
-    
-    // Verificar elementos del DOM
-    const usersTab = document.getElementById('users-tab');
-    const chatTab = document.getElementById('chat-tab');
-    const chatsTab = document.getElementById('chats-tab');
-    
-    console.log('Users Tab visible:', usersTab?.classList.contains('active'));
-    console.log('Chat Tab visible:', chatTab?.classList.contains('active'));
-    console.log('Chats Tab visible:', chatsTab?.classList.contains('active'));
-}
-
-// Agregar event listener para debug (temporal)
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'd' && e.ctrlKey) {
-        e.preventDefault();
-        debugNavigation();
-    }
-});
