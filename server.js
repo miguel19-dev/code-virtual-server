@@ -4,6 +4,7 @@ const socketIo = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,6 +12,7 @@ const io = socketIo(server, { cors: { origin: "*" } });
 
 app.use(express.json());
 app.use(express.static('public'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Carpetas necesarias
 ['data', 'uploads/avatars'].forEach(d => !fs.existsSync(d) && fs.mkdirSync(d, { recursive: true }));
@@ -29,6 +31,31 @@ function saveUsers() {
 function saveMessages() {
     fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
 }
+
+// Configuración de multer para upload de avatares
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/avatars/');
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB límite
+    },
+    fileFilter: function (req, file, cb) {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Solo se permiten archivos de imagen'));
+        }
+    }
+});
 
 // Rutas de autenticación
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'auth.html')));
@@ -93,8 +120,8 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
     }
 });
 
-// API para actualizar perfil
-app.put('/api/profile/:userId', async (req, res) => {
+// API para actualizar perfil con avatar
+app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
     const { userId } = req.params;
     const { name, bio } = req.body;
     
@@ -106,6 +133,21 @@ app.put('/api/profile/:userId', async (req, res) => {
     // Actualizar datos del usuario
     users[userIndex].name = name;
     users[userIndex].bio = bio;
+    
+    // Si se subió un nuevo avatar, actualizar la ruta
+    if (req.file) {
+        // Eliminar avatar anterior si no es el default
+        const oldAvatar = users[userIndex].avatar;
+        if (oldAvatar && oldAvatar !== '/default-avatar.png' && oldAvatar.startsWith('/uploads/avatars/')) {
+            const oldAvatarPath = path.join(__dirname, 'public', oldAvatar);
+            if (fs.existsSync(oldAvatarPath)) {
+                fs.unlinkSync(oldAvatarPath);
+            }
+        }
+        
+        users[userIndex].avatar = '/uploads/avatars/' + req.file.filename;
+    }
+    
     saveUsers();
     
     const { password, ...updatedUser } = users[userIndex];
