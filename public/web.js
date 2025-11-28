@@ -12,7 +12,7 @@ let userLastSeen = {};
 let followers = [];
 let following = [];
 let currentProfileUser = null;
-let previousTab = 'chats'; // Para recordar la pestaña anterior
+let previousTab = 'chats';
 
 // Inicializar la aplicación
 document.addEventListener('DOMContentLoaded', async function() {
@@ -23,73 +23,51 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
     
-    // Inicializar datos del perfil si no existen
     if (!currentUser.bio) currentUser.bio = "¡Yo uso SecureChat!";
     if (!currentUser.avatar) currentUser.avatar = '/default-avatar.png';
     
-    // Mostrar información del usuario actual
     updateCurrentUserDisplay();
-    
-    // Mostrar skeletons mientras carga
     showSkeletons();
-    
-    // Configurar event listeners
     setupEventListeners();
     
-    // Conectar al socket
     socket.emit('user_online', currentUser);
-    
-    // Cargar datos iniciales
     await loadInitialData();
-    
-    // Solicitar contadores de mensajes no leídos
     socket.emit('get_unread_counts', currentUser.id);
-    
-    // Cargar datos de seguidores/seguidos
     loadFollowData();
-    
-    // Forzar que chats sea la pestaña activa inicialmente
     showTab('chats');
 });
 
 // Configurar event listeners
 function setupEventListeners() {
-    // Navegación
     document.getElementById('menu-btn').addEventListener('click', togglePanel);
     document.getElementById('panel-overlay').addEventListener('click', togglePanel);
     document.getElementById('my-profile-btn').addEventListener('click', showMyProfile);
     document.getElementById('logout-btn').addEventListener('click', logout);
     
-    // Navegación entre pestañas
     document.getElementById('fab-button').addEventListener('click', () => showTab('users'));
     document.getElementById('empty-chats-action').addEventListener('click', () => showTab('users'));
     document.getElementById('chat-back-btn').addEventListener('click', handleChatBack);
     document.getElementById('users-back-btn').addEventListener('click', () => showTab('chats'));
     
-    // Navegación de perfiles
     document.getElementById('my-profile-back-btn').addEventListener('click', hideMyProfile);
     document.getElementById('user-profile-back-btn').addEventListener('click', hideUserProfile);
     document.getElementById('edit-profile-btn').addEventListener('click', showEditProfile);
     document.getElementById('edit-profile-back-btn').addEventListener('click', hideEditProfile);
     document.getElementById('cancel-edit-btn').addEventListener('click', hideEditProfile);
     
-    // Seguidores/Seguidos
     document.getElementById('followers-stat').addEventListener('click', showFollowers);
     document.getElementById('following-stat').addEventListener('click', showFollowing);
     document.getElementById('followers-back-btn').addEventListener('click', hideFollowers);
     document.getElementById('following-back-btn').addEventListener('click', hideFollowing);
     
-    // Botones de perfil de usuario
     document.getElementById('follow-btn').addEventListener('click', toggleFollow);
     document.getElementById('user-followers-stat').addEventListener('click', showUserFollowers);
     document.getElementById('user-following-stat').addEventListener('click', showUserFollowing);
     
-    // Editar perfil
     document.getElementById('save-profile-btn').addEventListener('click', saveMyProfile);
     document.getElementById('delete-account-btn').addEventListener('click', deleteAccount);
     document.getElementById('avatar-input').addEventListener('change', previewAvatar);
     
-    // Chat
     document.getElementById('send-button').addEventListener('click', sendMessage);
     document.getElementById('message-input').addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -98,27 +76,21 @@ function setupEventListeners() {
         }
     });
     
-    // Auto-resize del textarea
     document.getElementById('message-input').addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
     });
     
-    // Detectar escritura para el indicador "escribiendo"
     let typingTimer;
     document.getElementById('message-input').addEventListener('input', function() {
         if (!selectedUser) return;
         
-        // Notificar que está escribiendo
         socket.emit('user_typing', {
             to: selectedUser,
             from: currentUser
         });
         
-        // Limpiar timer anterior
         clearTimeout(typingTimer);
-        
-        // Notificar que dejó de escribir después de 1 segundo
         typingTimer = setTimeout(() => {
             socket.emit('user_stop_typing', {
                 to: selectedUser,
@@ -127,21 +99,17 @@ function setupEventListeners() {
         }, 1000);
     });
     
-    // ========== SOCKET EVENTS EN TIEMPO REAL ==========
-    
-    // Usuarios en línea
+    // Socket events
     socket.on('users_online', (users) => {
         onlineUsers = users;
         updateUserStatuses();
     });
     
-    // Todos los usuarios
     socket.on('all_users', (users) => {
         allUsers = users;
         loadUsers();
     });
     
-    // Usuario actualizado
     socket.on('user_updated', (updatedUser) => {
         const userIndex = allUsers.findIndex(u => u.id === updatedUser.id);
         if (userIndex !== -1) {
@@ -165,26 +133,23 @@ function setupEventListeners() {
         loadActiveChats();
     });
     
-    // Nuevo mensaje
     socket.on('new_message', (messageData) => {
+        console.log('Nuevo mensaje recibido:', messageData);
         handleNewMessage(messageData);
     });
     
-    // Contadores de mensajes no leídos
     socket.on('unread_counts', (counts) => {
         unreadCounts = { ...unreadCounts, ...counts };
         updateUnreadBadges();
         loadActiveChats();
     });
     
-    // Actualización de contador individual
     socket.on('unread_count_update', (data) => {
         unreadCounts[data.userId] = data.count;
         updateUnreadBadge(data.userId, data.count);
         loadActiveChats();
     });
     
-    // Usuario desconectado
     socket.on('user_offline', (userData) => {
         userLastSeen[userData.id] = userData.lastSeen || new Date().toISOString();
         if (selectedUser && selectedUser.id === userData.id) {
@@ -193,21 +158,18 @@ function setupEventListeners() {
         updateUserStatuses();
     });
     
-    // Usuario escribiendo
     socket.on('user_typing', (data) => {
         if (data.from !== currentUser.id) {
             showTypingIndicator(data.from);
         }
     });
     
-    // Usuario dejó de escribir
     socket.on('user_stop_typing', (data) => {
         if (data.from !== currentUser.id) {
             hideTypingIndicator(data.from);
         }
     });
     
-    // Seguidores en tiempo real
     socket.on('follow_data', (data) => {
         followers = data.followers;
         following = data.following;
@@ -229,23 +191,28 @@ function setupEventListeners() {
         loadFollowData();
     });
     
-    // Chats actualizados
     socket.on('chats_updated', () => {
+        console.log('Chats actualizados en tiempo real');
         loadActiveChats();
     });
     
-    // Mensaje enviado correctamente
     socket.on('message_sent', (messageData) => {
-        console.log('Mensaje enviado confirmado');
+        console.log('Mensaje enviado confirmado:', messageData);
     });
 }
 
 // Función para manejar nuevos mensajes en tiempo real
 function handleNewMessage(messageData) {
+    console.log('Manejando nuevo mensaje:', messageData);
     const sender = allUsers.find(u => u.id === messageData.from);
-    if (!sender) return;
+    if (!sender) {
+        console.log('Usuario remitente no encontrado');
+        return;
+    }
     
+    // Si el mensaje es para el chat actual, mostrarlo
     if (selectedUser && selectedUser.id === messageData.from) {
+        console.log('Agregando mensaje a la UI del chat actual');
         addMessageToUI(messageData);
         
         socket.emit('mark_as_read', {
@@ -256,17 +223,22 @@ function handleNewMessage(messageData) {
         unreadCounts[selectedUser.id] = 0;
         updateUnreadBadge(selectedUser.id, 0);
     } else {
+        console.log('Incrementando contador para usuario:', sender.name);
         unreadCounts[messageData.from] = (unreadCounts[messageData.from] || 0) + 1;
     }
     
+    // Actualizar chats activos en tiempo real
     updateActiveChatsWithNewMessage(sender, messageData);
 }
 
 // Actualizar chats activos con nuevo mensaje en tiempo real
 function updateActiveChatsWithNewMessage(sender, messageData) {
+    console.log('Actualizando chats activos con mensaje de:', sender.name);
+    
     const existingChatIndex = activeChats.findIndex(chat => chat.user.id === sender.id);
     
     if (existingChatIndex !== -1) {
+        console.log('Actualizando chat existente');
         activeChats[existingChatIndex].lastMessage = messageData.message.length > 30 ? 
             messageData.message.substring(0, 30) + '...' : messageData.message;
         activeChats[existingChatIndex].lastTime = new Date().toLocaleTimeString('es-ES', {
@@ -278,6 +250,7 @@ function updateActiveChatsWithNewMessage(sender, messageData) {
         const updatedChat = activeChats.splice(existingChatIndex, 1)[0];
         activeChats.unshift(updatedChat);
     } else {
+        console.log('Creando nuevo chat en activos');
         activeChats.unshift({
             user: sender,
             lastMessage: messageData.message.length > 30 ? 
@@ -290,6 +263,7 @@ function updateActiveChatsWithNewMessage(sender, messageData) {
         });
     }
     
+    // Actualizar UI en tiempo real
     renderActiveChats();
 }
 
@@ -400,11 +374,15 @@ async function loadUsers() {
                 `;
                 
                 userItem.addEventListener('click', (e) => {
+                    console.log('Iniciando chat con:', user.name);
                     startChat(user.id);
                 });
                 
-                userItem.querySelector('.user-avatar').addEventListener('click', (e) => {
+                // CORREGIDO: Event listener para el avatar
+                const avatarElement = userItem.querySelector('.user-avatar');
+                avatarElement.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    console.log('Mostrando perfil de:', user.name);
                     showOtherUserProfile(user.id);
                 });
                 
@@ -460,10 +438,16 @@ function updateUserStatuses() {
 // Cargar chats activos - SOLO usuarios con conversaciones iniciadas
 async function loadActiveChats() {
     try {
+        console.log('Cargando chats activos...');
         const response = await fetch(`/api/chats?userId=${currentUser.id}`);
         const chatsData = await response.json();
         
+        console.log('Chats recibidos del servidor:', chatsData);
+        
+        // Filtrar solo chats con mensajes
         activeChats = chatsData.filter(chat => chat.lastMessage && chat.lastMessage !== 'Iniciar conversación');
+        
+        console.log('Chats activos filtrados:', activeChats);
         
         renderActiveChats();
     } catch (error) {
@@ -476,6 +460,8 @@ async function loadActiveChats() {
 function renderActiveChats() {
     const chatsList = document.getElementById('chats-list');
     const emptyState = document.getElementById('chats-empty');
+    
+    console.log('Renderizando chats activos:', activeChats.length);
     
     if (activeChats.length === 0) {
         chatsList.style.display = 'none';
@@ -506,8 +492,12 @@ function renderActiveChats() {
             `;
             
             chatItem.addEventListener('click', () => openChat(chat.user.id));
-            chatItem.querySelector('.chat-avatar').addEventListener('click', (e) => {
+            
+            // CORREGIDO: Event listener para el avatar en chats
+            const avatarElement = chatItem.querySelector('.chat-avatar');
+            avatarElement.addEventListener('click', (e) => {
                 e.stopPropagation();
+                console.log('Mostrando perfil desde chats:', chat.user.name);
                 showOtherUserProfile(chat.user.id);
             });
             
@@ -520,16 +510,24 @@ function renderActiveChats() {
 
 // Iniciar chat con un usuario
 function startChat(userId) {
+    console.log('Iniciando chat con usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
-    if (!user) return;
+    if (!user) {
+        console.error('Usuario no encontrado');
+        return;
+    }
     
     openChat(userId);
 }
 
 // Abrir chat existente
 function openChat(userId) {
+    console.log('Abriendo chat con usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
-    if (!user) return;
+    if (!user) {
+        console.error('Usuario no encontrado en openChat');
+        return;
+    }
     
     selectedUser = user;
     
@@ -604,8 +602,11 @@ function updateUserOnlineStatus(user) {
 // Cargar mensajes del chat
 async function loadMessages(user) {
     try {
+        console.log('Cargando mensajes para usuario:', user.name);
         const response = await fetch(`/api/messages/${currentUser.id}/${user.id}`);
         const messages = await response.json();
+        
+        console.log('Mensajes recibidos:', messages);
         
         const messagesContainer = document.getElementById('messages-container');
         messagesContainer.innerHTML = '';
@@ -625,11 +626,18 @@ async function sendMessage() {
     const messageInput = document.getElementById('message-input');
     const message = messageInput.value.trim();
     
-    if (!message || !selectedUser) return;
+    if (!message || !selectedUser) {
+        console.log('No hay mensaje o usuario seleccionado');
+        return;
+    }
     
+    console.log('Enviando mensaje a:', selectedUser.name, 'Mensaje:', message);
+    
+    // Limpiar input
     messageInput.value = '';
     messageInput.style.height = 'auto';
     
+    // Enviar mensaje via socket
     socket.emit('private_message', {
         to: selectedUser,
         message: message,
@@ -740,6 +748,7 @@ function showTab(tabName) {
     
     document.getElementById('edit-profile-screen').classList.remove('active');
     
+    // Mostrar pestaña seleccionada
     if (tabName === 'users') {
         document.getElementById('users-tab').classList.add('active');
     } else if (tabName === 'chat') {
@@ -748,11 +757,13 @@ function showTab(tabName) {
         document.getElementById('chats-tab').classList.add('active');
     }
     
+    // Ocultar panel lateral si está abierto
     const panel = document.getElementById('side-panel');
     const overlay = document.getElementById('panel-overlay');
     panel.classList.remove('active');
     overlay.classList.remove('active');
     
+    // Mostrar/ocultar FAB button - solo en pestaña de chats
     const fabButton = document.getElementById('fab-button');
     if (fabButton) {
         if (tabName === 'chats') {
@@ -762,6 +773,7 @@ function showTab(tabName) {
         }
     }
     
+    // Enfocar input de mensaje si estamos en el chat
     if (tabName === 'chat' && selectedUser) {
         setTimeout(() => {
             const messageInput = document.getElementById('message-input');
@@ -976,10 +988,14 @@ function deleteAccount() {
     }
 }
 
-// Mostrar perfil de otro usuario
+// Mostrar perfil de otro usuario - CORREGIDO
 function showOtherUserProfile(userId) {
+    console.log('Mostrando perfil de usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
-    if (!user) return;
+    if (!user) {
+        console.error('Usuario no encontrado para perfil');
+        return;
+    }
     
     currentProfileUser = user;
     
