@@ -41,7 +41,7 @@
         
         <!-- Área Principal -->
         <div class="main-area">
-            <!-- Header Principal -->
+            <!-- Header Principal - SOLO visible en pestaña de chats -->
             <div class="main-header">
                 <button class="menu-btn" id="menu-btn">
                     <i class="fas fa-bars"></i>
@@ -79,7 +79,7 @@
                                 <i class="fas fa-arrow-left"></i>
                             </button>
                             <div class="current-chat-avatar" id="current-chat-avatar">
-                                <div class="online-status" id="current-chat-online-status"></div>
+                                <!-- Avatar se cargará dinámicamente -->
                             </div>
                             <div class="current-chat-info">
                                 <div class="current-chat-name" id="current-chat-name">Usuario</div>
@@ -87,7 +87,9 @@
                             </div>
                         </div>
                         
-                        <div class="messages-container" id="messages-container"></div>
+                        <div class="messages-container" id="messages-container">
+                            <!-- Mensajes se cargarán dinámicamente -->
+                        </div>
                         
                         <div class="message-input-container">
                             <div class="message-input-wrapper">
@@ -108,11 +110,11 @@
             
             <!-- Pestaña de Usuarios -->
             <div class="users-tab-content" id="users-tab">
-                <div class="chat-header">
+                <div class="users-header">
                     <button class="back-button" id="users-back-btn">
                         <i class="fas fa-arrow-left"></i>
                     </button>
-                    <div class="current-chat-name" style="font-size: 1.1em; font-weight: 600;">Usuarios</div>
+                    <div class="users-header-title">Usuarios</div>
                 </div>
                 <div class="users-list" id="users-list">
                     <div id="users-skeleton"></div>
@@ -152,7 +154,7 @@
             </div>
             <div class="profile-content">
                 <div class="profile-avatar" id="my-profile-avatar">
-                    <div class="online-status online"></div>
+                    <!-- Avatar se cargará dinámicamente -->
                 </div>
                 <div class="profile-name" id="my-profile-name">Usuario</div>
                 <div class="profile-bio" id="my-profile-bio">¡Yo uso SecureChat!</div>
@@ -180,7 +182,7 @@
             </div>
             <div class="profile-content">
                 <div class="profile-avatar" id="user-profile-avatar">
-                    <div class="online-status" id="user-profile-online-status"></div>
+                    <!-- Avatar se cargará dinámicamente -->
                 </div>
                 <div class="profile-name" id="user-profile-name">Usuario</div>
                 <div class="profile-bio" id="user-profile-bio">¡Yo uso SecureChat!</div>
