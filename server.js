@@ -19,10 +19,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const USERS_FILE = 'data/users.json';
 const MESSAGES_FILE = 'data/messages.json';
+const FOLLOWS_FILE = 'data/follows.json';
 
 // Cargar datos existentes
 let users = fs.existsSync(USERS_FILE) ? JSON.parse(fs.readFileSync(USERS_FILE)) : [];
 let messages = fs.existsSync(MESSAGES_FILE) ? JSON.parse(fs.readFileSync(MESSAGES_FILE)) : {};
+let follows = fs.existsSync(FOLLOWS_FILE) ? JSON.parse(fs.readFileSync(FOLLOWS_FILE)) : {};
 
 function saveUsers() {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
@@ -30,6 +32,21 @@ function saveUsers() {
 
 function saveMessages() {
     fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
+}
+
+function saveFollows() {
+    fs.writeFileSync(FOLLOWS_FILE, JSON.stringify(follows, null, 2));
+}
+
+// Inicializar datos de seguidores si no existen
+function initializeFollowData(userId) {
+    if (!follows[userId]) {
+        follows[userId] = {
+            followers: [],
+            following: []
+        };
+        saveFollows();
+    }
 }
 
 // Configuración de multer para upload de avatares
@@ -85,6 +102,9 @@ app.post('/api/register', async (req, res) => {
     users.push(newUser);
     saveUsers();
     
+    // Inicializar datos de seguidores
+    initializeFollowData(newUser.id);
+    
     const { password: _, ...safeUser } = newUser;
     res.json({ user: safeUser });
 });
@@ -106,6 +126,69 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/users', (req, res) => {
     const safeUsers = users.map(({ password, ...user }) => user);
     res.json(safeUsers);
+});
+
+// API para obtener datos de seguidores
+app.get('/api/follows/:userId', (req, res) => {
+    const { userId } = req.params;
+    
+    if (!follows[userId]) {
+        initializeFollowData(userId);
+    }
+    
+    const userFollows = follows[userId];
+    
+    // Obtener información completa de seguidores y seguidos
+    const followersWithData = userFollows.followers.map(followerId => {
+        const user = users.find(u => u.id === followerId);
+        return user ? { id: user.id, name: user.name, avatar: user.avatar, bio: user.bio } : null;
+    }).filter(Boolean);
+    
+    const followingWithData = userFollows.following.map(followingId => {
+        const user = users.find(u => u.id === followingId);
+        return user ? { id: user.id, name: user.name, avatar: user.avatar, bio: user.bio } : null;
+    }).filter(Boolean);
+    
+    res.json({
+        followers: followersWithData,
+        following: followingWithData,
+        followersCount: followersWithData.length,
+        followingCount: followingWithData.length
+    });
+});
+
+// API para seguir/dejar de seguir
+app.post('/api/follow', (req, res) => {
+    const { followerId, followingId } = req.body;
+    
+    if (!followerId || !followingId) {
+        return res.status(400).json({ error: 'Se requieren followerId y followingId' });
+    }
+    
+    // Inicializar datos si no existen
+    if (!follows[followerId]) initializeFollowData(followerId);
+    if (!follows[followingId]) initializeFollowData(followingId);
+    
+    const isFollowing = follows[followerId].following.includes(followingId);
+    
+    if (isFollowing) {
+        // Dejar de seguir
+        follows[followerId].following = follows[followerId].following.filter(id => id !== followingId);
+        follows[followingId].followers = follows[followingId].followers.filter(id => id !== followerId);
+    } else {
+        // Seguir
+        follows[followerId].following.push(followingId);
+        follows[followingId].followers.push(followerId);
+    }
+    
+    saveFollows();
+    
+    res.json({
+        success: true,
+        isFollowing: !isFollowing,
+        followersCount: follows[followingId].followers.length,
+        followingCount: follows[followerId].following.length
+    });
 });
 
 // API para obtener chats activos
@@ -166,7 +249,7 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
 // API para actualizar perfil con avatar
 app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
     const { userId } = req.params;
-    const { name, bio } = req.body;
+    const { name, bio, password } = req.body;
     
     const userIndex = users.findIndex(u => u.id === userId);
     if (userIndex === -1) {
@@ -176,6 +259,11 @@ app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
     // Actualizar datos del usuario
     users[userIndex].name = name;
     users[userIndex].bio = bio;
+    
+    // Actualizar contraseña si se proporciona
+    if (password && password.length >= 6) {
+        users[userIndex].password = await bcrypt.hash(password, 10);
+    }
     
     // Si se subió un nuevo avatar, actualizar la ruta
     if (req.file) {
@@ -193,12 +281,42 @@ app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
     
     saveUsers();
     
-    const { password, ...updatedUser } = users[userIndex];
+    const { password: _, ...updatedUser } = users[userIndex];
     
     // Notificar a todos los clientes sobre la actualización
     io.emit('user_updated', updatedUser);
     
     res.json({ user: updatedUser });
+});
+
+// API para eliminar cuenta
+app.delete('/api/profile/:userId', (req, res) => {
+    const { userId } = req.params;
+    
+    const userIndex = users.findIndex(u => u.id === userId);
+    if (userIndex === -1) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    
+    // Eliminar usuario
+    users.splice(userIndex, 1);
+    saveUsers();
+    
+    // Eliminar datos de seguidores
+    if (follows[userId]) {
+        delete follows[userId];
+        saveFollows();
+    }
+    
+    // Limpiar mensajes del usuario
+    Object.keys(messages).forEach(chatId => {
+        if (chatId.includes(userId)) {
+            delete messages[chatId];
+        }
+    });
+    saveMessages();
+    
+    res.json({ success: true, message: 'Cuenta eliminada correctamente' });
 });
 
 // Socket.IO para mensajería en tiempo real
@@ -303,6 +421,69 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Seguir/dejar de seguir usuario
+    socket.on('toggle_follow', (data) => {
+        const { followerId, followingId } = data;
+        
+        if (!follows[followerId]) initializeFollowData(followerId);
+        if (!follows[followingId]) initializeFollowData(followingId);
+        
+        const isFollowing = follows[followerId].following.includes(followingId);
+        
+        if (isFollowing) {
+            // Dejar de seguir
+            follows[followerId].following = follows[followerId].following.filter(id => id !== followingId);
+            follows[followingId].followers = follows[followingId].followers.filter(id => id !== followerId);
+        } else {
+            // Seguir
+            follows[followerId].following.push(followingId);
+            follows[followingId].followers.push(followerId);
+        }
+        
+        saveFollows();
+        
+        // Notificar a ambos usuarios
+        const followerEntry = Array.from(onlineUsers.entries()).find(([_, u]) => u.id === followerId);
+        const followingEntry = Array.from(onlineUsers.entries()).find(([_, u]) => u.id === followingId);
+        
+        if (followerEntry) {
+            const [followerSocketId, _] = followerEntry;
+            io.to(followerSocketId).emit('follow_updated', {
+                followingId: followingId,
+                isFollowing: !isFollowing,
+                followingCount: follows[followerId].following.length
+            });
+        }
+        
+        if (followingEntry) {
+            const [followingSocketId, _] = followingEntry;
+            io.to(followingSocketId).emit('follower_updated', {
+                followerId: followerId,
+                followersCount: follows[followingId].followers.length
+            });
+        }
+    });
+
+    // Usuario escribiendo
+    socket.on('user_typing', (data) => {
+        const { to, from } = data;
+        const recipientEntry = Array.from(onlineUsers.entries()).find(([_, u]) => u.id === to.id);
+        if (recipientEntry) {
+            const [recipientSocketId, recipient] = recipientEntry;
+            io.to(recipientSocketId).emit('user_typing', { from: from.id });
+        }
+    });
+
+    // Usuario dejó de escribir
+    socket.on('user_stop_typing', (data) => {
+        const { to, from } = data;
+        const recipientEntry = Array.from(onlineUsers.entries()).find(([_, u]) => u.id === to.id);
+        if (recipientEntry) {
+            const [recipientSocketId, recipient] = recipientEntry;
+            io.to(recipientSocketId).emit('user_stop_typing', { from: from.id });
+        }
+    });
+
     // Actualización de perfil
     socket.on('profile_update', (userData) => {
         const userIndex = users.findIndex(u => u.id === userData.id);
@@ -329,11 +510,45 @@ io.on('connection', (socket) => {
         socket.emit('unread_counts', unreadCounts);
     });
 
+    // Obtener datos de seguidores
+    socket.on('get_follow_data', (userId) => {
+        if (!follows[userId]) {
+            initializeFollowData(userId);
+        }
+        
+        const userFollows = follows[userId];
+        
+        // Obtener información completa de seguidores y seguidos
+        const followersWithData = userFollows.followers.map(followerId => {
+            const user = users.find(u => u.id === followerId);
+            return user ? { id: user.id, name: user.name, avatar: user.avatar, bio: user.bio } : null;
+        }).filter(Boolean);
+        
+        const followingWithData = userFollows.following.map(followingId => {
+            const user = users.find(u => u.id === followingId);
+            return user ? { id: user.id, name: user.name, avatar: user.avatar, bio: user.bio } : null;
+        }).filter(Boolean);
+        
+        socket.emit('follow_data', {
+            followers: followersWithData,
+            following: followingWithData,
+            followersCount: followersWithData.length,
+            followingCount: followingWithData.length
+        });
+    });
+
     // Usuario desconectado
     socket.on('disconnect', () => {
         const user = onlineUsers.get(socket.id);
         if (user) {
             console.log('Usuario desconectado:', user.name);
+            
+            // Notificar que el usuario se desconectó
+            io.emit('user_offline', {
+                id: user.id,
+                lastSeen: new Date().toISOString()
+            });
+            
             onlineUsers.delete(socket.id);
             io.emit('users_online', Array.from(onlineUsers.values()));
         }
