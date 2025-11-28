@@ -1,4 +1,4 @@
-:root {
+﻿:root {
     --primary: #2563eb;
     --primary-dark: #1d4ed8;
     --secondary: #7c3aed;
@@ -280,6 +280,7 @@ body {
 .chat-info {
     flex: 1;
     min-width: 0;
+    margin-right: 60px;
 }
 
 .chat-name {
@@ -304,44 +305,10 @@ body {
     margin-top: 3px;
 }
 
-/* CORRECCIÓN MEJORADA: Estado en línea - SIEMPRE ENCIMA del avatar */
-.online-status {
-    position: absolute;
-    bottom: -2px;
-    right: -2px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--text-secondary);
-    border: 3px solid var(--background);
-    z-index: 20;
-}
-
-.online-status.online {
-    background: var(--success);
-}
-
-/* Estado en línea más pequeño para usuarios */
-.user-online-status {
-    position: absolute;
-    bottom: -1px;
-    right: -1px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--text-secondary);
-    border: 2px solid var(--background);
-    z-index: 20;
-}
-
-.user-online-status.online {
-    background: var(--success);
-}
-
 /* Contador de mensajes no leídos */
 .unread-badge {
     position: absolute;
-    top: 12px;
+    top: 15px;
     right: 15px;
     background: var(--error);
     color: white;
@@ -453,21 +420,33 @@ body {
     text-overflow: ellipsis;
 }
 
-.user-bio-small {
-    font-size: 0.85em;
+.user-status {
+    font-size: 0.8em;
     color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
-/* Pestaña de Chat Individual */
+.user-status.online {
+    color: var(--success);
+}
+
+.user-status.offline {
+    color: var(--text-secondary);
+}
+
+/* Pestaña de Chat Individual - OCUPA 100% */
 .chat-area {
     flex: 1;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    width: 100%;
+    height: 100vh;
+    width: 100vw;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--background);
+    z-index: 200;
 }
 
 .chat-header {
