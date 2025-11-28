@@ -33,38 +33,61 @@
             color: var(--text);
             height: 100vh;
             overflow: hidden;
+            touch-action: pan-y;
         }
         
+        /* Container Principal - Mobile First */
         .app-container {
             display: flex;
             height: 100vh;
+            width: 100vw;
+            position: relative;
         }
         
-        /* Sidebar */
+        /* Sidebar - Oculto por defecto en móvil */
         .sidebar {
-            width: 350px;
+            width: 100%;
             background: var(--surface);
-            border-right: 1px solid rgba(255, 255, 255, 0.1);
             display: flex;
             flex-direction: column;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            z-index: 100;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar.active {
+            transform: translateX(0);
         }
         
         .sidebar-header {
-            padding: 20px;
+            padding: 15px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(30, 41, 59, 0.8);
-            cursor: pointer;
-            transition: background 0.3s ease;
+            position: relative;
         }
         
-        .sidebar-header:hover {
-            background: rgba(255, 255, 255, 0.05);
+        .mobile-menu-btn {
+            display: block;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 1.2em;
+            cursor: pointer;
+            padding: 8px;
+            position: absolute;
+            right: 15px;
+            top: 15px;
         }
         
         .user-info {
             display: flex;
             align-items: center;
             gap: 12px;
+            margin-top: 10px;
         }
         
         .user-avatar {
@@ -83,6 +106,7 @@
             overflow: hidden;
             background-size: cover;
             background-position: center;
+            flex-shrink: 0;
         }
         
         .user-avatar img {
@@ -94,35 +118,43 @@
         
         .user-details {
             flex: 1;
+            min-width: 0;
         }
         
         .user-name {
             font-weight: 600;
             font-size: 1.1em;
             margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .user-status {
-            font-size: 0.85em;
+            font-size: 0.8em;
             color: var(--success);
         }
         
         .user-bio {
-            font-size: 0.8em;
+            font-size: 0.75em;
             color: var(--text-secondary);
             margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .logout-btn {
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid var(--error);
             color: var(--error);
-            padding: 8px 16px;
+            padding: 8px 12px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 0.9em;
+            font-size: 0.8em;
             transition: all 0.3s ease;
             margin-top: 10px;
+            white-space: nowrap;
         }
         
         .logout-btn:hover {
@@ -131,7 +163,7 @@
         }
         
         .search-container {
-            padding: 15px 20px;
+            padding: 15px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
@@ -154,12 +186,13 @@
             flex: 1;
             overflow-y: auto;
             padding: 10px 0;
+            -webkit-overflow-scrolling: touch;
         }
         
         .user-item {
             display: flex;
             align-items: center;
-            padding: 12px 20px;
+            padding: 12px 15px;
             cursor: pointer;
             transition: background 0.3s ease;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -193,6 +226,7 @@
             overflow: hidden;
             background-size: cover;
             background-position: center;
+            flex-shrink: 0;
         }
         
         .user-avatar-small img {
@@ -208,15 +242,19 @@
         
         .user-info-small {
             flex: 1;
+            min-width: 0;
         }
         
         .user-name-small {
             font-weight: 500;
             margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .user-last-message {
-            font-size: 0.85em;
+            font-size: 0.8em;
             color: var(--text-secondary);
             white-space: nowrap;
             overflow: hidden;
@@ -267,12 +305,13 @@
             100% { transform: scale(1); }
         }
         
-        /* Chat Area */
+        /* Chat Area - Ocupa toda la pantalla en móvil */
         .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
             background: var(--background);
+            width: 100%;
         }
         
         #chat-container {
@@ -283,18 +322,32 @@
         }
         
         .chat-header {
-            padding: 20px 30px;
+            padding: 15px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(30, 41, 59, 0.8);
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
+            position: relative;
+            flex-shrink: 0;
+        }
+        
+        .back-button {
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 1.2em;
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             flex-shrink: 0;
         }
         
         .chat-user-avatar {
-            width: 50px;
-            height: 50px;
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             display: flex;
@@ -309,6 +362,7 @@
             overflow: hidden;
             background-size: cover;
             background-position: center;
+            flex-shrink: 0;
         }
         
         .chat-user-avatar img {
@@ -324,31 +378,36 @@
         
         .chat-user-info {
             flex: 1;
+            min-width: 0;
         }
         
         .chat-user-info h3 {
             font-weight: 600;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .chat-user-info .status {
-            font-size: 0.85em;
+            font-size: 0.8em;
             color: var(--success);
         }
         
         .messages-container {
             flex: 1;
             overflow-y: auto;
-            padding: 20px 30px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
+            -webkit-overflow-scrolling: touch;
             min-height: 0;
         }
         
         .message {
-            max-width: 70%;
-            padding: 12px 18px;
+            max-width: 85%;
+            padding: 12px 16px;
             border-radius: 18px;
             position: relative;
             word-wrap: break-word;
@@ -379,32 +438,33 @@
         }
         
         .message-content {
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             line-height: 1.4;
         }
         
         .message-time {
-            font-size: 0.75em;
+            font-size: 0.7em;
             opacity: 0.7;
             text-align: right;
         }
         
         .message-input-container {
-            padding: 20px 30px;
+            padding: 15px;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(30, 41, 59, 0.8);
+            position: relative;
             flex-shrink: 0;
         }
         
         .message-input-wrapper {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: flex-end;
         }
         
         .message-input {
             flex: 1;
-            padding: 15px 20px;
+            padding: 12px 16px;
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 25px;
@@ -412,8 +472,9 @@
             font-size: 14px;
             resize: none;
             max-height: 120px;
-            min-height: 50px;
+            min-height: 44px;
             font-family: inherit;
+            line-height: 1.4;
         }
         
         .message-input:focus {
@@ -426,8 +487,8 @@
         }
         
         .send-button {
-            width: 50px;
-            height: 50px;
+            width: 44px;
+            height: 44px;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             border: none;
             border-radius: 50%;
@@ -437,6 +498,7 @@
             align-items: center;
             justify-content: center;
             transition: all 0.3s ease;
+            flex-shrink: 0;
         }
         
         .send-button:hover {
@@ -467,27 +529,12 @@
         }
         
         .profile-header {
-            padding: 20px 30px;
+            padding: 15px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(30, 41, 59, 0.8);
             display: flex;
             align-items: center;
-            gap: 15px;
-        }
-        
-        .back-button {
-            background: none;
-            border: none;
-            color: var(--text);
-            font-size: 1.2em;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 8px;
-            transition: background 0.3s ease;
-        }
-        
-        .back-button:hover {
-            background: rgba(255, 255, 255, 0.1);
+            gap: 12px;
         }
         
         .profile-content {
@@ -495,16 +542,18 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 40px;
-            max-width: 500px;
+            justify-content: flex-start;
+            padding: 30px 20px;
+            max-width: 100%;
             margin: 0 auto;
             width: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
         
         .profile-avatar {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             display: flex;
@@ -512,7 +561,7 @@
             justify-content: center;
             font-weight: 600;
             color: white;
-            font-size: 2.5em;
+            font-size: 2em;
             margin-bottom: 20px;
             border: 4px solid var(--primary);
             position: relative;
@@ -543,7 +592,7 @@
             color: white;
             padding: 8px;
             text-align: center;
-            font-size: 0.8em;
+            font-size: 0.75em;
             opacity: 0;
             transition: opacity 0.3s ease;
         }
@@ -553,7 +602,7 @@
         }
         
         .profile-name {
-            font-size: 1.8em;
+            font-size: 1.5em;
             font-weight: 600;
             margin-bottom: 10px;
             text-align: center;
@@ -562,23 +611,27 @@
         .profile-bio {
             color: var(--text-secondary);
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             line-height: 1.5;
+            font-size: 0.9em;
         }
         
         .profile-actions {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         
         .btn {
-            padding: 12px 24px;
+            padding: 12px 20px;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
             transition: all 0.3s ease;
+            font-size: 0.9em;
         }
         
         .btn-primary {
@@ -616,6 +669,7 @@
             margin-bottom: 8px;
             font-weight: 500;
             color: var(--text-secondary);
+            font-size: 0.9em;
         }
         
         .form-input {
@@ -653,6 +707,7 @@
             text-align: center;
             cursor: pointer;
             transition: all 0.3s ease;
+            font-size: 0.9em;
         }
         
         .file-label:hover {
@@ -661,8 +716,8 @@
         }
         
         .avatar-preview {
-            width: 80px;
-            height: 80px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             object-fit: cover;
             margin: 10px auto;
@@ -677,11 +732,11 @@
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding: 40px;
+            padding: 30px;
         }
         
         .welcome-icon {
-            font-size: 4em;
+            font-size: 3em;
             margin-bottom: 20px;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             -webkit-background-clip: text;
@@ -689,19 +744,82 @@
         }
         
         .welcome-title {
-            font-size: 1.8em;
+            font-size: 1.5em;
             margin-bottom: 10px;
             font-weight: 600;
         }
         
         .welcome-subtitle {
             color: var(--text-secondary);
-            margin-bottom: 30px;
+            margin-bottom: 25px;
+            line-height: 1.5;
         }
         
-        /* Scrollbar personalizado */
+        /* Footer móvil */
+        .mobile-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-around;
+            z-index: 90;
+        }
+        
+        .footer-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.3em;
+            cursor: pointer;
+            padding: 10px;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+        
+        .footer-btn.active {
+            color: var(--primary);
+        }
+        
+        .footer-badge {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: var(--error);
+            color: white;
+            border-radius: 8px;
+            min-width: 16px;
+            height: 16px;
+            font-size: 0.6em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 3px;
+        }
+        
+        /* Overlay para cerrar sidebar en móvil */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 99;
+            display: none;
+        }
+        
+        .sidebar-overlay.active {
+            display: block;
+        }
+        
+        /* Scrollbar personalizado para móvil */
         ::-webkit-scrollbar {
-            width: 6px;
+            width: 4px;
         }
         
         ::-webkit-scrollbar-track {
@@ -710,19 +828,155 @@
         
         ::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.2);
-            border-radius: 3px;
+            border-radius: 2px;
         }
         
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
+        /* Media Queries para tablets y desktop */
+        @media (min-width: 768px) {
+            .app-container {
+                flex-direction: row;
+            }
+            
+            .sidebar {
+                position: relative;
+                transform: translateX(0);
+                width: 350px;
+                max-width: 350px;
+            }
+            
+            .mobile-menu-btn {
+                display: none;
+            }
+            
+            .back-button {
+                display: none;
+            }
+            
+            .mobile-footer {
+                display: none;
+            }
+            
+            .sidebar-overlay {
+                display: none !important;
+            }
+            
+            .message {
+                max-width: 70%;
+            }
+            
+            .chat-header {
+                padding: 20px 30px;
+            }
+            
+            .messages-container {
+                padding: 20px 30px;
+            }
+            
+            .message-input-container {
+                padding: 20px 30px;
+            }
+            
+            .profile-content {
+                padding: 40px;
+                justify-content: center;
+            }
+            
+            .profile-avatar {
+                width: 120px;
+                height: 120px;
+                font-size: 2.5em;
+            }
+            
+            .profile-name {
+                font-size: 1.8em;
+            }
+            
+            .avatar-preview {
+                width: 80px;
+                height: 80px;
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .sidebar {
+                width: 400px;
+                max-width: 400px;
+            }
+        }
+        
+        /* Mejoras para dispositivos muy pequeños */
+        @media (max-width: 360px) {
+            .sidebar-header {
+                padding: 12px;
+            }
+            
+            .search-container {
+                padding: 12px;
+            }
+            
+            .user-item {
+                padding: 10px 12px;
+            }
+            
+            .user-avatar-small {
+                width: 40px;
+                height: 40px;
+                margin-right: 10px;
+            }
+            
+            .chat-header {
+                padding: 12px;
+            }
+            
+            .messages-container {
+                padding: 12px;
+            }
+            
+            .message-input-container {
+                padding: 12px;
+            }
+            
+            .profile-content {
+                padding: 20px 15px;
+            }
+        }
+        
+        /* Soporte para modo oscuro del sistema */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --background: #0f172a;
+                --surface: #1e293b;
+            }
+        }
+        
+        /* Prevenir zoom en inputs en iOS */
+        @media (max-width: 768px) {
+            input, textarea {
+                font-size: 16px;
+            }
+        }
+        
+        /* Mejoras de accesibilidad */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
         }
     </style>
 </head>
 <body>
     <div class="app-container">
+        <!-- Overlay para móvil -->
+        <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+        
         <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-header" onclick="showMyProfile()">
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-times"></i>
+                </button>
                 <div class="user-info">
                     <div class="user-avatar" id="current-user-avatar">
                         <!-- Avatar se cargará dinámicamente -->
@@ -734,6 +988,9 @@
                         <div class="user-bio" id="current-user-bio">¡Yo uso SecureChat!</div>
                     </div>
                 </div>
+                <button class="logout-btn" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Salir
+                </button>
             </div>
             
             <div class="search-container">
@@ -742,12 +999,6 @@
             
             <div class="users-list" id="users-list">
                 <!-- Los usuarios se cargarán aquí -->
-            </div>
-            
-            <div style="padding: 20px;">
-                <button class="logout-btn" onclick="logout()">
-                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
-                </button>
             </div>
         </div>
         
@@ -759,11 +1010,17 @@
                 </div>
                 <div class="welcome-title">Bienvenido a SecureChat</div>
                 <div class="welcome-subtitle">Selecciona un usuario para comenzar una conversación privada</div>
+                <button class="logout-btn" onclick="logout()" style="margin-top: 20px;">
+                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                </button>
             </div>
             
             <div id="chat-container" style="display: none;">
                 <!-- HEADER - Arriba -->
                 <div class="chat-header">
+                    <button class="back-button" onclick="showUserList()">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
                     <div class="chat-user-avatar" id="chat-user-avatar" onclick="showUserProfile()">
                         <!-- Avatar se cargará dinámicamente -->
                         <div class="online-status" id="chat-user-online-status"></div>
@@ -794,6 +1051,20 @@
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <!-- Footer móvil -->
+        <div class="mobile-footer">
+            <button class="footer-btn active" onclick="toggleSidebar()" id="footer-chats">
+                <i class="fas fa-comments"></i>
+                <div class="footer-badge" id="footer-total-badge" style="display: none;">0</div>
+            </button>
+            <button class="footer-btn" onclick="showMyProfile()" id="footer-profile">
+                <i class="fas fa-user"></i>
+            </button>
+            <button class="footer-btn" onclick="showWelcomeScreen()" id="footer-home">
+                <i class="fas fa-home"></i>
+            </button>
         </div>
         
         <!-- Pantalla de Mi Perfil -->
@@ -877,6 +1148,7 @@
         let allUsers = [];
         let unreadCounts = {};
         let newAvatarFile = null;
+        let isMobile = window.innerWidth < 768;
         
         // Inicializar la aplicación
         document.addEventListener('DOMContentLoaded', async function() {
@@ -907,9 +1179,87 @@
             // Configurar eventos
             setupEventListeners();
             
+            // Ajustar para móvil/desktop
+            setupResponsiveBehavior();
+            
             // Solicitar contadores de mensajes no leídos
             socket.emit('get_unread_counts', currentUser.id);
         });
+        
+        // Configurar comportamiento responsive
+        function setupResponsiveBehavior() {
+            isMobile = window.innerWidth < 768;
+            
+            if (!isMobile) {
+                // En desktop, mostrar sidebar siempre
+                document.getElementById('sidebar').classList.add('active');
+                document.getElementById('sidebar-overlay').classList.remove('active');
+            }
+            
+            // Actualizar cuando cambie el tamaño de la ventana
+            window.addEventListener('resize', function() {
+                const wasMobile = isMobile;
+                isMobile = window.innerWidth < 768;
+                
+                if (wasMobile !== isMobile) {
+                    if (!isMobile) {
+                        document.getElementById('sidebar').classList.add('active');
+                        document.getElementById('sidebar-overlay').classList.remove('active');
+                    }
+                }
+            });
+        }
+        
+        // Alternar sidebar en móvil
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            if (isMobile) {
+                sidebar.classList.toggle('active');
+                overlay.classList.toggle('active');
+            } else {
+                sidebar.classList.add('active');
+            }
+        }
+        
+        // Mostrar lista de usuarios (desde chat)
+        function showUserList() {
+            if (isMobile) {
+                document.getElementById('chat-container').style.display = 'none';
+                document.getElementById('welcome-screen').style.display = 'flex';
+                toggleSidebar();
+            }
+        }
+        
+        // Mostrar pantalla de bienvenida
+        function showWelcomeScreen() {
+            if (isMobile) {
+                document.getElementById('chat-container').style.display = 'none';
+                document.getElementById('welcome-screen').style.display = 'flex';
+                document.getElementById('sidebar').classList.remove('active');
+                document.getElementById('sidebar-overlay').classList.remove('active');
+                selectedUser = null;
+                updateFooterActive('home');
+            }
+        }
+        
+        // Actualizar footer activo
+        function updateFooterActive(activeBtn) {
+            if (!isMobile) return;
+            
+            document.querySelectorAll('.footer-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            if (activeBtn === 'chats') {
+                document.getElementById('footer-chats').classList.add('active');
+            } else if (activeBtn === 'profile') {
+                document.getElementById('footer-profile').classList.add('active');
+            } else if (activeBtn === 'home') {
+                document.getElementById('footer-home').classList.add('active');
+            }
+        }
         
         // Cargar lista de usuarios
         async function loadUsers() {
@@ -954,6 +1304,7 @@
                 
                 updateOnlineStatus();
                 updateUnreadBadges();
+                updateFooterBadge();
             } catch (error) {
                 console.error('Error cargando usuarios:', error);
             }
@@ -978,6 +1329,13 @@
             document.getElementById('chat-container').style.flexDirection = 'column';
             document.getElementById('chat-container').style.height = '100%';
             
+            // Ocultar sidebar en móvil
+            if (isMobile) {
+                document.getElementById('sidebar').classList.remove('active');
+                document.getElementById('sidebar-overlay').classList.remove('active');
+                updateFooterActive('chats');
+            }
+            
             // Actualizar header del chat
             document.getElementById('chat-user-name').textContent = user.name;
             updateAvatarDisplay('chat-user-avatar', user.avatar, user.name);
@@ -999,6 +1357,7 @@
             // Limpiar contador de no leídos
             unreadCounts[user.id] = 0;
             updateUnreadBadge(user.id, 0);
+            updateFooterBadge();
             
             // Enfocar input de mensaje
             setTimeout(() => {
@@ -1065,6 +1424,11 @@
             
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Animación suave
+            setTimeout(() => {
+                messageDiv.style.opacity = '1';
+            }, 10);
         }
         
         // Mostrar mi perfil
@@ -1077,11 +1441,19 @@
             // Resetear preview
             document.getElementById('avatar-preview').style.display = 'none';
             newAvatarFile = null;
+            
+            // Actualizar footer
+            if (isMobile) {
+                updateFooterActive('profile');
+            }
         }
         
         // Ocultar mi perfil
         function hideMyProfile() {
             document.getElementById('my-profile-screen').classList.remove('active');
+            if (isMobile) {
+                updateFooterActive('home');
+            }
         }
         
         // Previsualizar avatar
@@ -1263,6 +1635,21 @@
             });
         }
         
+        // Actualizar badge del footer
+        function updateFooterBadge() {
+            if (!isMobile) return;
+            
+            const totalUnread = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+            const footerBadge = document.getElementById('footer-total-badge');
+            
+            if (totalUnread > 0) {
+                footerBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+                footerBadge.style.display = 'flex';
+            } else {
+                footerBadge.style.display = 'none';
+            }
+        }
+        
         // Configurar event listeners
         function setupEventListeners() {
             // Socket events - USUARIOS EN LÍNEA
@@ -1334,12 +1721,14 @@
             socket.on('unread_counts', (counts) => {
                 unreadCounts = { ...unreadCounts, ...counts };
                 updateUnreadBadges();
+                updateFooterBadge();
             });
             
             // ACTUALIZACIÓN DE CONTADOR INDIVIDUAL
             socket.on('unread_count_update', (data) => {
                 unreadCounts[data.userId] = data.count;
                 updateUnreadBadge(data.userId, data.count);
+                updateFooterBadge();
             });
             
             // MENSAJES MARCADOS COMO LEÍDOS
@@ -1348,6 +1737,7 @@
                 if (data.otherUserId === currentUser.id && selectedUser && selectedUser.id === data.userId) {
                     unreadCounts[data.userId] = 0;
                     updateUnreadBadge(data.userId, 0);
+                    updateFooterBadge();
                 }
             });
             
@@ -1379,6 +1769,33 @@
                     }
                 });
             });
+            
+            // Cerrar sidebar al hacer clic fuera en móvil
+            document.addEventListener('click', function(e) {
+                if (isMobile && 
+                    !document.getElementById('sidebar').contains(e.target) &&
+                    !e.target.closest('.mobile-menu-btn') &&
+                    !e.target.closest('.footer-btn')) {
+                    document.getElementById('sidebar').classList.remove('active');
+                    document.getElementById('sidebar-overlay').classList.remove('active');
+                }
+            });
+            
+            // Swipe para cerrar sidebar en móvil
+            let touchStartX = 0;
+            document.addEventListener('touchstart', function(e) {
+                touchStartX = e.touches[0].clientX;
+            });
+            
+            document.addEventListener('touchend', function(e) {
+                const touchEndX = e.changedTouches[0].clientX;
+                const diff = touchStartX - touchEndX;
+                
+                // Swipe izquierda para cerrar sidebar
+                if (diff > 50 && document.getElementById('sidebar').classList.contains('active')) {
+                    toggleSidebar();
+                }
+            });
         }
         
         // Cerrar sesión
@@ -1386,6 +1803,13 @@
             localStorage.removeItem('currentUser');
             window.location.href = '/';
         }
+        
+        // Prevenir acciones táctiles no deseadas
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
     </script>
 </body>
 </html>
