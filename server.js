@@ -108,6 +108,49 @@ app.get('/api/users', (req, res) => {
     res.json(safeUsers);
 });
 
+// API para obtener chats activos
+app.get('/api/chats', (req, res) => {
+    const currentUserId = req.query.userId;
+    if (!currentUserId) {
+        return res.status(400).json({ error: 'Se requiere userId' });
+    }
+
+    const userChats = [];
+    const safeUsers = users.map(({ password, ...user }) => user);
+    
+    // Obtener todos los usuarios excepto el actual
+    const otherUsers = safeUsers.filter(user => user.id !== currentUserId);
+    
+    otherUsers.forEach(user => {
+        const chatId = [currentUserId, user.id].sort().join('_');
+        const chatMessages = messages[chatId] || [];
+        
+        if (chatMessages.length > 0) {
+            const lastMessage = chatMessages[chatMessages.length - 1];
+            userChats.push({
+                user: user,
+                lastMessage: lastMessage.message,
+                lastTime: new Date(lastMessage.timestamp).toLocaleTimeString('es-ES', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }),
+                unreadCount: chatMessages.filter(msg => 
+                    msg.to === currentUserId && !msg.read
+                ).length
+            });
+        }
+    });
+    
+    // Ordenar por último mensaje (más reciente primero)
+    userChats.sort((a, b) => {
+        const timeA = new Date(messages[[currentUserId, a.user.id].sort().join('_')]?.slice(-1)[0]?.timestamp || 0);
+        const timeB = new Date(messages[[currentUserId, b.user.id].sort().join('_')]?.slice(-1)[0]?.timestamp || 0);
+        return timeB - timeA;
+    });
+    
+    res.json(userChats);
+});
+
 // API para obtener mensajes entre dos usuarios
 app.get('/api/messages/:userId1/:userId2', (req, res) => {
     const { userId1, userId2 } = req.params;
@@ -219,6 +262,12 @@ io.on('connection', (socket) => {
         
         // Actualizar contadores para ambos usuarios
         updateUnreadCounts(from.id, to.id);
+        
+        // Notificar a ambos usuarios para actualizar lista de chats
+        socket.emit('chats_updated');
+        if (recipientEntry) {
+            io.to(recipientEntry[0]).emit('chats_updated');
+        }
     });
 
     // Marcar mensajes como leídos
