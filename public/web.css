@@ -171,14 +171,15 @@ body {
     z-index: 20;
 }
 
-/* OCULTAR HEADER PRINCIPAL POR DEFECTO */
-.main-header {
-    display: none;
-}
-
 /* MOSTRAR HEADER SOLO cuando la pestaña de chats está activa */
 #chats-tab.active ~ .main-header {
     display: flex;
+}
+
+/* OCULTAR HEADER PRINCIPAL en otras pestañas */
+#chat-tab.active ~ .main-header,
+#users-tab.active ~ .main-header {
+    display: none;
 }
 
 .menu-btn {
