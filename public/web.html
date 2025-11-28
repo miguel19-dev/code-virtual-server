@@ -313,11 +313,11 @@
             margin-top: 3px;
         }
         
-        /* MEJORA: Estado en línea más visible */
+        /* CORRECCIÓN: Estado en línea mejor posicionado */
         .online-status {
             position: absolute;
-            bottom: 2px;
-            right: 2px;
+            bottom: 3px;
+            right: 3px;
             width: 14px;
             height: 14px;
             border-radius: 50%;
@@ -357,7 +357,7 @@
             100% { transform: scale(1); }
         }
         
-        /* Pestaña de Usuarios - MEJORA: Pantalla completa */
+        /* MEJORA: Pestaña de Usuarios - Pantalla completa */
         .users-tab-content {
             position: fixed;
             top: 0;
@@ -372,6 +372,18 @@
         
         .users-tab-content.active {
             display: flex;
+            animation: slideInUp 0.3s ease;
+        }
+        
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .users-list {
@@ -519,6 +531,15 @@
         .current-chat-status {
             font-size: 0.8em;
             color: var(--success);
+        }
+        
+        .current-chat-status.typing {
+            color: var(--primary);
+            font-style: italic;
+        }
+        
+        .current-chat-status.offline {
+            color: var(--text-secondary);
         }
         
         .messages-container {
@@ -694,6 +715,18 @@
         
         .profile-screen.active {
             display: flex;
+            animation: slideInRight 0.3s ease;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
         
         .profile-header {
@@ -990,6 +1023,40 @@
             width: 80%;
         }
         
+        /* MEJORA: Indicador de escribiendo */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 12px;
+            background: var(--surface-light);
+            border-radius: 18px;
+            align-self: flex-start;
+            margin-bottom: 8px;
+            animation: typingPulse 1.5s infinite;
+        }
+        
+        @keyframes typingPulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+        
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--primary);
+            animation: typingBounce 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typingBounce {
+            0%, 80%, 100% { transform: scale(0.8); }
+            40% { transform: scale(1); }
+        }
+        
         /* Scrollbar personalizado para móvil */
         ::-webkit-scrollbar {
             width: 4px;
@@ -1162,7 +1229,8 @@
                     <button class="back-button" onclick="showTab('chats')">
                         <i class="fas fa-arrow-left"></i>
                     </button>
-                    <div class="current-chat-name">Todos los Usuarios</div>
+                    <!-- CORRECCIÓN: Título más discreto -->
+                    <div class="current-chat-name" style="font-size: 1.1em; font-weight: 600;">Usuarios</div>
                 </div>
                 <div class="users-list" id="users-list">
                     <!-- Skeleton loading mientras carga -->
@@ -1272,6 +1340,8 @@
         let unreadCounts = {};
         let newAvatarFile = null;
         let isMobile = window.innerWidth < 768;
+        let typingTimeouts = {};
+        let userLastSeen = {};
         
         // Inicializar la aplicación
         document.addEventListener('DOMContentLoaded', async function() {
@@ -1490,9 +1560,7 @@
             updateAvatarDisplay('current-chat-avatar', user.avatar, user.name);
             
             // Actualizar estado en línea
-            const isOnline = onlineUsers.find(u => u.id === user.id);
-            document.getElementById('current-chat-status').textContent = isOnline ? 'En línea' : 'Desconectado';
-            document.getElementById('current-chat-online-status').className = `online-status ${isOnline ? 'online' : ''}`;
+            updateUserOnlineStatus(user);
             
             // Cargar mensajes
             loadMessages(user);
@@ -1511,6 +1579,31 @@
             setTimeout(() => {
                 document.getElementById('message-input').focus();
             }, 300);
+        }
+        
+        // Actualizar estado en línea del usuario
+        function updateUserOnlineStatus(user) {
+            const isOnline = onlineUsers.find(u => u.id === user.id);
+            const statusElement = document.getElementById('current-chat-status');
+            
+            if (isOnline) {
+                statusElement.textContent = 'En línea';
+                statusElement.className = 'current-chat-status';
+            } else {
+                const lastSeen = userLastSeen[user.id];
+                if (lastSeen) {
+                    const lastSeenTime = new Date(lastSeen).toLocaleTimeString('es-ES', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    statusElement.textContent = `Últ. vez ${lastSeenTime}`;
+                } else {
+                    statusElement.textContent = 'Desconectado';
+                }
+                statusElement.className = 'current-chat-status offline';
+            }
+            
+            document.getElementById('current-chat-online-status').className = `online-status ${isOnline ? 'online' : ''}`;
         }
         
         // Cargar mensajes del chat
@@ -1604,6 +1697,56 @@
             setTimeout(() => {
                 messageDiv.style.opacity = '1';
             }, 10);
+        }
+        
+        // Mostrar indicador de escribiendo
+        function showTypingIndicator(userId) {
+            if (!selectedUser || selectedUser.id !== userId) return;
+            
+            const messagesContainer = document.getElementById('messages-container');
+            const existingIndicator = document.getElementById('typing-indicator');
+            
+            if (!existingIndicator) {
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'typing-indicator';
+                typingDiv.className = 'typing-indicator';
+                typingDiv.innerHTML = `
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <span style="font-size: 0.8em; margin-left: 8px;">escribiendo...</span>
+                `;
+                messagesContainer.appendChild(typingDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            
+            // Actualizar estado en header
+            const statusElement = document.getElementById('current-chat-status');
+            statusElement.textContent = 'escribiendo...';
+            statusElement.className = 'current-chat-status typing';
+            
+            // Limpiar timeout anterior
+            if (typingTimeouts[userId]) {
+                clearTimeout(typingTimeouts[userId]);
+            }
+            
+            // Ocultar después de 3 segundos
+            typingTimeouts[userId] = setTimeout(() => {
+                hideTypingIndicator(userId);
+            }, 3000);
+        }
+        
+        // Ocultar indicador de escribiendo
+        function hideTypingIndicator(userId) {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
+            
+            // Restaurar estado normal
+            if (selectedUser && selectedUser.id === userId) {
+                updateUserOnlineStatus(selectedUser);
+            }
         }
         
         // Mostrar/ocultar panel lateral
@@ -1834,8 +1977,7 @@
                 
                 // Actualizar estado en el chat actual
                 if (selectedUser && selectedUser.id === user.id) {
-                    document.getElementById('current-chat-status').textContent = 'En línea';
-                    document.getElementById('current-chat-online-status').classList.add('online');
+                    updateUserOnlineStatus(user);
                 }
                 
                 // Actualizar estado en el perfil si está abierto
@@ -1963,12 +2105,58 @@
                 loadActiveChats(); // Recargar chats para mostrar badges
             });
             
+            // USUARIO DESCONECTADO - actualizar última vez visto
+            socket.on('user_offline', (userData) => {
+                userLastSeen[userData.id] = userData.lastSeen || new Date().toISOString();
+                if (selectedUser && selectedUser.id === userData.id) {
+                    updateUserOnlineStatus(selectedUser);
+                }
+                updateOnlineStatus();
+            });
+            
+            // INDICADOR DE ESCRIBIENDO
+            socket.on('user_typing', (data) => {
+                if (data.from !== currentUser.id) {
+                    showTypingIndicator(data.from);
+                }
+            });
+            
+            // DEJÓ DE ESCRIBIR
+            socket.on('user_stop_typing', (data) => {
+                if (data.from !== currentUser.id) {
+                    hideTypingIndicator(data.from);
+                }
+            });
+            
             // Input de mensaje - enter para enviar
             document.getElementById('message-input').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     sendMessage();
                 }
+            });
+            
+            // Detectar escritura para el indicador "escribiendo"
+            let typingTimer;
+            document.getElementById('message-input').addEventListener('input', function() {
+                if (!selectedUser) return;
+                
+                // Notificar que está escribiendo
+                socket.emit('user_typing', {
+                    to: selectedUser,
+                    from: currentUser
+                });
+                
+                // Limpiar timer anterior
+                clearTimeout(typingTimer);
+                
+                // Notificar que dejó de escribir después de 1 segundo
+                typingTimer = setTimeout(() => {
+                    socket.emit('user_stop_typing', {
+                        to: selectedUser,
+                        from: currentUser
+                    });
+                }, 1000);
             });
             
             // Auto-resize del textarea
