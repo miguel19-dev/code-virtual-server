@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecureChat - Mensajes</title>
+    <title>SecureChat</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -189,9 +189,11 @@
         }
         
         .app-title {
-            font-weight: 600;
-            font-size: 1.1em;
-            color: var(--text);
+            font-weight: 700;
+            font-size: 1.3em;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         
         /* Contenedor de Pestañas */
@@ -208,6 +210,7 @@
             display: none;
             flex-direction: column;
             height: 100%;
+            width: 100%;
         }
         
         .tab-content.active {
@@ -225,7 +228,7 @@
         .chat-item {
             display: flex;
             align-items: center;
-            padding: 12px 15px;
+            padding: 15px;
             cursor: pointer;
             transition: background 0.3s ease;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -241,8 +244,8 @@
         }
         
         .chat-avatar {
-            width: 45px;
-            height: 45px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             display: flex;
@@ -250,7 +253,7 @@
             justify-content: center;
             font-weight: 600;
             color: white;
-            margin-right: 12px;
+            margin-right: 15px;
             border: 2px solid var(--surface-light);
             position: relative;
             overflow: hidden;
@@ -272,15 +275,15 @@
         }
         
         .chat-name {
-            font-weight: 500;
-            margin-bottom: 4px;
+            font-weight: 600;
+            margin-bottom: 5px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         
         .chat-last-message {
-            font-size: 0.8em;
+            font-size: 0.85em;
             color: var(--text-secondary);
             white-space: nowrap;
             overflow: hidden;
@@ -288,9 +291,9 @@
         }
         
         .chat-time {
-            font-size: 0.7em;
+            font-size: 0.75em;
             color: var(--text-secondary);
-            margin-top: 2px;
+            margin-top: 3px;
         }
         
         /* Estado en línea */
@@ -310,24 +313,23 @@
             background: var(--success);
         }
         
-        /* Contador de mensajes no leídos */
+        /* Contador de mensajes no leídos en el chat */
         .unread-badge {
             position: absolute;
-            top: -5px;
-            right: -5px;
+            top: 12px;
+            right: 15px;
             background: var(--error);
             color: white;
             border-radius: 10px;
-            min-width: 18px;
-            height: 18px;
-            font-size: 0.7em;
+            min-width: 20px;
+            height: 20px;
+            font-size: 0.75em;
             font-weight: 600;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0 4px;
+            padding: 0 5px;
             animation: pulse 2s infinite;
-            z-index: 2;
         }
         
         @keyframes pulse {
@@ -347,7 +349,7 @@
         .user-item {
             display: flex;
             align-items: center;
-            padding: 12px 15px;
+            padding: 15px;
             cursor: pointer;
             transition: background 0.3s ease;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -358,8 +360,8 @@
         }
         
         .user-avatar {
-            width: 45px;
-            height: 45px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             display: flex;
@@ -367,7 +369,7 @@
             justify-content: center;
             font-weight: 600;
             color: white;
-            margin-right: 12px;
+            margin-right: 15px;
             border: 2px solid var(--surface-light);
             cursor: pointer;
             position: relative;
@@ -390,15 +392,15 @@
         }
         
         .user-name {
-            font-weight: 500;
-            margin-bottom: 4px;
+            font-weight: 600;
+            margin-bottom: 5px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         
         .user-bio-small {
-            font-size: 0.8em;
+            font-size: 0.85em;
             color: var(--text-secondary);
             white-space: nowrap;
             overflow: hidden;
@@ -411,6 +413,7 @@
             display: flex;
             flex-direction: column;
             height: 100%;
+            width: 100%;
         }
         
         .chat-header {
@@ -429,7 +432,7 @@
             color: var(--text);
             font-size: 1.2em;
             cursor: pointer;
-            padding: 5px;
+            padding: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -437,8 +440,8 @@
         }
         
         .current-chat-avatar {
-            width: 40px;
-            height: 40px;
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             display: flex;
@@ -943,14 +946,6 @@
             </div>
             
             <div class="panel-actions">
-                <button class="panel-action-btn" onclick="showTab('chats'); togglePanel();">
-                    <i class="fas fa-comments"></i>
-                    <span>Mis Chats</span>
-                </button>
-                <button class="panel-action-btn" onclick="showTab('users'); togglePanel();">
-                    <i class="fas fa-users"></i>
-                    <span>Todos los Usuarios</span>
-                </button>
                 <button class="panel-action-btn logout" onclick="logout()">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
@@ -988,6 +983,12 @@
                 
                 <!-- Pestaña de Usuarios -->
                 <div class="tab-content" id="users-tab">
+                    <div class="chat-header">
+                        <button class="back-button" onclick="showTab('chats')">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <div class="current-chat-name">Todos los Usuarios</div>
+                    </div>
                     <div class="users-list" id="users-list">
                         <!-- Los usuarios se cargarán aquí -->
                     </div>
@@ -1200,10 +1201,14 @@
         // Cargar chats activos
         async function loadActiveChats() {
             try {
-                // En una implementación real, aquí cargarías los chats del servidor
-                // Por ahora, simulamos cargando usuarios con los que hay mensajes
                 const chatsList = document.getElementById('chats-list');
                 const emptyState = document.getElementById('chats-empty');
+                
+                // Obtener chats del servidor
+                const response = await fetch('/api/chats');
+                const chatsData = await response.json();
+                
+                activeChats = chatsData;
                 
                 if (activeChats.length === 0) {
                     chatsList.style.display = 'none';
@@ -1214,6 +1219,7 @@
                     
                     chatsList.innerHTML = '';
                     activeChats.forEach(chat => {
+                        const unreadCount = unreadCounts[chat.user.id] || 0;
                         const chatItem = document.createElement('div');
                         chatItem.className = 'chat-item';
                         chatItem.dataset.userId = chat.user.id;
@@ -1224,20 +1230,19 @@
                                     chat.user.name.charAt(0).toUpperCase()
                                 }
                                 <div class="online-status" id="chat-online-${chat.user.id}"></div>
-                                <div class="unread-badge" id="chat-unread-${chat.user.id}" style="display: none;">0</div>
                             </div>
                             <div class="chat-info" onclick="openChat('${chat.user.id}')">
                                 <div class="chat-name">${chat.user.name}</div>
                                 <div class="chat-last-message">${chat.lastMessage || 'Haz clic para chatear'}</div>
                                 <div class="chat-time">${chat.lastTime || ''}</div>
                             </div>
+                            ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
                         `;
                         chatsList.appendChild(chatItem);
                     });
                 }
                 
                 updateOnlineStatus();
-                updateUnreadBadges();
             } catch (error) {
                 console.error('Error cargando chats:', error);
             }
@@ -1281,7 +1286,7 @@
             // Cargar mensajes
             loadMessages(user);
             
-            // Marcar mensajes como leídos
+            // Marcar mensajes como leídos y limpiar contador
             socket.emit('mark_as_read', {
                 userId: currentUser.id,
                 otherUserId: user.id
@@ -1679,14 +1684,13 @@
                             minute: '2-digit'
                         })
                     });
-                    loadActiveChats();
                 }
                 
                 // Si el mensaje es para el chat actual, mostrarlo
                 if (selectedUser && selectedUser.id === messageData.from) {
                     addMessageToUI(messageData);
                     
-                    // Marcar como leído
+                    // Marcar como leído automáticamente
                     socket.emit('mark_as_read', {
                         userId: currentUser.id,
                         otherUserId: selectedUser.id
@@ -1702,20 +1706,24 @@
                         hour: '2-digit',
                         minute: '2-digit'
                     });
-                    loadActiveChats();
                 }
+                
+                // Recargar lista de chats
+                loadActiveChats();
             });
             
             // CONTADORES DE MENSAJES NO LEÍDOS
             socket.on('unread_counts', (counts) => {
                 unreadCounts = { ...unreadCounts, ...counts };
                 updateUnreadBadges();
+                loadActiveChats(); // Recargar chats para mostrar badges
             });
             
             // ACTUALIZACIÓN DE CONTADOR INDIVIDUAL
             socket.on('unread_count_update', (data) => {
                 unreadCounts[data.userId] = data.count;
                 updateUnreadBadge(data.userId, data.count);
+                loadActiveChats(); // Recargar chats para mostrar badges
             });
             
             // Input de mensaje - enter para enviar
