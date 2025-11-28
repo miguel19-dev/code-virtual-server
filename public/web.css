@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --primary: #2563eb;
     --primary-dark: #1d4ed8;
     --secondary: #7c3aed;
@@ -215,13 +215,14 @@ body {
     display: flex;
 }
 
-/* Ocultar header principal cuando una pestaña está activa */
-.tab-content.active ~ .main-header {
+/* Ocultar header principal cuando el chat está activo */
+#chat-tab.active ~ .main-header {
     display: none;
 }
 
-/* Mostrar header solo en pestaña de chats */
-#chats-tab.active ~ .main-header {
+/* Mostrar header solo en pestaña de chats y usuarios */
+#chats-tab.active ~ .main-header,
+#users-tab.active ~ .main-header {
     display: flex;
 }
 
@@ -300,15 +301,17 @@ body {
 }
 
 .chat-time {
+    position: absolute;
+    top: 15px;
+    right: 15px;
     font-size: 0.75em;
     color: var(--text-secondary);
-    margin-top: 3px;
 }
 
 /* Contador de mensajes no leídos */
 .unread-badge {
     position: absolute;
-    top: 15px;
+    top: 35px;
     right: 15px;
     background: var(--error);
     color: white;
@@ -433,7 +436,7 @@ body {
     color: var(--text-secondary);
 }
 
-/* Pestaña de Chat Individual - OCUPA 100% */
+/* Pestaña de Chat Individual - PANTALLA COMPLETA */
 .chat-area {
     flex: 1;
     display: flex;
