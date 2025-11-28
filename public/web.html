@@ -55,7 +55,7 @@
             top: 0;
             left: 0;
             height: 100%;
-            z-index: 200;
+            z-index: 300;
             transform: translateX(-100%);
             transition: transform 0.3s ease;
             box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
@@ -168,11 +168,13 @@
         .main-header {
             padding: 15px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(30, 41, 59, 0.8);
+            background: rgba(30, 41, 59, 0.95);
             display: flex;
             align-items: center;
             gap: 12px;
             flex-shrink: 0;
+            position: relative;
+            z-index: 20;
         }
         
         .menu-btn {
@@ -196,24 +198,36 @@
             -webkit-text-fill-color: transparent;
         }
         
-        /* Contenedor de Pestañas */
+        /* MODIFICACIONES PARA PANTALLAS COMPLETAS */
         .tabs-container {
             flex: 1;
-            display: flex;
-            flex-direction: column;
             position: relative;
             overflow: hidden;
         }
         
         .tab-content {
-            flex: 1;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             display: none;
             flex-direction: column;
-            height: 100%;
-            width: 100%;
+            background: var(--background);
+            z-index: 10;
         }
         
         .tab-content.active {
+            display: flex;
+        }
+        
+        /* Ocultar header principal cuando una pestaña está activa */
+        .tab-content.active ~ .main-header {
+            display: none;
+        }
+        
+        /* Mostrar header solo en pestaña de chats */
+        #chats-tab.active ~ .main-header {
             display: flex;
         }
         
@@ -419,11 +433,13 @@
         .chat-header {
             padding: 15px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(30, 41, 59, 0.8);
+            background: rgba(30, 41, 59, 0.95);
             display: flex;
             align-items: center;
             gap: 12px;
             flex-shrink: 0;
+            position: relative;
+            z-index: 11;
         }
         
         .back-button {
@@ -540,7 +556,7 @@
         .message-input-container {
             padding: 15px;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(30, 41, 59, 0.8);
+            background: rgba(30, 41, 59, 0.95);
             flex-shrink: 0;
         }
         
@@ -639,7 +655,7 @@
         .profile-header {
             padding: 15px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(30, 41, 59, 0.8);
+            background: rgba(30, 41, 59, 0.95);
             display: flex;
             align-items: center;
             gap: 12px;
@@ -841,7 +857,7 @@
             right: 0;
             bottom: 0;
             background: rgba(0, 0, 0, 0.5);
-            z-index: 150;
+            z-index: 250;
             display: none;
         }
         
@@ -915,6 +931,15 @@
             
             .message {
                 max-width: 70%;
+            }
+            
+            /* Ajustes para desktop en el sistema de pestañas */
+            .tab-content {
+                position: relative;
+            }
+            
+            .tab-content.active ~ .main-header {
+                display: flex;
             }
         }
         
@@ -1149,6 +1174,9 @@
             
             // Solicitar contadores de mensajes no leídos
             socket.emit('get_unread_counts', currentUser.id);
+            
+            // Forzar que chats sea la pestaña activa inicialmente
+            showTab('chats');
         });
         
         // Cargar datos iniciales
@@ -1419,16 +1447,26 @@
             document.getElementById(`${tabName}-tab`).classList.add('active');
             
             // Ocultar panel en móvil
-            if (isMobile && tabName !== 'chat') {
-                togglePanel();
+            if (isMobile) {
+                const panel = document.getElementById('side-panel');
+                const overlay = document.getElementById('panel-overlay');
+                panel.classList.remove('active');
+                overlay.classList.remove('active');
             }
             
-            // Mostrar/ocultar FAB button
+            // Mostrar/ocultar FAB button - solo en pestaña de chats
             const fabButton = document.getElementById('fab-button');
             if (tabName === 'chats') {
                 fabButton.style.display = 'flex';
             } else {
                 fabButton.style.display = 'none';
+            }
+            
+            // Enfocar input de mensaje si estamos en el chat
+            if (tabName === 'chat') {
+                setTimeout(() => {
+                    document.getElementById('message-input').focus();
+                }, 300);
             }
         }
         
@@ -1748,6 +1786,11 @@
                     document.getElementById('side-panel').classList.remove('active');
                     document.getElementById('panel-overlay').classList.remove('active');
                 }
+            });
+            
+            // Ajustar detección de móvil al redimensionar
+            window.addEventListener('resize', function() {
+                isMobile = window.innerWidth < 768;
             });
         }
         
