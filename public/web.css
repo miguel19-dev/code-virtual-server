@@ -178,7 +178,8 @@ body {
 
 /* OCULTAR HEADER PRINCIPAL en otras pestañas */
 #chat-tab.active ~ .main-header,
-#users-tab.active ~ .main-header {
+#users-tab.active ~ .main-header,
+.chat-area.active ~ .main-header {
     display: none;
 }
 
@@ -478,7 +479,7 @@ body {
     gap: 12px;
     flex-shrink: 0;
     position: relative;
-    z-index: 11;
+    z-index: 30;
 }
 
 .back-button {
