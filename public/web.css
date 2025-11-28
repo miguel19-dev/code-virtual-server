@@ -158,7 +158,7 @@ body {
     position: relative;
 }
 
-/* Header Principal */
+/* Header Principal - SOLO visible en pestaña de chats */
 .main-header {
     padding: 15px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -169,6 +169,16 @@ body {
     flex-shrink: 0;
     position: relative;
     z-index: 20;
+}
+
+/* OCULTAR HEADER PRINCIPAL POR DEFECTO */
+.main-header {
+    display: none;
+}
+
+/* MOSTRAR HEADER SOLO cuando la pestaña de chats está activa */
+#chats-tab.active ~ .main-header {
+    display: flex;
 }
 
 .menu-btn {
@@ -212,17 +222,6 @@ body {
 }
 
 .tab-content.active {
-    display: flex;
-}
-
-/* Ocultar header principal cuando el chat está activo */
-#chat-tab.active ~ .main-header {
-    display: none;
-}
-
-/* Mostrar header solo en pestaña de chats y usuarios */
-#chats-tab.active ~ .main-header,
-#users-tab.active ~ .main-header {
     display: flex;
 }
 
@@ -360,6 +359,23 @@ body {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+.users-header {
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(30, 41, 59, 0.95);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 11;
+}
+
+.users-header-title {
+    font-weight: 600;
+    font-size: 1.1em;
 }
 
 .users-list {
