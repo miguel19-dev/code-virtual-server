@@ -122,6 +122,9 @@
         
         .panel-actions {
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
         
         .panel-action-btn {
@@ -134,7 +137,6 @@
             font-size: 1em;
             cursor: pointer;
             transition: all 0.3s ease;
-            margin-bottom: 10px;
             text-align: left;
             display: flex;
             align-items: center;
@@ -148,6 +150,7 @@
         .panel-action-btn.logout {
             background: rgba(239, 68, 68, 0.1);
             color: var(--error);
+            margin-top: 10px;
         }
         
         .panel-action-btn.logout:hover {
@@ -310,21 +313,23 @@
             margin-top: 3px;
         }
         
-        /* Estado en línea */
+        /* MEJORA: Estado en línea más visible */
         .online-status {
             position: absolute;
             bottom: 2px;
             right: 2px;
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             background: var(--text-secondary);
             border: 2px solid var(--surface);
             z-index: 2;
+            box-shadow: 0 0 0 2px var(--background);
         }
         
         .online-status.online {
             background: var(--success);
+            border-color: var(--surface);
         }
         
         /* Contador de mensajes no leídos en el chat */
@@ -352,12 +357,29 @@
             100% { transform: scale(1); }
         }
         
-        /* Pestaña de Usuarios */
+        /* Pestaña de Usuarios - MEJORA: Pantalla completa */
+        .users-tab-content {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--background);
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+        }
+        
+        .users-tab-content.active {
+            display: flex;
+        }
+        
         .users-list {
             flex: 1;
             overflow-y: auto;
             padding: 10px 0;
             -webkit-overflow-scrolling: touch;
+            height: 100%;
         }
         
         .user-item {
@@ -609,7 +631,7 @@
             transform: scale(1.05);
         }
         
-        /* Botón Flotante Nuevo Chat */
+        /* MEJORA: Botón Flotante con tooltip */
         .fab-button {
             position: fixed;
             bottom: 20px;
@@ -633,6 +655,28 @@
         .fab-button:hover {
             transform: scale(1.1);
             box-shadow: 0 6px 25px rgba(37, 99, 235, 0.6);
+        }
+        
+        .fab-tooltip {
+            position: absolute;
+            bottom: 70px;
+            right: 0;
+            background: var(--surface);
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8em;
+            white-space: nowrap;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .fab-button:hover .fab-tooltip {
+            opacity: 1;
+            transform: translateY(0);
         }
         
         /* Pantallas de Perfil */
@@ -865,7 +909,7 @@
             display: block;
         }
         
-        /* Estados vacíos */
+        /* MEJORA: Estados vacíos mejorados */
         .empty-state {
             flex: 1;
             display: flex;
@@ -892,6 +936,58 @@
         .empty-subtitle {
             font-size: 0.9em;
             line-height: 1.4;
+            margin-bottom: 20px;
+            max-width: 300px;
+        }
+        
+        .empty-action {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .empty-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4);
+        }
+        
+        /* Skeleton loading */
+        .skeleton {
+            background: linear-gradient(90deg, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .skeleton-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 15px;
+        }
+        
+        .skeleton-text {
+            height: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+        }
+        
+        .skeleton-text.short {
+            width: 60%;
+        }
+        
+        .skeleton-text.medium {
+            width: 80%;
         }
         
         /* Scrollbar personalizado para móvil */
@@ -941,6 +1037,10 @@
             .tab-content.active ~ .main-header {
                 display: flex;
             }
+            
+            .users-tab-content {
+                position: absolute;
+            }
         }
         
         /* Prevenir zoom en inputs en iOS */
@@ -971,6 +1071,11 @@
             </div>
             
             <div class="panel-actions">
+                <!-- MEJORA: Botón Mi Perfil agregado -->
+                <button class="panel-action-btn" onclick="showMyProfile()">
+                    <i class="fas fa-user"></i>
+                    <span>Mi Perfil</span>
+                </button>
                 <button class="panel-action-btn logout" onclick="logout()">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
@@ -993,29 +1098,23 @@
                 <!-- Pestaña de Chats -->
                 <div class="tab-content active" id="chats-tab">
                     <div class="chats-list" id="chats-list">
+                        <!-- Skeleton loading mientras carga -->
+                        <div id="chats-skeleton">
+                            <!-- Se generará dinámicamente -->
+                        </div>
                         <!-- Las conversaciones se cargarán aquí -->
                     </div>
                     
-                    <!-- Estado vacío para chats -->
+                    <!-- MEJORA: Estado vacío mejorado para chats -->
                     <div class="empty-state" id="chats-empty" style="display: none;">
                         <div class="empty-icon">
                             <i class="fas fa-comments"></i>
                         </div>
                         <div class="empty-title">No hay conversaciones</div>
-                        <div class="empty-subtitle">Inicia una conversación tocando el botón +</div>
-                    </div>
-                </div>
-                
-                <!-- Pestaña de Usuarios -->
-                <div class="tab-content" id="users-tab">
-                    <div class="chat-header">
-                        <button class="back-button" onclick="showTab('chats')">
-                            <i class="fas fa-arrow-left"></i>
+                        <div class="empty-subtitle">Inicia una conversación tocando el botón + para ver todos los usuarios disponibles</div>
+                        <button class="empty-action" onclick="showTab('users')">
+                            <i class="fas fa-plus"></i> Ver todos los usuarios
                         </button>
-                        <div class="current-chat-name">Todos los Usuarios</div>
-                    </div>
-                    <div class="users-list" id="users-list">
-                        <!-- Los usuarios se cargarán aquí -->
                     </div>
                 </div>
                 
@@ -1045,7 +1144,7 @@
                                 <textarea 
                                     class="message-input" 
                                     id="message-input" 
-                                    placeholder="Mensaje" 
+                                    placeholder="Escribe un mensaje..." 
                                     rows="1"
                                 ></textarea>
                                 <button class="send-button" id="send-button" onclick="sendMessage()">
@@ -1057,9 +1156,36 @@
                 </div>
             </div>
             
-            <!-- Botón Flotante Nuevo Chat -->
+            <!-- MEJORA: Pestaña de Usuarios como pantalla completa independiente -->
+            <div class="users-tab-content" id="users-tab">
+                <div class="chat-header">
+                    <button class="back-button" onclick="showTab('chats')">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div class="current-chat-name">Todos los Usuarios</div>
+                </div>
+                <div class="users-list" id="users-list">
+                    <!-- Skeleton loading mientras carga -->
+                    <div id="users-skeleton">
+                        <!-- Se generará dinámicamente -->
+                    </div>
+                    <!-- Los usuarios se cargarán aquí -->
+                </div>
+                
+                <!-- MEJORA: Estado vacío mejorado para usuarios -->
+                <div class="empty-state" id="users-empty" style="display: none;">
+                    <div class="empty-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="empty-title">No hay otros usuarios</div>
+                    <div class="empty-subtitle">Parece que eres el único usuario registrado por ahora</div>
+                </div>
+            </div>
+            
+            <!-- MEJORA: Botón Flotante con tooltip -->
             <button class="fab-button" id="fab-button" onclick="showTab('users')">
                 <i class="fas fa-plus"></i>
+                <div class="fab-tooltip">Todos los usuarios</div>
             </button>
         </div>
         
@@ -1163,6 +1289,9 @@
             // Mostrar información del usuario actual
             updateCurrentUserDisplay();
             
+            // Mostrar skeletons mientras carga
+            showSkeletons();
+            
             // Conectar al socket
             socket.emit('user_online', currentUser);
             
@@ -1179,10 +1308,52 @@
             showTab('chats');
         });
         
+        // Mostrar skeletons de carga
+        function showSkeletons() {
+            // Skeleton para chats
+            const chatsSkeleton = document.getElementById('chats-skeleton');
+            chatsSkeleton.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const skeletonItem = document.createElement('div');
+                skeletonItem.className = 'chat-item';
+                skeletonItem.innerHTML = `
+                    <div class="skeleton skeleton-avatar"></div>
+                    <div class="chat-info">
+                        <div class="skeleton skeleton-text short"></div>
+                        <div class="skeleton skeleton-text medium"></div>
+                    </div>
+                `;
+                chatsSkeleton.appendChild(skeletonItem);
+            }
+            
+            // Skeleton para usuarios
+            const usersSkeleton = document.getElementById('users-skeleton');
+            usersSkeleton.innerHTML = '';
+            for (let i = 0; i < 5; i++) {
+                const skeletonItem = document.createElement('div');
+                skeletonItem.className = 'user-item';
+                skeletonItem.innerHTML = `
+                    <div class="skeleton skeleton-avatar"></div>
+                    <div class="user-info">
+                        <div class="skeleton skeleton-text short"></div>
+                        <div class="skeleton skeleton-text medium"></div>
+                    </div>
+                `;
+                usersSkeleton.appendChild(skeletonItem);
+            }
+        }
+        
+        // Ocultar skeletons
+        function hideSkeletons() {
+            document.getElementById('chats-skeleton').style.display = 'none';
+            document.getElementById('users-skeleton').style.display = 'none';
+        }
+        
         // Cargar datos iniciales
         async function loadInitialData() {
             await loadUsers();
             await loadActiveChats();
+            hideSkeletons();
         }
         
         // Cargar lista de usuarios
@@ -1192,37 +1363,48 @@
                 allUsers = await response.json();
                 
                 const usersList = document.getElementById('users-list');
-                usersList.innerHTML = '';
+                const emptyState = document.getElementById('users-empty');
                 
                 const otherUsers = allUsers.filter(user => user.id !== currentUser.id);
                 
-                otherUsers.forEach(user => {
-                    if (!user.bio) user.bio = "¡Yo uso SecureChat!";
-                    if (!user.avatar) user.avatar = '/default-avatar.png';
+                if (otherUsers.length === 0) {
+                    usersList.style.display = 'none';
+                    emptyState.style.display = 'flex';
+                } else {
+                    usersList.style.display = 'block';
+                    emptyState.style.display = 'none';
                     
-                    const userItem = document.createElement('div');
-                    userItem.className = 'user-item';
-                    userItem.dataset.userId = user.id;
-                    userItem.innerHTML = `
-                        <div class="user-avatar" onclick="event.stopPropagation(); showOtherUserProfile('${user.id}')">
-                            ${user.avatar !== '/default-avatar.png' ? 
-                                `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                                user.name.charAt(0).toUpperCase()
-                            }
-                            <div class="online-status" id="user-online-${user.id}"></div>
-                        </div>
-                        <div class="user-info" onclick="startChat('${user.id}')">
-                            <div class="user-name">${user.name}</div>
-                            <div class="user-bio-small">${user.bio}</div>
-                        </div>
-                    `;
+                    usersList.innerHTML = '';
                     
-                    usersList.appendChild(userItem);
-                });
+                    otherUsers.forEach(user => {
+                        if (!user.bio) user.bio = "¡Yo uso SecureChat!";
+                        if (!user.avatar) user.avatar = '/default-avatar.png';
+                        
+                        const userItem = document.createElement('div');
+                        userItem.className = 'user-item';
+                        userItem.dataset.userId = user.id;
+                        userItem.innerHTML = `
+                            <div class="user-avatar" onclick="event.stopPropagation(); showOtherUserProfile('${user.id}')">
+                                ${user.avatar !== '/default-avatar.png' ? 
+                                    `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
+                                    user.name.charAt(0).toUpperCase()
+                                }
+                                <div class="online-status" id="user-online-${user.id}"></div>
+                            </div>
+                            <div class="user-info" onclick="startChat('${user.id}')">
+                                <div class="user-name">${user.name}</div>
+                                <div class="user-bio-small">${user.bio}</div>
+                            </div>
+                        `;
+                        
+                        usersList.appendChild(userItem);
+                    });
+                }
                 
                 updateOnlineStatus();
             } catch (error) {
                 console.error('Error cargando usuarios:', error);
+                hideSkeletons();
             }
         }
         
@@ -1273,6 +1455,7 @@
                 updateOnlineStatus();
             } catch (error) {
                 console.error('Error cargando chats:', error);
+                hideSkeletons();
             }
         }
         
@@ -1443,8 +1626,16 @@
                 tab.classList.remove('active');
             });
             
+            document.querySelectorAll('.users-tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
             // Mostrar pestaña seleccionada
-            document.getElementById(`${tabName}-tab`).classList.add('active');
+            if (tabName === 'users') {
+                document.getElementById('users-tab').classList.add('active');
+            } else {
+                document.getElementById(`${tabName}-tab`).classList.add('active');
+            }
             
             // Ocultar panel en móvil
             if (isMobile) {
@@ -1480,6 +1671,14 @@
             // Resetear preview
             document.getElementById('avatar-preview').style.display = 'none';
             newAvatarFile = null;
+            
+            // Ocultar panel en móvil
+            if (isMobile) {
+                const panel = document.getElementById('side-panel');
+                const overlay = document.getElementById('panel-overlay');
+                panel.classList.remove('active');
+                overlay.classList.remove('active');
+            }
         }
         
         // Ocultar mi perfil
