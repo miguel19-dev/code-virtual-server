@@ -176,8 +176,7 @@ app.get('/api/follows/:userId', (req, res) => {
                 id: user.id, 
                 name: user.name, 
                 avatar: user.avatar, 
-                bio: user.bio,
-                online: Array.from(onlineUsers.values()).some(u => u.id === user.id)
+                bio: user.bio
             } : null;
         }).filter(Boolean);
 
@@ -187,8 +186,7 @@ app.get('/api/follows/:userId', (req, res) => {
                 id: user.id, 
                 name: user.name, 
                 avatar: user.avatar, 
-                bio: user.bio,
-                online: Array.from(onlineUsers.values()).some(u => u.id === user.id)
+                bio: user.bio
             } : null;
         }).filter(Boolean);
 
@@ -231,36 +229,6 @@ app.post('/api/follow', (req, res) => {
 
         saveFollows();
 
-        // Notificar en tiempo real a los usuarios afectados
-        const followerData = users.find(u => u.id === followerId);
-        const followingData = users.find(u => u.id === followingId);
-
-        if (followerData && followingData) {
-            const { password: _, ...safeFollower } = followerData;
-            const { password: __, ...safeFollowing } = followingData;
-
-            // Notificar al seguidor
-            const followerSocket = getUserSocket(followerId);
-            if (followerSocket) {
-                io.to(followerSocket).emit('follow_updated', {
-                    followingId: followingId,
-                    isFollowing: !isFollowing,
-                    followingCount: follows[followerId].following.length,
-                    user: safeFollowing
-                });
-            }
-
-            // Notificar al seguido
-            const followingSocket = getUserSocket(followingId);
-            if (followingSocket) {
-                io.to(followingSocket).emit('follower_updated', {
-                    followerId: followerId,
-                    followersCount: follows[followingId].followers.length,
-                    user: safeFollower
-                });
-            }
-        }
-
         res.json({
             success: true,
             isFollowing: !isFollowing,
@@ -273,7 +241,7 @@ app.post('/api/follow', (req, res) => {
     }
 });
 
-// API para obtener chats activos
+// API para obtener chats activos - SOLO con mensajes
 app.get('/api/chats', (req, res) => {
     try {
         const currentUserId = req.query.userId;
@@ -291,6 +259,7 @@ app.get('/api/chats', (req, res) => {
             const chatId = [currentUserId, user.id].sort().join('_');
             const chatMessages = messages[chatId] || [];
 
+            // SOLO incluir chats que tienen mensajes (al menos 1 mensaje)
             if (chatMessages.length > 0) {
                 const lastMessage = chatMessages[chatMessages.length - 1];
                 userChats.push({
@@ -303,14 +272,6 @@ app.get('/api/chats', (req, res) => {
                     unreadCount: chatMessages.filter(msg => 
                         msg.to === currentUserId && !msg.read
                     ).length
-                });
-            } else {
-                // Incluir usuarios sin mensajes pero con posibilidad de chat
-                userChats.push({
-                    user: user,
-                    lastMessage: 'Iniciar conversación',
-                    lastTime: '',
-                    unreadCount: 0
                 });
             }
         });
@@ -473,6 +434,16 @@ function updateUnreadCounts(userId1, userId2) {
     });
 }
 
+// Función para notificar actualización de chats
+function notifyChatsUpdated(userIds) {
+    userIds.forEach(userId => {
+        const userSocket = getUserSocket(userId);
+        if (userSocket) {
+            io.to(userSocket).emit('chats_updated');
+        }
+    });
+}
+
 io.on('connection', (socket) => {
     console.log('Usuario conectado:', socket.id);
 
@@ -500,8 +471,7 @@ io.on('connection', (socket) => {
                 id: userData.id, 
                 name: userData.name, 
                 avatar: userData.avatar, 
-                bio: userData.bio,
-                online: onlineUsersList.some(u => u.id === userData.id)
+                bio: userData.bio
             } : null;
         }).filter(Boolean);
 
@@ -511,8 +481,7 @@ io.on('connection', (socket) => {
                 id: userData.id, 
                 name: userData.name, 
                 avatar: userData.avatar, 
-                bio: userData.bio,
-                online: onlineUsersList.some(u => u.id === userData.id)
+                bio: userData.bio
             } : null;
         }).filter(Boolean);
 
@@ -568,11 +537,8 @@ io.on('connection', (socket) => {
             // Actualizar contadores para ambos usuarios
             updateUnreadCounts(from.id, to.id);
 
-            // Notificar a ambos usuarios para actualizar lista de chats
-            socket.emit('chats_updated');
-            if (recipientSocket) {
-                io.to(recipientSocket).emit('chats_updated');
-            }
+            // Notificar a ambos usuarios para actualizar lista de chats EN TIEMPO REAL
+            notifyChatsUpdated([from.id, to.id]);
 
             console.log(`Mensaje de ${from.name} para ${to.name}: ${message.substring(0, 50)}...`);
         } catch (error) {
@@ -599,17 +565,11 @@ io.on('connection', (socket) => {
                 if (updated) {
                     saveMessages();
 
-                    // Notificar al remitente que sus mensajes fueron leídos
-                    const senderSocket = getUserSocket(otherUserId);
-                    if (senderSocket) {
-                        io.to(senderSocket).emit('messages_read', {
-                            userId: userId,
-                            otherUserId: otherUserId
-                        });
-                    }
-
                     // Actualizar contadores
                     updateUnreadCounts(userId, otherUserId);
+
+                    // Notificar actualización de chats EN TIEMPO REAL
+                    notifyChatsUpdated([userId, otherUserId]);
                 }
             }
         } catch (error) {
@@ -683,8 +643,7 @@ io.on('connection', (socket) => {
                             id: user.id, 
                             name: user.name, 
                             avatar: user.avatar, 
-                            bio: user.bio,
-                            online: Array.from(onlineUsers.values()).some(u => u.id === user.id)
+                            bio: user.bio
                         } : null;
                     }).filter(Boolean);
                     
@@ -695,8 +654,7 @@ io.on('connection', (socket) => {
                                 id: user.id, 
                                 name: user.name, 
                                 avatar: user.avatar, 
-                                bio: user.bio,
-                                online: Array.from(onlineUsers.values()).some(u => u.id === user.id)
+                                bio: user.bio
                             } : null;
                         }).filter(Boolean),
                         following: followingWithData,
@@ -760,7 +718,6 @@ io.on('connection', (socket) => {
             }
 
             const userFollows = follows[userId];
-            const onlineUsersList = Array.from(onlineUsers.values()).map(({ socketId, ...user }) => user);
 
             const followersWithData = userFollows.followers.map(followerId => {
                 const user = users.find(u => u.id === followerId);
@@ -768,8 +725,7 @@ io.on('connection', (socket) => {
                     id: user.id, 
                     name: user.name, 
                     avatar: user.avatar, 
-                    bio: user.bio,
-                    online: onlineUsersList.some(u => u.id === user.id)
+                    bio: user.bio
                 } : null;
             }).filter(Boolean);
 
@@ -779,8 +735,7 @@ io.on('connection', (socket) => {
                     id: user.id, 
                     name: user.name, 
                     avatar: user.avatar, 
-                    bio: user.bio,
-                    online: onlineUsersList.some(u => u.id === user.id)
+                    bio: user.bio
                 } : null;
             }).filter(Boolean);
 
@@ -793,11 +748,6 @@ io.on('connection', (socket) => {
         } catch (error) {
             console.error('Error obteniendo datos de seguidores:', error);
         }
-    });
-
-    // Ping para mantener conexión activa
-    socket.on('ping', () => {
-        socket.emit('pong');
     });
 
     // Usuario desconectado
