@@ -183,7 +183,7 @@ body {
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
-    gap: 8px;
+    gap: 4px;
     flex-shrink: 0;
     transition: all 0.3s ease;
     width: 32px;
@@ -201,9 +201,9 @@ body {
     transform: scale(0.95);
 }
 
-/* Líneas personalizadas del botón hamburguesa - MÁS GRUESAS */
+/* Líneas personalizadas del botón hamburguesa */
 .menu-btn .hamburger-line {
-    height: 3px; /* Aumentado de 2px a 3px */
+    height: 2px;
     background: currentColor;
     border-radius: 2px;
     transition: all 0.3s ease;
@@ -232,7 +232,7 @@ body {
 
 /* Efecto activo - se convierten en X */
 .menu-btn.active .hamburger-line:nth-child(1) {
-    transform: rotate(45deg) translate(7px, 7px); /* Ajustado para las líneas más gruesas */
+    transform: rotate(45deg) translate(6px, 6px);
     width: 100%;
 }
 
@@ -241,7 +241,7 @@ body {
 }
 
 .menu-btn.active .hamburger-line:nth-child(3) {
-    transform: rotate(-45deg) translate(7px, -7px); /* Ajustado para las líneas más gruesas */
+    transform: rotate(-45deg) translate(6px, -6px);
     width: 100%;
 }
 
