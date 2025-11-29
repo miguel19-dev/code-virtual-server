@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
+const { Pool } = require('pg');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,43 +16,78 @@ const io = socketIo(server, {
     } 
 });
 
+// Configuración de PostgreSQL
+const pool = new Pool({
+    user: 'securechat_im03_user',
+    host: 'dpg-d4l5530gjchc73ah6j10-a.oregon-postgres.render.com',
+    database: 'securechat_im03',
+    password: 'kruf294SvJ8Ta7BJb5hlpfihQEnWJ3F9',
+    port: 5432,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
+
+// Verificar conexión a la base de datos
+pool.connect((err, client, release) => {
+    if (err) {
+        console.error('Error conectando a PostgreSQL:', err);
+    } else {
+        console.log('✅ Conectado a PostgreSQL');
+        release();
+        initializeDatabase();
+    }
+});
+
+// Inicializar tablas de la base de datos
+async function initializeDatabase() {
+    try {
+        // Tabla de usuarios
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(50) UNIQUE NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                avatar VARCHAR(500) DEFAULT '/default-avatar.png',
+                bio TEXT DEFAULT '¡Yo uso SecureChat!',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Tabla de seguidores
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS follows (
+                id SERIAL PRIMARY KEY,
+                follower_id VARCHAR(50) NOT NULL,
+                following_id VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(follower_id, following_id)
+            )
+        `);
+
+        console.log('✅ Tablas de la base de datos inicializadas');
+    } catch (error) {
+        console.error('Error inicializando base de datos:', error);
+    }
+}
+
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Carpetas necesarias
-['data', 'uploads/avatars'].forEach(d => !fs.existsSync(d) && fs.mkdirSync(d, { recursive: true }));
+// Carpetas necesarias para archivos
+['uploads/avatars', 'data'].forEach(d => {
+    if (!fs.existsSync(d)) {
+        fs.mkdirSync(d, { recursive: true });
+    }
+});
 
-const USERS_FILE = 'data/users.json';
 const MESSAGES_FILE = 'data/messages.json';
-const FOLLOWS_FILE = 'data/follows.json';
-
-// Cargar datos existentes
-let users = fs.existsSync(USERS_FILE) ? JSON.parse(fs.readFileSync(USERS_FILE)) : [];
 let messages = fs.existsSync(MESSAGES_FILE) ? JSON.parse(fs.readFileSync(MESSAGES_FILE)) : {};
-let follows = fs.existsSync(FOLLOWS_FILE) ? JSON.parse(fs.readFileSync(FOLLOWS_FILE)) : {};
-
-function saveUsers() {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
 
 function saveMessages() {
     fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
-}
-
-function saveFollows() {
-    fs.writeFileSync(FOLLOWS_FILE, JSON.stringify(follows, null, 2));
-}
-
-// Inicializar datos de seguidores si no existen
-function initializeFollowData(userId) {
-    if (!follows[userId]) {
-        follows[userId] = {
-            followers: [],
-            following: []
-        };
-        saveFollows();
-    }
 }
 
 // Configuración de multer para upload de avatares
@@ -98,25 +134,28 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Nombre y contraseña requeridos (mín. 6 caracteres)' });
         }
 
-        if (users.find(u => u.name.toLowerCase() === name.toLowerCase())) {
+        // Verificar si el usuario ya existe
+        const existingUser = await pool.query(
+            'SELECT * FROM users WHERE name = $1',
+            [name.toLowerCase()]
+        );
+
+        if (existingUser.rows.length > 0) {
             return res.status(400).json({ error: 'El usuario ya existe' });
         }
 
-        const newUser = {
-            id: Date.now().toString(),
-            name: name.trim(),
-            password: await bcrypt.hash(password, 10),
-            avatar: '/default-avatar.png',
-            bio: "¡Yo uso SecureChat!",
-            createdAt: new Date().toISOString()
-        };
+        const userId = Date.now().toString();
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-        users.push(newUser);
-        saveUsers();
+        // Insertar nuevo usuario
+        const newUser = await pool.query(
+            `INSERT INTO users (user_id, name, password, avatar, bio) 
+             VALUES ($1, $2, $3, $4, $5) 
+             RETURNING user_id, name, avatar, bio, created_at`,
+            [userId, name.trim(), hashedPassword, '/default-avatar.png', "¡Yo uso SecureChat!"]
+        );
 
-        initializeFollowData(newUser.id);
-
-        const { password: _, ...safeUser } = newUser;
+        const safeUser = newUser.rows[0];
 
         io.emit('user_updated', safeUser);
 
@@ -131,9 +170,20 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { name, password } = req.body;
-        const user = users.find(u => u.name.toLowerCase() === name.toLowerCase());
+        
+        const userResult = await pool.query(
+            'SELECT * FROM users WHERE name = $1',
+            [name.toLowerCase()]
+        );
 
-        if (!user || !await bcrypt.compare(password, user.password)) {
+        if (userResult.rows.length === 0) {
+            return res.status(401).json({ error: 'Credenciales incorrectas' });
+        }
+
+        const user = userResult.rows[0];
+        const isValidPassword = await bcrypt.compare(password, user.password);
+
+        if (!isValidPassword) {
             return res.status(401).json({ error: 'Credenciales incorrectas' });
         }
 
@@ -146,10 +196,13 @@ app.post('/api/login', async (req, res) => {
 });
 
 // API para obtener usuarios
-app.get('/api/users', (req, res) => {
+app.get('/api/users', async (req, res) => {
     try {
-        const safeUsers = users.map(({ password, ...user }) => user);
-        res.json(safeUsers);
+        const usersResult = await pool.query(
+            'SELECT user_id, name, avatar, bio, created_at FROM users'
+        );
+        
+        res.json(usersResult.rows);
     } catch (error) {
         console.error('Error obteniendo usuarios:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
@@ -157,41 +210,31 @@ app.get('/api/users', (req, res) => {
 });
 
 // API para obtener datos de seguidores
-app.get('/api/follows/:userId', (req, res) => {
+app.get('/api/follows/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
 
-        if (!follows[userId]) {
-            initializeFollowData(userId);
-        }
+        // Obtener seguidores
+        const followersResult = await pool.query(`
+            SELECT u.user_id, u.name, u.avatar, u.bio 
+            FROM follows f 
+            JOIN users u ON f.follower_id = u.user_id 
+            WHERE f.following_id = $1
+        `, [userId]);
 
-        const userFollows = follows[userId];
-
-        const followersWithData = userFollows.followers.map(followerId => {
-            const user = users.find(u => u.id === followerId);
-            return user ? { 
-                id: user.id, 
-                name: user.name, 
-                avatar: user.avatar, 
-                bio: user.bio
-            } : null;
-        }).filter(Boolean);
-
-        const followingWithData = userFollows.following.map(followingId => {
-            const user = users.find(u => u.id === followingId);
-            return user ? { 
-                id: user.id, 
-                name: user.name, 
-                avatar: user.avatar, 
-                bio: user.bio
-            } : null;
-        }).filter(Boolean);
+        // Obtener seguidos
+        const followingResult = await pool.query(`
+            SELECT u.user_id, u.name, u.avatar, u.bio 
+            FROM follows f 
+            JOIN users u ON f.following_id = u.user_id 
+            WHERE f.follower_id = $1
+        `, [userId]);
 
         res.json({
-            followers: followersWithData,
-            following: followingWithData,
-            followersCount: followersWithData.length,
-            followingCount: followingWithData.length
+            followers: followersResult.rows,
+            following: followingResult.rows,
+            followersCount: followersResult.rows.length,
+            followingCount: followingResult.rows.length
         });
     } catch (error) {
         console.error('Error obteniendo datos de seguidores:', error);
@@ -200,7 +243,7 @@ app.get('/api/follows/:userId', (req, res) => {
 });
 
 // API para seguir/dejar de seguir
-app.post('/api/follow', (req, res) => {
+app.post('/api/follow', async (req, res) => {
     try {
         const { followerId, followingId } = req.body;
 
@@ -208,35 +251,64 @@ app.post('/api/follow', (req, res) => {
             return res.status(400).json({ error: 'Se requieren followerId y followingId' });
         }
 
-        if (!follows[followerId]) initializeFollowData(followerId);
-        if (!follows[followingId]) initializeFollowData(followingId);
+        // Verificar si ya está siguiendo
+        const existingFollow = await pool.query(
+            'SELECT * FROM follows WHERE follower_id = $1 AND following_id = $2',
+            [followerId, followingId]
+        );
 
-        const isFollowing = follows[followerId].following.includes(followingId);
-
-        if (isFollowing) {
-            follows[followerId].following = follows[followerId].following.filter(id => id !== followingId);
-            follows[followingId].followers = follows[followingId].followers.filter(id => id !== followerId);
+        if (existingFollow.rows.length > 0) {
+            // Dejar de seguir
+            await pool.query(
+                'DELETE FROM follows WHERE follower_id = $1 AND following_id = $2',
+                [followerId, followingId]
+            );
+            
+            res.json({
+                success: true,
+                isFollowing: false,
+                followersCount: await getFollowersCount(followingId),
+                followingCount: await getFollowingCount(followerId)
+            });
         } else {
-            follows[followerId].following.push(followingId);
-            follows[followingId].followers.push(followerId);
+            // Seguir
+            await pool.query(
+                'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)',
+                [followerId, followingId]
+            );
+            
+            res.json({
+                success: true,
+                isFollowing: true,
+                followersCount: await getFollowersCount(followingId),
+                followingCount: await getFollowingCount(followerId)
+            });
         }
-
-        saveFollows();
-
-        res.json({
-            success: true,
-            isFollowing: !isFollowing,
-            followersCount: follows[followingId].followers.length,
-            followingCount: follows[followerId].following.length
-        });
     } catch (error) {
         console.error('Error en follow:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
 
+// Funciones auxiliares para contar seguidores/seguidos
+async function getFollowersCount(userId) {
+    const result = await pool.query(
+        'SELECT COUNT(*) FROM follows WHERE following_id = $1',
+        [userId]
+    );
+    return parseInt(result.rows[0].count);
+}
+
+async function getFollowingCount(userId) {
+    const result = await pool.query(
+        'SELECT COUNT(*) FROM follows WHERE follower_id = $1',
+        [userId]
+    );
+    return parseInt(result.rows[0].count);
+}
+
 // API para obtener chats activos - SOLO con mensajes
-app.get('/api/chats', (req, res) => {
+app.get('/api/chats', async (req, res) => {
     try {
         const currentUserId = req.query.userId;
         if (!currentUserId) {
@@ -244,12 +316,17 @@ app.get('/api/chats', (req, res) => {
         }
 
         const userChats = [];
-        const safeUsers = users.map(({ password, ...user }) => user);
+        
+        // Obtener todos los usuarios excepto el actual
+        const usersResult = await pool.query(
+            'SELECT user_id, name, avatar, bio FROM users WHERE user_id != $1',
+            [currentUserId]
+        );
 
-        const otherUsers = safeUsers.filter(user => user.id !== currentUserId);
+        const otherUsers = usersResult.rows;
 
-        otherUsers.forEach(user => {
-            const chatId = [currentUserId, user.id].sort().join('_');
+        for (const user of otherUsers) {
+            const chatId = [currentUserId, user.user_id].sort().join('_');
             const chatMessages = messages[chatId] || [];
 
             // SOLO incluir chats que tienen mensajes
@@ -267,11 +344,11 @@ app.get('/api/chats', (req, res) => {
                     ).length
                 });
             }
-        });
+        }
 
         userChats.sort((a, b) => {
-            const chatIdA = [currentUserId, a.user.id].sort().join('_');
-            const chatIdB = [currentUserId, b.user.id].sort().join('_');
+            const chatIdA = [currentUserId, a.user.user_id].sort().join('_');
+            const chatIdB = [currentUserId, b.user.user_id].sort().join('_');
             const timeA = new Date(messages[chatIdA]?.slice(-1)[0]?.timestamp || 0);
             const timeB = new Date(messages[chatIdB]?.slice(-1)[0]?.timestamp || 0);
             return timeB - timeA;
@@ -307,37 +384,73 @@ app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
         const { userId } = req.params;
         const { name, bio, password } = req.body;
 
-        const userIndex = users.findIndex(u => u.id === userId);
-        if (userIndex === -1) {
+        // Obtener usuario actual para preservar datos existentes
+        const userResult = await pool.query(
+            'SELECT * FROM users WHERE user_id = $1',
+            [userId]
+        );
+
+        if (userResult.rows.length === 0) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        users[userIndex].name = name || users[userIndex].name;
-        users[userIndex].bio = bio || users[userIndex].bio;
+        const currentUser = userResult.rows[0];
+        let updateFields = [];
+        let updateValues = [];
+        let paramCount = 1;
+
+        // Construir consulta dinámica
+        if (name) {
+            updateFields.push(`name = $${paramCount}`);
+            updateValues.push(name);
+            paramCount++;
+        }
+
+        if (bio) {
+            updateFields.push(`bio = $${paramCount}`);
+            updateValues.push(bio);
+            paramCount++;
+        }
 
         if (password && password.length >= 6) {
-            users[userIndex].password = await bcrypt.hash(password, 10);
+            const hashedPassword = await bcrypt.hash(password, 10);
+            updateFields.push(`password = $${paramCount}`);
+            updateValues.push(hashedPassword);
+            paramCount++;
         }
 
         if (req.file) {
-            const oldAvatar = users[userIndex].avatar;
-            if (oldAvatar && oldAvatar !== '/default-avatar.png' && oldAvatar.startsWith('/uploads/avatars/')) {
-                const oldAvatarPath = path.join(__dirname, 'public', oldAvatar);
+            // Eliminar avatar anterior si no es el default
+            if (currentUser.avatar && currentUser.avatar !== '/default-avatar.png' && currentUser.avatar.startsWith('/uploads/avatars/')) {
+                const oldAvatarPath = path.join(__dirname, 'public', currentUser.avatar);
                 if (fs.existsSync(oldAvatarPath)) {
                     fs.unlinkSync(oldAvatarPath);
                 }
             }
 
-            users[userIndex].avatar = '/uploads/avatars/' + req.file.filename;
+            const newAvatarPath = '/uploads/avatars/' + req.file.filename;
+            updateFields.push(`avatar = $${paramCount}`);
+            updateValues.push(newAvatarPath);
+            paramCount++;
         }
 
-        saveUsers();
+        if (updateFields.length === 0) {
+            return res.status(400).json({ error: 'No hay campos para actualizar' });
+        }
 
-        const { password: _, ...updatedUser } = users[userIndex];
+        updateValues.push(userId);
+        const updateQuery = `
+            UPDATE users 
+            SET ${updateFields.join(', ')} 
+            WHERE user_id = $${paramCount} 
+            RETURNING user_id, name, avatar, bio, created_at
+        `;
 
-        io.emit('user_updated', updatedUser);
+        const updatedUser = await pool.query(updateQuery, updateValues);
 
-        res.json({ user: updatedUser });
+        io.emit('user_updated', updatedUser.rows[0]);
+
+        res.json({ user: updatedUser.rows[0] });
     } catch (error) {
         console.error('Error actualizando perfil:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
@@ -345,25 +458,37 @@ app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
 });
 
 // API para eliminar cuenta
-app.delete('/api/profile/:userId', (req, res) => {
+app.delete('/api/profile/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
 
-        const userIndex = users.findIndex(u => u.id === userId);
-        if (userIndex === -1) {
+        // Obtener usuario antes de eliminar
+        const userResult = await pool.query(
+            'SELECT * FROM users WHERE user_id = $1',
+            [userId]
+        );
+
+        if (userResult.rows.length === 0) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        const deletedUser = users[userIndex];
+        const deletedUser = userResult.rows[0];
 
-        users.splice(userIndex, 1);
-        saveUsers();
-
-        if (follows[userId]) {
-            delete follows[userId];
-            saveFollows();
+        // Eliminar avatar si no es el default
+        if (deletedUser.avatar && deletedUser.avatar !== '/default-avatar.png' && deletedUser.avatar.startsWith('/uploads/avatars/')) {
+            const avatarPath = path.join(__dirname, 'public', deletedUser.avatar);
+            if (fs.existsSync(avatarPath)) {
+                fs.unlinkSync(avatarPath);
+            }
         }
 
+        // Eliminar usuario de la base de datos
+        await pool.query('DELETE FROM users WHERE user_id = $1', [userId]);
+        
+        // Eliminar relaciones de seguidores
+        await pool.query('DELETE FROM follows WHERE follower_id = $1 OR following_id = $1', [userId]);
+
+        // Eliminar mensajes del archivo
         Object.keys(messages).forEach(chatId => {
             if (chatId.includes(userId)) {
                 delete messages[chatId];
@@ -404,12 +529,17 @@ function updateUnreadCounts(userId1, userId2) {
         const userSocket = getUserSocket(userId);
         if (userSocket) {
             const unreadCounts = {};
-            users.forEach(u => {
-                if (u.id !== userId) {
-                    unreadCounts[u.id] = getUnreadCount(userId, u.id);
-                }
-            });
-            io.to(userSocket).emit('unread_counts', unreadCounts);
+            // Obtener todos los usuarios para calcular contadores
+            pool.query('SELECT user_id FROM users WHERE user_id != $1', [userId])
+                .then(result => {
+                    result.rows.forEach(user => {
+                        unreadCounts[user.user_id] = getUnreadCount(userId, user.user_id);
+                    });
+                    io.to(userSocket).emit('unread_counts', unreadCounts);
+                })
+                .catch(error => {
+                    console.error('Error obteniendo usuarios para unread counts:', error);
+                });
         }
     });
 }
@@ -426,46 +556,47 @@ function notifyChatsUpdated(userIds) {
 io.on('connection', (socket) => {
     console.log('Usuario conectado:', socket.id);
 
-    socket.on('user_online', (user) => {
+    socket.on('user_online', async (user) => {
         onlineUsers.set(socket.id, { ...user, socketId: socket.id, lastSeen: null });
 
         const onlineUsersList = Array.from(onlineUsers.values()).map(({ socketId, ...user }) => user);
         io.emit('users_online', onlineUsersList);
 
-        const safeUsers = users.map(({ password, ...user }) => user);
-        socket.emit('all_users', safeUsers);
-
-        if (!follows[user.id]) {
-            initializeFollowData(user.id);
+        // Enviar todos los usuarios
+        try {
+            const usersResult = await pool.query(
+                'SELECT user_id, name, avatar, bio FROM users'
+            );
+            socket.emit('all_users', usersResult.rows);
+        } catch (error) {
+            console.error('Error obteniendo usuarios para socket:', error);
         }
 
-        const userFollows = follows[user.id];
-        const followersWithData = userFollows.followers.map(followerId => {
-            const userData = users.find(u => u.id === followerId);
-            return userData ? { 
-                id: userData.id, 
-                name: userData.name, 
-                avatar: userData.avatar, 
-                bio: userData.bio
-            } : null;
-        }).filter(Boolean);
+        // Enviar datos de seguidores
+        try {
+            const followersResult = await pool.query(`
+                SELECT u.user_id, u.name, u.avatar, u.bio 
+                FROM follows f 
+                JOIN users u ON f.follower_id = u.user_id 
+                WHERE f.following_id = $1
+            `, [user.id]);
 
-        const followingWithData = userFollows.following.map(followingId => {
-            const userData = users.find(u => u.id === followingId);
-            return userData ? { 
-                id: userData.id, 
-                name: userData.name, 
-                avatar: userData.avatar, 
-                bio: userData.bio
-            } : null;
-        }).filter(Boolean);
+            const followingResult = await pool.query(`
+                SELECT u.user_id, u.name, u.avatar, u.bio 
+                FROM follows f 
+                JOIN users u ON f.following_id = u.user_id 
+                WHERE f.follower_id = $1
+            `, [user.id]);
 
-        socket.emit('follow_data', {
-            followers: followersWithData,
-            following: followingWithData,
-            followersCount: followersWithData.length,
-            followingCount: followingWithData.length
-        });
+            socket.emit('follow_data', {
+                followers: followersResult.rows,
+                following: followingResult.rows,
+                followersCount: followersResult.rows.length,
+                followingCount: followingResult.rows.length
+            });
+        } catch (error) {
+            console.error('Error obteniendo datos de seguidores para socket:', error);
+        }
 
         console.log('Usuario en línea:', user.name);
     });
@@ -540,7 +671,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('toggle_follow', (data) => {
+    socket.on('toggle_follow', async (data) => {
         try {
             const { followerId, followingId } = data;
 
@@ -549,35 +680,52 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            if (!follows[followerId]) initializeFollowData(followerId);
-            if (!follows[followingId]) initializeFollowData(followingId);
+            // Verificar si ya está siguiendo
+            const existingFollow = await pool.query(
+                'SELECT * FROM follows WHERE follower_id = $1 AND following_id = $2',
+                [followerId, followingId]
+            );
 
-            const isFollowing = follows[followerId].following.includes(followingId);
+            let isFollowing = existingFollow.rows.length > 0;
 
             if (isFollowing) {
-                follows[followerId].following = follows[followerId].following.filter(id => id !== followingId);
-                follows[followingId].followers = follows[followingId].followers.filter(id => id !== followerId);
+                // Dejar de seguir
+                await pool.query(
+                    'DELETE FROM follows WHERE follower_id = $1 AND following_id = $2',
+                    [followerId, followingId]
+                );
+                isFollowing = false;
             } else {
-                follows[followerId].following.push(followingId);
-                follows[followingId].followers.push(followerId);
+                // Seguir
+                await pool.query(
+                    'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)',
+                    [followerId, followingId]
+                );
+                isFollowing = true;
             }
 
-            saveFollows();
+            // Obtener datos actualizados de usuarios
+            const followerResult = await pool.query(
+                'SELECT user_id, name, avatar, bio FROM users WHERE user_id = $1',
+                [followerId]
+            );
 
-            const followerData = users.find(u => u.id === followerId);
-            const followingData = users.find(u => u.id === followingId);
+            const followingResult = await pool.query(
+                'SELECT user_id, name, avatar, bio FROM users WHERE user_id = $1',
+                [followingId]
+            );
 
-            if (followerData && followingData) {
-                const { password: _, ...safeFollower } = followerData;
-                const { password: __, ...safeFollowing } = followingData;
+            if (followerResult.rows.length > 0 && followingResult.rows.length > 0) {
+                const followerData = followerResult.rows[0];
+                const followingData = followingResult.rows[0];
 
                 const followerSocket = getUserSocket(followerId);
                 if (followerSocket) {
                     io.to(followerSocket).emit('follow_updated', {
                         followingId: followingId,
-                        isFollowing: !isFollowing,
-                        followingCount: follows[followerId].following.length,
-                        user: safeFollowing
+                        isFollowing: isFollowing,
+                        followingCount: await getFollowingCount(followerId),
+                        user: followingData
                     });
                 }
 
@@ -585,36 +733,32 @@ io.on('connection', (socket) => {
                 if (followingSocket) {
                     io.to(followingSocket).emit('follower_updated', {
                         followerId: followerId,
-                        followersCount: follows[followingId].followers.length,
-                        user: safeFollower
+                        followersCount: await getFollowersCount(followingId),
+                        user: followerData
                     });
                 }
 
+                // Enviar datos completos de seguidores al follower
                 if (followerSocket) {
-                    const followerFollows = follows[followerId];
-                    const followingWithData = followerFollows.following.map(fId => {
-                        const user = users.find(u => u.id === fId);
-                        return user ? { 
-                            id: user.id, 
-                            name: user.name, 
-                            avatar: user.avatar, 
-                            bio: user.bio
-                        } : null;
-                    }).filter(Boolean);
+                    const followersResult = await pool.query(`
+                        SELECT u.user_id, u.name, u.avatar, u.bio 
+                        FROM follows f 
+                        JOIN users u ON f.follower_id = u.user_id 
+                        WHERE f.following_id = $1
+                    `, [followerId]);
+
+                    const followingResult = await pool.query(`
+                        SELECT u.user_id, u.name, u.avatar, u.bio 
+                        FROM follows f 
+                        JOIN users u ON f.following_id = u.user_id 
+                        WHERE f.follower_id = $1
+                    `, [followerId]);
 
                     io.to(followerSocket).emit('follow_data', {
-                        followers: followerFollows.followers.map(fId => {
-                            const user = users.find(u => u.id === fId);
-                            return user ? { 
-                                id: user.id, 
-                                name: user.name, 
-                                avatar: user.avatar, 
-                                bio: user.bio
-                            } : null;
-                        }).filter(Boolean),
-                        following: followingWithData,
-                        followersCount: followerFollows.followers.length,
-                        followingCount: followingWithData.length
+                        followers: followersResult.rows,
+                        following: followingResult.rows,
+                        followersCount: followersResult.rows.length,
+                        followingCount: followingResult.rows.length
                     });
                 }
             }
@@ -651,50 +795,42 @@ io.on('connection', (socket) => {
     socket.on('get_unread_counts', (userId) => {
         try {
             const unreadCounts = {};
-            users.forEach(user => {
-                if (user.id !== userId) {
-                    unreadCounts[user.id] = getUnreadCount(userId, user.id);
-                }
-            });
-            socket.emit('unread_counts', unreadCounts);
+            pool.query('SELECT user_id FROM users WHERE user_id != $1', [userId])
+                .then(result => {
+                    result.rows.forEach(user => {
+                        unreadCounts[user.user_id] = getUnreadCount(userId, user.user_id);
+                    });
+                    socket.emit('unread_counts', unreadCounts);
+                })
+                .catch(error => {
+                    console.error('Error obteniendo usuarios para unread counts:', error);
+                });
         } catch (error) {
             console.error('Error obteniendo contadores no leídos:', error);
         }
     });
 
-    socket.on('get_follow_data', (userId) => {
+    socket.on('get_follow_data', async (userId) => {
         try {
-            if (!follows[userId]) {
-                initializeFollowData(userId);
-            }
+            const followersResult = await pool.query(`
+                SELECT u.user_id, u.name, u.avatar, u.bio 
+                FROM follows f 
+                JOIN users u ON f.follower_id = u.user_id 
+                WHERE f.following_id = $1
+            `, [userId]);
 
-            const userFollows = follows[userId];
-
-            const followersWithData = userFollows.followers.map(followerId => {
-                const user = users.find(u => u.id === followerId);
-                return user ? { 
-                    id: user.id, 
-                    name: user.name, 
-                    avatar: user.avatar, 
-                    bio: user.bio
-                } : null;
-            }).filter(Boolean);
-
-            const followingWithData = userFollows.following.map(followingId => {
-                const user = users.find(u => u.id === followingId);
-                return user ? { 
-                    id: user.id, 
-                    name: user.name, 
-                    avatar: user.avatar, 
-                    bio: user.bio
-                } : null;
-            }).filter(Boolean);
+            const followingResult = await pool.query(`
+                SELECT u.user_id, u.name, u.avatar, u.bio 
+                FROM follows f 
+                JOIN users u ON f.following_id = u.user_id 
+                WHERE f.follower_id = $1
+            `, [userId]);
 
             socket.emit('follow_data', {
-                followers: followersWithData,
-                following: followingWithData,
-                followersCount: followersWithData.length,
-                followingCount: followingWithData.length
+                followers: followersResult.rows,
+                following: followingResult.rows,
+                followersCount: followersResult.rows.length,
+                followingCount: followingResult.rows.length
             });
         } catch (error) {
             console.error('Error obteniendo datos de seguidores:', error);
@@ -722,5 +858,6 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
     console.log(`🚀 Servidor de mensajería ejecutándose en http://localhost:${PORT}`);
-    console.log(`✅ Socket.IO configurado para tiempo real sin retrasos`);
+    console.log(`✅ PostgreSQL configurado correctamente`);
+    console.log(`✅ Socket.IO configurado para tiempo real`);
 });
