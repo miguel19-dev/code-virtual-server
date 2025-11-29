@@ -158,8 +158,6 @@ body {
     position: relative;
 }
 
-/* ELIMINADO: Header Principal separado */
-
 /* Sistema de Pestañas - Pantalla Completa */
 .tabs-container {
     flex: 1;
@@ -193,38 +191,50 @@ body {
     display: flex;
 }
 
-/* Header integrado en la pestaña de chats */
+/* Header integrado en la pestaña de chats - MODIFICADO */
 .chats-header {
     padding: 15px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(30, 41, 59, 0.95);
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 20px; /* Más espacio entre botón y texto */
     flex-shrink: 0;
     position: relative;
     z-index: 20;
 }
 
+/* BOTÓN HAMBURGUESA MODIFICADO - Más grande y desplazado */
 .menu-btn {
     background: none;
     border: none;
     color: var(--text);
-    font-size: 1.2em;
+    font-size: 1.5em; /* Más grande */
     cursor: pointer;
-    padding: 8px;
+    padding: 12px; /* Más grande */
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    margin-left: 0.5cm; /* Desplazado 0.5cm a la derecha */
+    margin-top: 0.5cm; /* Desplazado 0.5cm hacia abajo */
+    transition: all 0.3s ease;
 }
 
+.menu-btn:hover {
+    transform: scale(1.1);
+    color: var(--primary);
+}
+
+/* TEXTO SECURECHAT MODIFICADO - Más grande y a la derecha */
 .app-title {
     font-weight: 700;
-    font-size: 1.3em;
+    font-size: 1.6em; /* Más grande que el botón */
     background: linear-gradient(90deg, var(--primary), var(--secondary));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    margin-left: auto; /* Empuja el texto hacia la derecha */
+    margin-right: 15px;
 }
 
 .chats-list {
@@ -622,16 +632,18 @@ body {
     text-align: right;
 }
 
-/* CONTENEDOR DE MENSAJES DESPLAZADO 1.5cm HACIA ARRIBA */
+/* CONTENEDOR DE MENSAJES FIJO EN LA PARTE INFERIOR */
 .message-input-container {
     padding: 15px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(30, 41, 59, 0.95);
     flex-shrink: 0;
-    position: sticky;
-    bottom: -1.5cm; /* DESPLAZADO 1.5cm HACIA ARRIBA */
+    position: fixed; /* Cambiado de sticky a fixed */
+    bottom: 0; /* Fijo en la parte inferior */
+    left: 0;
+    right: 0;
     width: 100%;
-    margin-bottom: -1.5cm; /* Compensación para el desplazamiento */
+    z-index: 40;
 }
 
 .message-input-wrapper {
@@ -686,7 +698,7 @@ body {
 /* Botón Flotante con tooltip */
 .fab-button {
     position: fixed;
-    bottom: 20px;
+    bottom: 80px; /* Ajustado para no superponerse con la barra de mensajes */
     right: 20px;
     width: 56px;
     height: 56px;
