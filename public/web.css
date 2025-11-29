@@ -148,7 +148,7 @@ body {
     background: rgba(239, 68, 68, 0.2);
 }
 
-/* Área Principal - SIN HEADER SEPARADO */
+/* Área Principal */
 .main-area {
     flex: 1;
     display: flex;
@@ -158,11 +158,146 @@ body {
     position: relative;
 }
 
+/* HEADER SOLO para pestaña de chats */
+#chats-tab .header-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(30, 41, 59, 0.95);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 20;
+    min-height: 60px;
+}
+
+/* Botón hamburguesa personalizado */
+.menu-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    position: relative;
+}
+
+.menu-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.05);
+}
+
+.menu-btn:active {
+    transform: scale(0.95);
+}
+
+/* Líneas personalizadas del botón hamburguesa */
+.menu-btn .hamburger-line {
+    height: 2px;
+    background: currentColor;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+/* Primera línea - más corta (45%) */
+.menu-btn .hamburger-line:nth-child(1) {
+    width: 45%;
+}
+
+/* Segunda línea - tamaño normal (100%) */
+.menu-btn .hamburger-line:nth-child(2) {
+    width: 100%;
+}
+
+/* Tercera línea - intermedia (65%) */
+.menu-btn .hamburger-line:nth-child(3) {
+    width: 65%;
+}
+
+/* Efecto hover - las líneas se igualan */
+.menu-btn:hover .hamburger-line {
+    width: 100%;
+}
+
+/* Efecto activo - se convierten en X */
+.menu-btn.active .hamburger-line:nth-child(1) {
+    transform: rotate(45deg) translate(6px, 6px);
+    width: 100%;
+}
+
+.menu-btn.active .hamburger-line:nth-child(2) {
+    opacity: 0;
+}
+
+.menu-btn.active .hamburger-line:nth-child(3) {
+    transform: rotate(-45deg) translate(6px, -6px);
+    width: 100%;
+}
+
+/* Título dentro del contenedor */
+.app-title {
+    font-weight: 700;
+    font-size: 1.6em;
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
+    margin: 0;
+    white-space: nowrap;
+    padding: 8px 0;
+}
+
+/* Efectos hover para el título */
+.app-title {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.app-title::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+    transition: width 0.3s ease;
+}
+
+.header-container:hover .app-title::after {
+    width: 100%;
+}
+
+/* Ocultar cualquier otro header que pudiera interferir */
+.main-header {
+    display: none !important;
+}
+
+/* Asegurar que el header de chats no se muestre en otras pestañas */
+#chat-tab .header-container,
+#users-tab .header-container,
+.profile-screen .header-container {
+    display: none !important;
+}
+
 /* Sistema de Pestañas - Pantalla Completa */
 .tabs-container {
     flex: 1;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .tab-content {
@@ -185,52 +320,11 @@ body {
 #chats-tab {
     display: none;
     flex-direction: column;
+    flex: 1;
 }
 
 #chats-tab.active {
     display: flex;
-}
-
-/* Header integrado en la pestaña de chats - MODIFICADO */
-.chats-header {
-    padding: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(30, 41, 59, 0.95);
-    display: flex;
-    align-items: center;
-    gap: 15px; /* Espacio entre botón y texto */
-    flex-shrink: 0;
-    position: relative;
-    z-index: 20;
-}
-
-/* BOTÓN HAMBURGUESA MODIFICADO - Esquina superior izquierda */
-.menu-btn {
-    background: none;
-    border: none;
-    color: var(--text);
-    font-size: 1.5em; /* Más grande */
-    cursor: pointer;
-    padding: 12px; /* Más grande */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: all 0.3s ease;
-}
-
-.menu-btn:hover {
-    transform: scale(1.1);
-    color: var(--primary);
-}
-
-/* TEXTO SECURECHAT MODIFICADO - Al lado del botón */
-.app-title {
-    font-weight: 700;
-    font-size: 1.6em; /* Más grande que el botón */
-    background: linear-gradient(90deg, var(--primary), var(--secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
 }
 
 .chats-list {
@@ -700,10 +794,10 @@ body {
     transform: scale(1.05);
 }
 
-/* Botón Flotante con tooltip */
+/* Botón Flotante FIJO en esquina inferior derecha */
 .fab-button {
     position: fixed;
-    bottom: 80px; /* Ajustado para no superponerse con la barra de mensajes */
+    bottom: 20px;
     right: 20px;
     width: 56px;
     height: 56px;
