@@ -198,7 +198,7 @@ body {
     background: rgba(30, 41, 59, 0.95);
     display: flex;
     align-items: center;
-    gap: 15px; /* Espacio entre botón y texto */
+    gap: 5px; /* Menos espacio entre botón y texto */
     flex-shrink: 0;
     position: relative;
     z-index: 20;
@@ -226,15 +226,14 @@ body {
     color: var(--primary);
 }
 
-/* TEXTO SECURECHAT MODIFICADO - Al lado del botón */
+/* TEXTO SECURECHAT MODIFICADO - Justo al lado derecho del botón */
 .app-title {
     font-weight: 700;
     font-size: 1.6em; /* Más grande que el botón */
     background: linear-gradient(90deg, var(--primary), var(--secondary));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    /* margin-left: auto; ELIMINADO - Ya no empuja a la derecha */
-    margin-right: 15px;
+    margin-top: 0.4cm; /* Mismo margen superior que el botón */
 }
 
 .chats-list {
