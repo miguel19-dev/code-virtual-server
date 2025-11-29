@@ -88,8 +88,19 @@
                             <!-- Mensajes se cargarán dinámicamente -->
                         </div>
 
+                        <!-- Preview de respuesta -->
+                        <div class="reply-preview" id="reply-preview">
+                            <div class="reply-preview-content" id="reply-content"></div>
+                            <button class="cancel-reply" id="cancel-reply" aria-label="Cancelar respuesta">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
                         <div class="message-input-container">
                             <div class="message-input-wrapper">
+                                <button class="attach-button" id="attach-button" aria-label="Adjuntar archivo">
+                                    <i class="fas fa-paperclip"></i>
+                                </button>
                                 <textarea 
                                     class="message-input" 
                                     id="message-input" 
@@ -97,8 +108,11 @@
                                     rows="1"
                                     aria-label="Escribe un mensaje"
                                 ></textarea>
+                                <button class="voice-button" id="voice-button" aria-label="Grabar mensaje de voz">
+                                    <i class="fas fa-microphone"></i>
+                                </button>
                                 <button class="send-button" id="send-button" aria-label="Enviar mensaje">
-                                    <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                                    <i class="fas fa-paper-plane"></i>
                                 </button>
                             </div>
                         </div>
@@ -117,12 +131,12 @@
                         <i class="fas fa-users" aria-hidden="true"></i>
                     </button>
                 </div>
-                
+
                 <!-- Barra de búsqueda -->
                 <div class="users-search">
                     <input type="text" id="users-search-input" class="search-input" placeholder="Buscar usuarios o grupos..." aria-label="Buscar usuarios o grupos">
                 </div>
-                
+
                 <div class="users-list" id="users-list">
                     <div id="users-skeleton"></div>
                 </div>
@@ -414,7 +428,7 @@
                         Todos los Usuarios
                     </button>
                 </div>
-                
+
                 <div class="members-search">
                     <input type="text" id="members-search-input" class="form-input" placeholder="Buscar usuarios..." aria-label="Buscar usuarios">
                 </div>
@@ -490,6 +504,13 @@
                 <h2>Seguidos</h2>
             </div>
             <div class="follow-list" id="following-list"></div>
+        </div>
+
+        <!-- UI de grabación -->
+        <div class="recording-ui" id="recording-ui">
+            <div class="recording-waveform"></div>
+            <div class="recording-timer" id="recording-timer">0:00</div>
+            <div class="recording-hint">Desliza hacia la izquierda para cancelar</div>
         </div>
     </div>
 
