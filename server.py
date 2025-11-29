@@ -1,9 +1,8 @@
 import os
 import logging
-import asyncio
+import subprocess
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
-import yt_dlp
+from telegram.ext import Application, MessageHandler, filters, ContextTypes, CommandHandler
 
 # ✅ TU TOKEN AQUÍ
 TOKEN = "8304674517:AAHG-pU2R7ryf7gv0t1h2krWsllgCoU3sls"
@@ -42,24 +41,39 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         file_id = video.file_id
         file = await context.bot.get_file(file_id)
         
-        # Nombre del archivo temporal
+        # Nombres de archivos temporales
         temp_input = f"temp_input_{file_id}.mp4"
         temp_output = f"temp_output_{file_id}.mp4"
         
         # Descargar el archivo
         await file.download_to_drive(temp_input)
 
-        # Configuración para convertir a 360p
-        ydl_opts = {
-            'format': 'best[height<=360]',
-            'outtmpl': temp_output,
-            'quiet': True,
-        }
+        await update.message.reply_text("🔄 *Convirtiendo video...*", parse_mode='Markdown')
 
-        # Convertir el video usando yt-dlp (que internamente usa ffmpeg)
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Usamos yt-dlp para procesar el archivo local
-            ydl.download([f'file:{temp_input}'])
+        # Convertir el video a 360p usando FFmpeg directamente
+        ffmpeg_command = [
+            'ffmpeg',
+            '-i', temp_input,           # Archivo de entrada
+            '-vf', 'scale=-2:360',      # Escalar a 360p manteniendo relación de aspecto
+            '-c:v', 'libx264',          # Codec de video
+            '-crf', '23',               # Calidad (23 es buen balance)
+            '-preset', 'medium',        # Velocidad de compresión
+            '-c:a', 'aac',              # Codec de audio
+            '-b:a', '128k',             # Bitrate de audio
+            '-y',                       # Sobrescribir archivo de salida
+            temp_output
+        ]
+
+        # Ejecutar FFmpeg
+        result = subprocess.run(
+            ffmpeg_command,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minutos de timeout
+        )
+
+        if result.returncode != 0:
+            raise Exception(f"FFmpeg error: {result.stderr}")
 
         await update.message.reply_text("✅ *Video convertido*\n📤 *Enviando...*", parse_mode='Markdown')
 
@@ -69,28 +83,27 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 chat_id=update.message.chat_id,
                 video=video_file,
                 caption="🎥 *Video convertido a 360p*\n¡Listo para usar!",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                supports_streaming=True
             )
 
-        # Limpiar archivos temporales
-        try:
-            os.remove(temp_input)
-            os.remove(temp_output)
-        except Exception as e:
-            logging.warning(f"No se pudieron eliminar archivos temporales: {e}")
+        await update.message.reply_text("✅ *¡Conversión completada!*", parse_mode='Markdown')
 
+    except subprocess.TimeoutExpired:
+        error_msg = "❌ *Tiempo de espera agotado*\nEl video es muy largo o complejo."
+        await update.message.reply_text(error_msg, parse_mode='Markdown')
     except Exception as e:
         error_msg = f"❌ *Error al procesar el video:*\n\n{str(e)}"
         await update.message.reply_text(error_msg, parse_mode='Markdown')
-        
-        # Limpiar archivos temporales en caso de error
+    finally:
+        # Limpiar archivos temporales
         try:
-            if 'temp_input' in locals():
+            if os.path.exists(temp_input):
                 os.remove(temp_input)
-            if 'temp_output' in locals():
+            if os.path.exists(temp_output):
                 os.remove(temp_output)
-        except:
-            pass
+        except Exception as e:
+            logging.warning(f"No se pudieron eliminar archivos temporales: {e}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Maneja mensajes de texto"""
@@ -102,15 +115,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 def main():
     print("🎥 Iniciando Bot Convertidor de Videos a 360p...")
     
+    # Verificar que FFmpeg está disponible
+    try:
+        subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+        print("✅ FFmpeg está disponible")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("❌ ERROR: FFmpeg no está instalado o no está en el PATH")
+        return
+
     application = Application.builder().token(TOKEN).build()
 
     # Handlers
+    application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.VIDEO, handle_video))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # Comando start
-    from telegram.ext import CommandHandler
-    application.add_handler(CommandHandler("start", start))
 
     print("✅ Bot iniciado correctamente!")
     print("📹 Listo para recibir videos y convertirlos a 360p")
