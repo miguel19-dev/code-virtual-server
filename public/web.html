@@ -58,7 +58,7 @@
                         <div id="chats-skeleton"></div>
                     </div>
 
-                    <!-- Estado vacío para chats - SIN BOTÓN -->
+                    <!-- Estado vacío para chats -->
                     <div class="empty-state" id="chats-empty" style="display: none;">
                         <div class="empty-icon">
                             <i class="fas fa-comments"></i>
@@ -111,7 +111,10 @@
                     <button class="back-button" id="users-back-btn">
                         <i class="fas fa-arrow-left"></i>
                     </button>
-                    <div class="users-header-title">Usuarios</div>
+                    <div class="users-header-title">Usuarios y Grupos</div>
+                    <button class="new-group-btn" id="new-group-btn">
+                        <i class="fas fa-users"></i>
+                    </button>
                 </div>
                 <div class="users-list" id="users-list">
                     <div id="users-skeleton"></div>
@@ -199,6 +202,58 @@
             </div>
         </div>
 
+        <!-- Pantalla de Perfil de Grupo -->
+        <div class="profile-screen" id="group-profile-screen">
+            <div class="profile-header">
+                <button class="back-button" id="group-profile-back-btn">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Grupo</h2>
+                <div class="profile-header-actions" id="group-admin-actions" style="display: none;">
+                    <button class="edit-profile-btn" id="edit-group-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="profile-content">
+                <div class="profile-avatar group-avatar" id="group-profile-avatar">
+                    <!-- Avatar del grupo se cargará dinámicamente -->
+                    <div class="group-badge">
+                        <i class="fas fa-users"></i>
+                    </div>
+                </div>
+                <div class="profile-name" id="group-profile-name">Nombre del Grupo</div>
+                <div class="profile-bio" id="group-profile-description">Descripción del grupo</div>
+
+                <div class="profile-stats">
+                    <div class="stat-item" id="group-members-stat">
+                        <div class="stat-number" id="group-members-count">0</div>
+                        <div class="stat-label">Miembros</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="group-admin-badge">👑</div>
+                        <div class="stat-label">Administrador</div>
+                    </div>
+                </div>
+
+                <div class="members-section">
+                    <h3 class="members-title">Miembros del Grupo</h3>
+                    <div class="members-list" id="group-members-list">
+                        <!-- Miembros se cargarán dinámicamente -->
+                    </div>
+                </div>
+
+                <div class="group-actions">
+                    <button class="btn btn-danger" id="leave-group-btn">
+                        <i class="fas fa-sign-out-alt"></i> Salir del Grupo
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Pantalla de Editar Perfil -->
         <div class="edit-profile-screen" id="edit-profile-screen">
             <div class="profile-header">
@@ -240,6 +295,161 @@
                             Cancelar
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pantalla de Editar Grupo -->
+        <div class="edit-profile-screen" id="edit-group-screen">
+            <div class="profile-header">
+                <button class="back-button" id="edit-group-back-btn">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Editar Grupo</h2>
+            </div>
+            <div class="profile-content">
+                <div class="edit-form">
+                    <div class="form-group">
+                        <label class="form-label">Foto del grupo</label>
+                        <input type="file" id="group-avatar-input" class="file-input" accept="image/*">
+                        <label for="group-avatar-input" class="file-label">
+                            <i class="fas fa-upload"></i> Seleccionar imagen
+                        </label>
+                        <img id="group-avatar-preview" class="avatar-preview" style="display: none;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nombre del grupo</label>
+                        <input type="text" class="form-input" id="edit-group-name" placeholder="Nombre del grupo">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Descripción</label>
+                        <textarea class="form-input form-textarea" id="edit-group-description" placeholder="Describe el grupo"></textarea>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="btn btn-primary" id="save-group-btn">
+                            <i class="fas fa-save"></i> Guardar Cambios
+                        </button>
+                        <button class="btn btn-secondary" id="cancel-edit-group-btn">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pantalla de Crear Grupo -->
+        <div class="edit-profile-screen" id="create-group-screen">
+            <div class="profile-header">
+                <button class="back-button" id="create-group-back-btn">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Crear Grupo</h2>
+            </div>
+            <div class="profile-content">
+                <div class="edit-form">
+                    <div class="form-group">
+                        <label class="form-label">Foto del grupo (opcional)</label>
+                        <input type="file" id="create-group-avatar" class="file-input" accept="image/*">
+                        <label for="create-group-avatar" class="file-label">
+                            <i class="fas fa-upload"></i> Seleccionar imagen
+                        </label>
+                        <img id="create-group-avatar-preview" class="avatar-preview" style="display: none;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nombre del grupo *</label>
+                        <input type="text" class="form-input" id="create-group-name" placeholder="Nombre del grupo" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Descripción (opcional)</label>
+                        <textarea class="form-input form-textarea" id="create-group-description" placeholder="Describe el grupo"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Añadir miembros (opcional)</label>
+                        <button class="btn btn-secondary" id="add-members-btn" style="width: 100%;">
+                            <i class="fas fa-user-plus"></i> Seleccionar miembros
+                        </button>
+                        <div class="selected-members" id="selected-members-list">
+                            <!-- Miembros seleccionados aparecerán aquí -->
+                        </div>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="btn btn-primary" id="create-group-submit-btn">
+                            <i class="fas fa-plus"></i> Crear Grupo
+                        </button>
+                        <button class="btn btn-secondary" id="cancel-create-group-btn">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pantalla de Seleccionar Miembros -->
+        <div class="select-members-screen" id="select-members-screen">
+            <div class="profile-header">
+                <button class="back-button" id="select-members-back-btn">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2>Seleccionar Miembros</h2>
+            </div>
+            <div class="select-members-content">
+                <div class="members-tabs">
+                    <button class="members-tab-btn active" data-tab="chats">Chats Activos</button>
+                    <button class="members-tab-btn" data-tab="users">Todos los Usuarios</button>
+                </div>
+                
+                <div class="members-search">
+                    <input type="text" id="members-search-input" class="form-input" placeholder="Buscar usuarios...">
+                </div>
+
+                <div class="members-tab-content active" id="chats-members-tab">
+                    <div class="members-list" id="chats-members-list">
+                        <!-- Usuarios con chats activos -->
+                    </div>
+                </div>
+
+                <div class="members-tab-content" id="users-members-tab">
+                    <div class="members-list" id="all-members-list">
+                        <!-- Todos los usuarios -->
+                    </div>
+                </div>
+
+                <div class="selected-members-bar">
+                    <div class="selected-count" id="selected-members-count">0 miembros seleccionados</div>
+                    <button class="btn btn-primary" id="confirm-members-btn">
+                        Confirmar Selección
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Unirse a Grupo -->
+        <div class="modal-overlay" id="join-group-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Unirse al Grupo</h3>
+                    <button class="modal-close" id="join-group-close-btn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="group-modal-avatar" id="join-group-avatar">
+                        <!-- Avatar del grupo -->
+                    </div>
+                    <div class="group-modal-name" id="join-group-name">Nombre del Grupo</div>
+                    <div class="group-modal-description" id="join-group-description">Descripción del grupo</div>
+                    <div class="group-modal-members">
+                        <i class="fas fa-users"></i>
+                        <span id="join-group-members-count">0</span> miembros
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" id="confirm-join-group-btn">
+                        <i class="fas fa-user-plus"></i> Unirse al Grupo
+                    </button>
+                    <button class="btn btn-secondary" id="cancel-join-group-btn">
+                        Cancelar
+                    </button>
                 </div>
             </div>
         </div>
