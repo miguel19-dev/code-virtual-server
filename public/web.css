@@ -148,7 +148,7 @@ body {
     background: rgba(239, 68, 68, 0.2);
 }
 
-/* Área Principal */
+/* Área Principal - SIN HEADER SEPARADO */
 .main-area {
     flex: 1;
     display: flex;
@@ -158,59 +158,7 @@ body {
     position: relative;
 }
 
-/* Header Principal - OCULTO por defecto, solo visible en chats */
-.main-header {
-    padding: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(30, 41, 59, 0.95);
-    display: none; /* OCULTO por defecto */
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
-    position: relative;
-    z-index: 20;
-}
-
-/* BOTÓN HAMBURGUESA ELIMINADO - Comentado temporalmente */
-/*
-.menu-btn {
-    background: none;
-    border: none;
-    color: var(--text);
-    font-size: 1.2em;
-    cursor: pointer;
-    padding: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-*/
-
-/* TEXTO SECURECHAT ELIMINADO - Comentado temporalmente */
-/*
-.app-title {
-    font-weight: 700;
-    font-size: 1.3em;
-    background: linear-gradient(90deg, var(--primary), var(--secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-*/
-
-/* MOSTRAR HEADER SOLO cuando la pestaña de chats está activa */
-#chats-tab.active ~ .main-header {
-    display: flex;
-}
-
-/* OCULTAR HEADER en todas las demás situaciones */
-.users-tab-content.active ~ .main-header,
-#chat-tab.active ~ .main-header,
-.profile-screen.active ~ .main-header,
-.follow-screen.active ~ .main-header,
-.edit-profile-screen.active ~ .main-header {
-    display: none !important;
-}
+/* ELIMINADO: Header Principal separado */
 
 /* Sistema de Pestañas - Pantalla Completa */
 .tabs-container {
@@ -235,7 +183,50 @@ body {
     display: flex;
 }
 
-/* Pestaña de Chats */
+/* Pestaña de Chats - CON HEADER INTEGRADO */
+#chats-tab {
+    display: none;
+    flex-direction: column;
+}
+
+#chats-tab.active {
+    display: flex;
+}
+
+/* Header integrado en la pestaña de chats */
+.chats-header {
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(30, 41, 59, 0.95);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 20;
+}
+
+.menu-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.app-title {
+    font-weight: 700;
+    font-size: 1.3em;
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
 .chats-list {
     flex: 1;
     overflow-y: auto;
@@ -1205,19 +1196,4 @@ body {
 /* Prevenir zoom en inputs en iOS */
 input, textarea {
     font-size: 16px;
-}
-
-/* CORRECCIÓN FINAL: Asegurar que el header se comporte correctamente */
-/* Header visible SOLO en pestaña de chats, OCULTO en todo lo demás */
-.main-area:has(#users-tab.active) .main-header,
-.main-area:has(#chat-tab.active) .main-header,
-.main-area:has(.profile-screen.active) .main-header,
-.main-area:has(.follow-screen.active) .main-header,
-.main-area:has(.edit-profile-screen.active) .main-header {
-    display: none !important;
-}
-
-/* Solo mostrar cuando específicamente la pestaña de chats está activa */
-.main-area:has(#chats-tab.active) .main-header {
-    display: flex;
 }
