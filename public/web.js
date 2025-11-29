@@ -378,7 +378,7 @@ async function loadUsers() {
                     startChat(user.id);
                 });
                 
-                // CORREGIDO: Event listener para el avatar
+                // Event listener para el avatar
                 const avatarElement = userItem.querySelector('.user-avatar');
                 avatarElement.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -493,7 +493,7 @@ function renderActiveChats() {
             
             chatItem.addEventListener('click', () => openChat(chat.user.id));
             
-            // CORREGIDO: Event listener para el avatar en chats
+            // Event listener para el avatar en chats
             const avatarElement = chatItem.querySelector('.chat-avatar');
             avatarElement.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -611,13 +611,38 @@ async function loadMessages(user) {
         const messagesContainer = document.getElementById('messages-container');
         messagesContainer.innerHTML = '';
         
-        messages.forEach(message => {
-            addMessageToUI(message);
-        });
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = `
+                <div class="empty-state" style="justify-content: center; height: 100%;">
+                    <div class="empty-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <div class="empty-title">Inicia la conversación</div>
+                    <div class="empty-subtitle">Envía el primer mensaje a ${user.name}</div>
+                </div>
+            `;
+        } else {
+            messages.forEach(message => {
+                addMessageToUI(message);
+            });
+        }
         
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        // Scroll al final
+        setTimeout(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 100);
     } catch (error) {
         console.error('Error cargando mensajes:', error);
+        const messagesContainer = document.getElementById('messages-container');
+        messagesContainer.innerHTML = `
+            <div class="empty-state" style="justify-content: center; height: 100%;">
+                <div class="empty-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="empty-title">Error cargando mensajes</div>
+                <div class="empty-subtitle">Intenta nuevamente</div>
+            </div>
+        `;
     }
 }
 
@@ -632,6 +657,18 @@ async function sendMessage() {
     }
     
     console.log('Enviando mensaje a:', selectedUser.name, 'Mensaje:', message);
+    
+    // Crear mensaje temporal en la UI inmediatamente
+    const tempMessageData = {
+        id: 'temp-' + Date.now(),
+        from: currentUser.id,
+        to: selectedUser.id,
+        message: message,
+        timestamp: new Date().toISOString(),
+        read: false
+    };
+    
+    addMessageToUI(tempMessageData);
     
     // Limpiar input
     messageInput.value = '';
@@ -648,10 +685,18 @@ async function sendMessage() {
 // Agregar mensaje a la UI
 function addMessageToUI(messageData) {
     const messagesContainer = document.getElementById('messages-container');
+    
+    // Remover estado vacío si existe
+    const emptyState = messagesContainer.querySelector('.empty-state');
+    if (emptyState) {
+        emptyState.remove();
+    }
+    
     const messageDiv = document.createElement('div');
     
     const isSent = messageData.from === currentUser.id;
     messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+    messageDiv.dataset.messageId = messageData.id;
     
     const time = new Date(messageData.timestamp).toLocaleTimeString('es-ES', {
         hour: '2-digit',
@@ -664,8 +709,13 @@ function addMessageToUI(messageData) {
     `;
     
     messagesContainer.appendChild(messageDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
     
+    // Scroll al final
+    setTimeout(() => {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 50);
+    
+    // Animación de aparición
     setTimeout(() => {
         messageDiv.style.opacity = '1';
     }, 10);
@@ -988,7 +1038,7 @@ function deleteAccount() {
     }
 }
 
-// Mostrar perfil de otro usuario - CORREGIDO
+// Mostrar perfil de otro usuario
 function showOtherUserProfile(userId) {
     console.log('Mostrando perfil de usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
