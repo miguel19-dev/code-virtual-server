@@ -178,8 +178,7 @@ body {
 
 /* OCULTAR HEADER PRINCIPAL en otras pestañas */
 #chat-tab.active ~ .main-header,
-#users-tab.active ~ .main-header,
-.chat-area.active ~ .main-header {
+#users-tab.active ~ .main-header {
     display: none;
 }
 
@@ -454,13 +453,8 @@ body {
     color: var(--text-secondary);
 }
 
-/* Pestaña de Chat Individual - PANTALLA COMPLETA */
-.chat-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    width: 100vw;
+/* Pestaña de Chat Individual - RECONSTRUIDA */
+#chat-tab {
     position: fixed;
     top: 0;
     left: 0;
@@ -468,6 +462,24 @@ body {
     bottom: 0;
     background: var(--background);
     z-index: 200;
+    display: none;
+    flex-direction: column;
+}
+
+#chat-tab.active {
+    display: flex;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 .chat-header {
@@ -548,6 +560,14 @@ body {
     color: var(--text-secondary);
 }
 
+.messages-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
 .messages-container {
     flex: 1;
     overflow-y: auto;
@@ -607,6 +627,9 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(30, 41, 59, 0.95);
     flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    width: 100%;
 }
 
 .message-input-wrapper {
@@ -722,17 +745,6 @@ body {
 .profile-screen.active {
     display: flex;
     animation: slideInRight 0.3s ease;
-}
-
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
 }
 
 .profile-header {
