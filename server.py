@@ -1,11 +1,11 @@
 import os
 import logging
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram import Update
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
 import yt_dlp
 
-# ✅ TU TOKEN AQUÍ - SOLO UNA VEZ
+# ✅ TU TOKEN AQUÍ
 TOKEN = "8304674517:AAHG-pU2R7ryf7gv0t1h2krWsllgCoU3sls"
 
 # Configurar logging
@@ -14,159 +14,106 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Configuración de cookies
-COOKIES_FILE = "cookies.txt"
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = (
-        "🤖 *¡Bienvenido al Bot Descargador!*\n\n"
-        "Solo envíame un enlace de video y podrás:\n"
-        "• 📹 Descargar video en calidad 720p\n"
-        "• 🎵 Descargar solo el audio (MP3)\n\n"
-        "¡Envía tu enlace y comienza!"
+        "🎥 *Bot Convertidor de Videos a 360p*\n\n"
+        "Solo envíame un video y lo convertiré a calidad 360p optimizada.\n\n"
+        "⚡ *Características:*\n"
+        "• Reducción de tamaño manteniendo buena calidad\n"
+        "• Conversión rápida y eficiente\n"
+        "• Compatible con la mayoría de formatos\n\n"
+        "¡Envía un video para comenzar!"
     )
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
-async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    url = update.message.text
-    context.user_data['url'] = url
-
-    keyboard = [
-        [
-            InlineKeyboardButton("🎥 Video", callback_data='video'),
-            InlineKeyboardButton("🎵 Audio", callback_data='audio'),
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_text(
-        "🔗 *Enlace recibido*\n¿Qué quieres descargar?",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-
-    choice = query.data
-    url = context.user_data.get('url')
-
-    if not url:
-        await query.edit_message_text("❌ Error: No se encontró el enlace.")
+async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja videos enviados directamente al bot"""
+    
+    # Verificar si el mensaje contiene un video
+    if not update.message.video:
+        await update.message.reply_text("❌ Por favor, envía un video válido.")
         return
 
-    await query.edit_message_text("⏳ *Descargando...* Esto puede tomar unos segundos.", parse_mode='Markdown')
+    video = update.message.video
+    await update.message.reply_text("⏳ *Procesando video...*\nConvirtiendo a 360p...", parse_mode='Markdown')
 
     try:
-        # Configuración base con cookies
-        base_ydl_opts = {
-            'cookiefile': COOKIES_FILE,
-            'outtmpl': 'temp_%(id)s.%(ext)s',
+        # Descargar el video
+        file_id = video.file_id
+        file = await context.bot.get_file(file_id)
+        
+        # Nombre del archivo temporal
+        temp_input = f"temp_input_{file_id}.mp4"
+        temp_output = f"temp_output_{file_id}.mp4"
+        
+        # Descargar el archivo
+        await file.download_to_drive(temp_input)
+
+        # Configuración para convertir a 360p
+        ydl_opts = {
+            'format': 'best[height<=360]',
+            'outtmpl': temp_output,
             'quiet': True,
-            'no_warnings': False,
         }
 
-        if choice == 'video':
-            # OPCIONES FLEXIBLES PARA VIDEO CON COOKIES
-            ydl_opts = {
-                **base_ydl_opts,
-                'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
-                'merge_output_format': 'mp4',
-            }
-        else:
-            # OPCIONES PARA AUDIO CON COOKIES
-            ydl_opts = {
-                **base_ydl_opts,
-                'format': 'bestaudio/best',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }],
-            }
-
+        # Convertir el video usando yt-dlp (que internamente usa ffmpeg)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+            # Usamos yt-dlp para procesar el archivo local
+            ydl.download([f'file:{temp_input}'])
 
-            if choice == 'audio':
-                # Para audio, cambiamos la extensión a mp3
-                filename = os.path.splitext(filename)[0] + '.mp3'
+        await update.message.reply_text("✅ *Video convertido*\n📤 *Enviando...*", parse_mode='Markdown')
 
-        await query.edit_message_text("📤 *Enviando archivo...*", parse_mode='Markdown')
+        # Enviar el video convertido
+        with open(temp_output, 'rb') as video_file:
+            await context.bot.send_video(
+                chat_id=update.message.chat_id,
+                video=video_file,
+                caption="🎥 *Video convertido a 360p*\n¡Listo para usar!",
+                parse_mode='Markdown'
+            )
 
-        if choice == 'video':
-            with open(filename, 'rb') as video_file:
-                await context.bot.send_video(
-                    chat_id=query.message.chat_id,
-                    video=video_file,
-                    caption="🎥 *Video descargado*",
-                    parse_mode='Markdown'
-                )
-        else:
-            with open(filename, 'rb') as audio_file:
-                await context.bot.send_audio(
-                    chat_id=query.message.chat_id,
-                    audio=audio_file,
-                    caption="🎵 *Audio descargado en MP3*",
-                    parse_mode='Markdown'
-                )
-
-        # Limpiar archivo temporal
+        # Limpiar archivos temporales
         try:
-            os.remove(filename)
+            os.remove(temp_input)
+            os.remove(temp_output)
         except Exception as e:
-            logging.warning(f"No se pudo eliminar el archivo temporal: {e}")
+            logging.warning(f"No se pudieron eliminar archivos temporales: {e}")
 
-        await query.edit_message_text("✅ *¡Descarga completada!*", parse_mode='Markdown')
-
-    except yt_dlp.utils.DownloadError as e:
-        error_msg = f"❌ *Error de descarga:*\n\n{str(e)}\n\n💡 *Posibles soluciones:*\n• El video puede ser privado/eliminado\n• Problemas con las cookies de autenticación\n• Restricciones geográficas"
-        await query.edit_message_text(error_msg, parse_mode='Markdown')
     except Exception as e:
-        error_msg = f"❌ *Error inesperado:*\n\n{str(e)}"
-        await query.edit_message_text(error_msg, parse_mode='Markdown')
+        error_msg = f"❌ *Error al procesar el video:*\n\n{str(e)}"
+        await update.message.reply_text(error_msg, parse_mode='Markdown')
+        
+        # Limpiar archivos temporales en caso de error
+        try:
+            if 'temp_input' in locals():
+                os.remove(temp_input)
+            if 'temp_output' in locals():
+                os.remove(temp_output)
+        except:
+            pass
 
-async def invalid_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Maneja mensajes de texto"""
     await update.message.reply_text(
-        "❌ Solo acepto enlaces de videos. Envía un enlace válido o usa /start",
+        "📹 Envíame un video directamente y lo convertiré a 360p optimizado.",
         parse_mode='Markdown'
     )
 
-def check_cookies_file():
-    """Verifica que el archivo de cookies exista y tenga contenido"""
-    if not os.path.exists(COOKIES_FILE):
-        logging.error(f"❌ Archivo de cookies '{COOKIES_FILE}' no encontrado")
-        return False
-    
-    with open(COOKIES_FILE, 'r', encoding='utf-8') as f:
-        content = f.read().strip()
-    
-    if not content:
-        logging.error(f"❌ Archivo de cookies '{COOKIES_FILE}' está vacío")
-        return False
-    
-    logging.info(f"✅ Archivo de cookies cargado correctamente")
-    return True
-
 def main():
-    print("🤖 Iniciando bot de Telegram...")
+    print("🎥 Iniciando Bot Convertidor de Videos a 360p...")
     
-    # Verificar archivo de cookies
-    if not check_cookies_file():
-        print("⚠️  Advertencia: No se encontró el archivo de cookies o está vacío")
-        print("💡 El bot funcionará pero puede tener problemas con videos restringidos")
-
     application = Application.builder().token(TOKEN).build()
 
+    # Handlers
+    application.add_handler(MessageHandler(filters.VIDEO, handle_video))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    # Comando start
+    from telegram.ext import CommandHandler
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Entity("url"), handle_url))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, invalid_message))
-    application.add_handler(CallbackQueryHandler(button_handler))
 
     print("✅ Bot iniciado correctamente!")
-    print(f"📁 Usando cookies de: {COOKIES_FILE}")
+    print("📹 Listo para recibir videos y convertirlos a 360p")
     application.run_polling()
 
 if __name__ == '__main__':
