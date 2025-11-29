@@ -41,33 +41,32 @@
 
         <!-- Área Principal -->
         <div class="main-area">
-            <!-- Header CORREGIDO - Usando chats-header -->
-            <div class="chats-header">
-                <button class="menu-btn" id="menu-btn">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <div class="app-title">SecureChat</div>
-            </div>
-
             <!-- Contenedor de Pestañas -->
             <div class="tabs-container">
                 <!-- Pestaña de Chats -->
                 <div class="tab-content active" id="chats-tab">
+                    <!-- Header solo para chats -->
+                    <div class="header-container">
+                        <button class="menu-btn" id="menu-btn">
+                            <span class="hamburger-line"></span>
+                            <span class="hamburger-line"></span>
+                            <span class="hamburger-line"></span>
+                        </button>
+                        <div class="app-title">SecureChat</div>
+                    </div>
+
                     <div class="chats-list" id="chats-list">
                         <!-- Skeleton loading mientras carga -->
                         <div id="chats-skeleton"></div>
                     </div>
 
-                    <!-- Estado vacío para chats -->
+                    <!-- Estado vacío para chats - SIN BOTÓN -->
                     <div class="empty-state" id="chats-empty" style="display: none;">
                         <div class="empty-icon">
                             <i class="fas fa-comments"></i>
                         </div>
                         <div class="empty-title">No hay conversaciones</div>
-                        <div class="empty-subtitle">Inicia una conversación tocando el botón + para ver todos los usuarios disponibles</div>
-                        <button class="empty-action" id="empty-chats-action">
-                            <i class="fas fa-plus"></i> Ver todos los usuarios
-                        </button>
+                        <div class="empty-subtitle">Inicia una conversación tocando el botón +</div>
                     </div>
                 </div>
 
@@ -129,7 +128,7 @@
                 </div>
             </div>
 
-            <!-- Botón Flotante -->
+            <!-- Botón Flotante FIJO -->
             <button class="fab-button" id="fab-button">
                 <i class="fas fa-plus"></i>
                 <div class="fab-tooltip">Todos los usuarios</div>
