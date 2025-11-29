@@ -16,7 +16,7 @@ const io = socketIo(server, {
     } 
 });
 
-// Configuración de PostgreSQL
+// Configuración de PostgreSQL CON RECONEXIÓN
 const pool = new Pool({
     user: 'securechat_im03_user',
     host: 'dpg-d4l5530gjchc73ah6j10-a.oregon-postgres.render.com',
@@ -25,19 +25,31 @@ const pool = new Pool({
     port: 5432,
     ssl: {
         rejectUnauthorized: false
-    }
+    },
+    // Configuración adicional para mejor estabilidad
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+    maxUses: 7500,
 });
 
-// Verificar conexión a la base de datos
-pool.connect((err, client, release) => {
-    if (err) {
-        console.error('Error conectando a PostgreSQL:', err);
-    } else {
-        console.log('✅ Conectado a PostgreSQL');
-        release();
-        initializeDatabase();
-    }
+// Manejo de errores de conexión
+pool.on('error', (err, client) => {
+    console.error('Error inesperado en el pool de PostgreSQL:', err);
 });
+
+// Función para verificar conexión
+async function testConnection() {
+    try {
+        const client = await pool.connect();
+        console.log('✅ Conectado a PostgreSQL exitosamente');
+        client.release();
+        return true;
+    } catch (error) {
+        console.error('❌ Error conectando a PostgreSQL:', error.message);
+        return false;
+    }
+}
 
 // Inicializar tablas de la base de datos
 async function initializeDatabase() {
@@ -72,6 +84,19 @@ async function initializeDatabase() {
     }
 }
 
+// Inicializar la aplicación
+async function initializeApp() {
+    const isConnected = await testConnection();
+    if (isConnected) {
+        await initializeDatabase();
+    } else {
+        console.log('⚠️  Intentando reconectar en 5 segundos...');
+        setTimeout(initializeApp, 5000);
+    }
+}
+
+initializeApp();
+
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -84,10 +109,24 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 });
 
 const MESSAGES_FILE = 'data/messages.json';
-let messages = fs.existsSync(MESSAGES_FILE) ? JSON.parse(fs.readFileSync(MESSAGES_FILE)) : {};
+let messages = {};
+
+// Cargar mensajes existentes
+try {
+    if (fs.existsSync(MESSAGES_FILE)) {
+        messages = JSON.parse(fs.readFileSync(MESSAGES_FILE));
+    }
+} catch (error) {
+    console.error('Error cargando mensajes:', error);
+    messages = {};
+}
 
 function saveMessages() {
-    fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
+    try {
+        fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
+    } catch (error) {
+        console.error('Error guardando mensajes:', error);
+    }
 }
 
 // Configuración de multer para upload de avatares
@@ -115,9 +154,24 @@ const upload = multer({
     }
 });
 
-// Middleware para logging
+// Middleware para logging mejorado
 app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`, req.body || '');
+    next();
+});
+
+// Middleware para manejo de errores de PostgreSQL
+app.use((req, res, next) => {
+    req.db = {
+        query: async (text, params) => {
+            try {
+                return await pool.query(text, params);
+            } catch (error) {
+                console.error('Error en consulta PostgreSQL:', error);
+                throw error;
+            }
+        }
+    };
     next();
 });
 
@@ -125,19 +179,20 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'auth.html')));
 app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'public', 'web.html')));
 
-// API de registro
+// API de registro - MEJORADO
 app.post('/api/register', async (req, res) => {
     try {
         const { name, password } = req.body;
+        console.log('Registrando usuario:', { name, passwordLength: password?.length });
 
         if (!name || !password || password.length < 6) {
             return res.status(400).json({ error: 'Nombre y contraseña requeridos (mín. 6 caracteres)' });
         }
 
         // Verificar si el usuario ya existe
-        const existingUser = await pool.query(
-            'SELECT * FROM users WHERE name = $1',
-            [name.toLowerCase()]
+        const existingUser = await req.db.query(
+            'SELECT * FROM users WHERE LOWER(name) = LOWER($1)',
+            [name.trim()]
         );
 
         if (existingUser.rows.length > 0) {
@@ -148,7 +203,7 @@ app.post('/api/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Insertar nuevo usuario
-        const newUser = await pool.query(
+        const newUser = await req.db.query(
             `INSERT INTO users (user_id, name, password, avatar, bio) 
              VALUES ($1, $2, $3, $4, $5) 
              RETURNING user_id, name, avatar, bio, created_at`,
@@ -156,27 +211,33 @@ app.post('/api/register', async (req, res) => {
         );
 
         const safeUser = newUser.rows[0];
+        console.log('Usuario registrado exitosamente:', safeUser.user_id);
 
         io.emit('user_updated', safeUser);
 
-        res.json({ user: safeUser });
+        res.json({ 
+            user: safeUser,
+            message: 'Usuario registrado exitosamente'
+        });
     } catch (error) {
         console.error('Error en registro:', error);
-        res.status(500).json({ error: 'Error interno del servidor' });
+        res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
     }
 });
 
-// API de login
+// API de login - MEJORADO
 app.post('/api/login', async (req, res) => {
     try {
         const { name, password } = req.body;
+        console.log('Intentando login:', name);
         
-        const userResult = await pool.query(
-            'SELECT * FROM users WHERE name = $1',
-            [name.toLowerCase()]
+        const userResult = await req.db.query(
+            'SELECT * FROM users WHERE LOWER(name) = LOWER($1)',
+            [name]
         );
 
         if (userResult.rows.length === 0) {
+            console.log('Usuario no encontrado:', name);
             return res.status(401).json({ error: 'Credenciales incorrectas' });
         }
 
@@ -184,24 +245,27 @@ app.post('/api/login', async (req, res) => {
         const isValidPassword = await bcrypt.compare(password, user.password);
 
         if (!isValidPassword) {
+            console.log('Contraseña incorrecta para:', name);
             return res.status(401).json({ error: 'Credenciales incorrectas' });
         }
 
         const { password: _, ...safeUser } = user;
+        console.log('Login exitoso para:', safeUser.user_id);
         res.json({ user: safeUser });
     } catch (error) {
         console.error('Error en login:', error);
-        res.status(500).json({ error: 'Error interno del servidor' });
+        res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
     }
 });
 
-// API para obtener usuarios
+// API para obtener usuarios - MEJORADO
 app.get('/api/users', async (req, res) => {
     try {
-        const usersResult = await pool.query(
-            'SELECT user_id, name, avatar, bio, created_at FROM users'
+        const usersResult = await req.db.query(
+            'SELECT user_id, name, avatar, bio, created_at FROM users ORDER BY name'
         );
         
+        console.log(`Obteniendo ${usersResult.rows.length} usuarios`);
         res.json(usersResult.rows);
     } catch (error) {
         console.error('Error obteniendo usuarios:', error);
@@ -213,9 +277,14 @@ app.get('/api/users', async (req, res) => {
 app.get('/api/follows/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
+        console.log('Obteniendo datos de seguidores para:', userId);
+
+        if (!userId || userId === 'undefined') {
+            return res.status(400).json({ error: 'ID de usuario inválido' });
+        }
 
         // Obtener seguidores
-        const followersResult = await pool.query(`
+        const followersResult = await req.db.query(`
             SELECT u.user_id, u.name, u.avatar, u.bio 
             FROM follows f 
             JOIN users u ON f.follower_id = u.user_id 
@@ -223,7 +292,7 @@ app.get('/api/follows/:userId', async (req, res) => {
         `, [userId]);
 
         // Obtener seguidos
-        const followingResult = await pool.query(`
+        const followingResult = await req.db.query(`
             SELECT u.user_id, u.name, u.avatar, u.bio 
             FROM follows f 
             JOIN users u ON f.following_id = u.user_id 
@@ -246,20 +315,21 @@ app.get('/api/follows/:userId', async (req, res) => {
 app.post('/api/follow', async (req, res) => {
     try {
         const { followerId, followingId } = req.body;
+        console.log('Solicitud follow:', { followerId, followingId });
 
-        if (!followerId || !followingId) {
-            return res.status(400).json({ error: 'Se requieren followerId y followingId' });
+        if (!followerId || !followingId || followerId === 'undefined' || followingId === 'undefined') {
+            return res.status(400).json({ error: 'Se requieren followerId y followingId válidos' });
         }
 
         // Verificar si ya está siguiendo
-        const existingFollow = await pool.query(
+        const existingFollow = await req.db.query(
             'SELECT * FROM follows WHERE follower_id = $1 AND following_id = $2',
             [followerId, followingId]
         );
 
         if (existingFollow.rows.length > 0) {
             // Dejar de seguir
-            await pool.query(
+            await req.db.query(
                 'DELETE FROM follows WHERE follower_id = $1 AND following_id = $2',
                 [followerId, followingId]
             );
@@ -272,7 +342,7 @@ app.post('/api/follow', async (req, res) => {
             });
         } else {
             // Seguir
-            await pool.query(
+            await req.db.query(
                 'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)',
                 [followerId, followingId]
             );
@@ -307,18 +377,20 @@ async function getFollowingCount(userId) {
     return parseInt(result.rows[0].count);
 }
 
-// API para obtener chats activos - SOLO con mensajes
+// API para obtener chats activos - CORREGIDO
 app.get('/api/chats', async (req, res) => {
     try {
         const currentUserId = req.query.userId;
-        if (!currentUserId) {
-            return res.status(400).json({ error: 'Se requiere userId' });
+        console.log('Obteniendo chats para userId:', currentUserId);
+
+        if (!currentUserId || currentUserId === 'undefined') {
+            return res.status(400).json({ error: 'Se requiere userId válido' });
         }
 
         const userChats = [];
         
         // Obtener todos los usuarios excepto el actual
-        const usersResult = await pool.query(
+        const usersResult = await req.db.query(
             'SELECT user_id, name, avatar, bio FROM users WHERE user_id != $1',
             [currentUserId]
         );
@@ -354,18 +426,25 @@ app.get('/api/chats', async (req, res) => {
             return timeB - timeA;
         });
 
+        console.log(`Enviando ${userChats.length} chats activos`);
         res.json(userChats);
     } catch (error) {
         console.error('Error obteniendo chats:', error);
-        res.status(500).json({ error: 'Error interno del servidor' });
+        res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
     }
 });
 
-// API para obtener mensajes entre dos usuarios
+// API para obtener mensajes entre dos usuarios - CORREGIDO
 app.get('/api/messages/:userId1/:userId2', (req, res) => {
     try {
         const { userId1, userId2 } = req.params;
+        
+        if (!userId1 || !userId2 || userId1 === 'undefined' || userId2 === 'undefined') {
+            return res.status(400).json({ error: 'IDs de usuario inválidos' });
+        }
+
         const chatId = [userId1, userId2].sort().join('_');
+        console.log('Obteniendo mensajes para chat:', chatId);
 
         if (messages[chatId]) {
             res.json(messages[chatId]);
@@ -378,14 +457,20 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
     }
 });
 
-// API para actualizar perfil con avatar
+// API para actualizar perfil - CORREGIDO
 app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
     try {
         const { userId } = req.params;
         const { name, bio, password } = req.body;
 
+        console.log('Actualizando perfil para:', userId);
+
+        if (!userId || userId === 'undefined') {
+            return res.status(400).json({ error: 'ID de usuario inválido' });
+        }
+
         // Obtener usuario actual para preservar datos existentes
-        const userResult = await pool.query(
+        const userResult = await req.db.query(
             'SELECT * FROM users WHERE user_id = $1',
             [userId]
         );
@@ -446,14 +531,14 @@ app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
             RETURNING user_id, name, avatar, bio, created_at
         `;
 
-        const updatedUser = await pool.query(updateQuery, updateValues);
+        const updatedUser = await req.db.query(updateQuery, updateValues);
 
         io.emit('user_updated', updatedUser.rows[0]);
 
         res.json({ user: updatedUser.rows[0] });
     } catch (error) {
         console.error('Error actualizando perfil:', error);
-        res.status(500).json({ error: 'Error interno del servidor' });
+        res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
     }
 });
 
@@ -462,8 +547,12 @@ app.delete('/api/profile/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
 
+        if (!userId || userId === 'undefined') {
+            return res.status(400).json({ error: 'ID de usuario inválido' });
+        }
+
         // Obtener usuario antes de eliminar
-        const userResult = await pool.query(
+        const userResult = await req.db.query(
             'SELECT * FROM users WHERE user_id = $1',
             [userId]
         );
@@ -483,10 +572,10 @@ app.delete('/api/profile/:userId', async (req, res) => {
         }
 
         // Eliminar usuario de la base de datos
-        await pool.query('DELETE FROM users WHERE user_id = $1', [userId]);
+        await req.db.query('DELETE FROM users WHERE user_id = $1', [userId]);
         
         // Eliminar relaciones de seguidores
-        await pool.query('DELETE FROM follows WHERE follower_id = $1 OR following_id = $1', [userId]);
+        await req.db.query('DELETE FROM follows WHERE follower_id = $1 OR following_id = $1', [userId]);
 
         // Eliminar mensajes del archivo
         Object.keys(messages).forEach(chatId => {
@@ -860,4 +949,11 @@ server.listen(PORT, () => {
     console.log(`🚀 Servidor de mensajería ejecutándose en http://localhost:${PORT}`);
     console.log(`✅ PostgreSQL configurado correctamente`);
     console.log(`✅ Socket.IO configurado para tiempo real`);
+});
+
+// Manejo graceful de shutdown
+process.on('SIGINT', async () => {
+    console.log('Apagando servidor...');
+    await pool.end();
+    process.exit(0);
 });
