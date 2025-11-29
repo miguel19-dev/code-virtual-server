@@ -2,18 +2,23 @@
 const socket = io();
 let currentUser = null;
 let selectedUser = null;
+let selectedGroup = null;
 let onlineUsers = [];
 let allUsers = [];
+let allGroups = [];
 let activeChats = [];
 let unreadCounts = {};
 let newAvatarFile = null;
+let newGroupAvatarFile = null;
 let typingTimeouts = {};
 let userLastSeen = {};
 let followers = [];
 let following = [];
 let currentProfileUser = null;
+let currentProfileGroup = null;
 let previousTab = 'chats';
-let typingUsers = new Set(); // Para controlar usuarios escribiendo en chats activos
+let typingUsers = new Set();
+let selectedMembers = new Set(); // Para creación de grupos
 
 // Inicializar la aplicación
 document.addEventListener('DOMContentLoaded', async function() {
@@ -51,12 +56,40 @@ function setupEventListeners() {
     document.getElementById('chat-back-btn').addEventListener('click', handleChatBack);
     document.getElementById('users-back-btn').addEventListener('click', () => showTab('chats'));
 
+    // Grupos - Botones principales
+    document.getElementById('new-group-btn').addEventListener('click', showCreateGroupScreen);
+
     // Perfiles
     document.getElementById('my-profile-back-btn').addEventListener('click', hideMyProfile);
     document.getElementById('user-profile-back-btn').addEventListener('click', hideUserProfile);
+    document.getElementById('group-profile-back-btn').addEventListener('click', hideGroupProfile);
     document.getElementById('edit-profile-btn').addEventListener('click', showEditProfile);
     document.getElementById('edit-profile-back-btn').addEventListener('click', hideEditProfile);
     document.getElementById('cancel-edit-btn').addEventListener('click', hideEditProfile);
+
+    // Grupos - Edición
+    document.getElementById('edit-group-btn').addEventListener('click', showEditGroupScreen);
+    document.getElementById('edit-group-back-btn').addEventListener('click', hideEditGroupScreen);
+    document.getElementById('cancel-edit-group-btn').addEventListener('click', hideEditGroupScreen);
+    document.getElementById('save-group-btn').addEventListener('click', saveGroupChanges);
+
+    // Grupos - Creación
+    document.getElementById('create-group-back-btn').addEventListener('click', hideCreateGroupScreen);
+    document.getElementById('cancel-create-group-btn').addEventListener('click', hideCreateGroupScreen);
+    document.getElementById('add-members-btn').addEventListener('click', showSelectMembersScreen);
+    document.getElementById('create-group-submit-btn').addEventListener('click', createGroup);
+
+    // Grupos - Selección de miembros
+    document.getElementById('select-members-back-btn').addEventListener('click', hideSelectMembersScreen);
+    document.getElementById('confirm-members-btn').addEventListener('click', confirmMembersSelection);
+
+    // Grupos - Unirse
+    document.getElementById('confirm-join-group-btn').addEventListener('click', joinGroup);
+    document.getElementById('cancel-join-group-btn').addEventListener('click', hideJoinGroupModal);
+    document.getElementById('join-group-close-btn').addEventListener('click', hideJoinGroupModal);
+
+    // Grupos - Salir
+    document.getElementById('leave-group-btn').addEventListener('click', leaveGroup);
 
     // Seguidores/seguidos
     document.getElementById('followers-stat').addEventListener('click', showFollowers);
@@ -74,6 +107,10 @@ function setupEventListeners() {
     document.getElementById('delete-account-btn').addEventListener('click', deleteAccount);
     document.getElementById('avatar-input').addEventListener('change', previewAvatar);
 
+    // Grupos - Avatares
+    document.getElementById('group-avatar-input').addEventListener('change', previewGroupAvatar);
+    document.getElementById('create-group-avatar').addEventListener('change', previewCreateGroupAvatar);
+
     // Mensajes
     document.getElementById('send-button').addEventListener('click', sendMessage);
     document.getElementById('message-input').addEventListener('keypress', function(e) {
@@ -90,21 +127,36 @@ function setupEventListeners() {
 
     let typingTimer;
     document.getElementById('message-input').addEventListener('input', function() {
-        if (!selectedUser) return;
+        if (!selectedUser && !selectedGroup) return;
 
-        socket.emit('user_typing', {
-            to: selectedUser,
-            from: currentUser
-        });
-
-        clearTimeout(typingTimer);
-        typingTimer = setTimeout(() => {
-            socket.emit('user_stop_typing', {
+        if (selectedUser) {
+            socket.emit('user_typing', {
                 to: selectedUser,
                 from: currentUser
             });
+        }
+
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => {
+            if (selectedUser) {
+                socket.emit('user_stop_typing', {
+                    to: selectedUser,
+                    from: currentUser
+                });
+            }
         }, 1000);
     });
+
+    // Tabs de selección de miembros
+    document.querySelectorAll('.members-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabName = this.dataset.tab;
+            switchMembersTab(tabName);
+        });
+    });
+
+    // Búsqueda de miembros
+    document.getElementById('members-search-input').addEventListener('input', filterMembers);
 
     // Socket events
     socket.on('users_online', (users) => {
@@ -115,6 +167,11 @@ function setupEventListeners() {
     socket.on('all_users', (users) => {
         allUsers = users;
         loadUsers();
+    });
+
+    socket.on('all_groups', (groups) => {
+        allGroups = groups;
+        loadUsers(); // Los grupos se muestran en la lista de usuarios
     });
 
     socket.on('user_updated', (updatedUser) => {
@@ -140,9 +197,55 @@ function setupEventListeners() {
         loadActiveChats();
     });
 
+    socket.on('new_group_created', (group) => {
+        allGroups.push(group);
+        loadUsers();
+        loadActiveChats();
+    });
+
+    socket.on('group_updated', (group) => {
+        const groupIndex = allGroups.findIndex(g => g.id === group.id);
+        if (groupIndex !== -1) {
+            allGroups[groupIndex] = group;
+        }
+
+        if (currentProfileGroup && currentProfileGroup.id === group.id) {
+            currentProfileGroup = group;
+            updateGroupProfileDisplay();
+        }
+
+        if (selectedGroup && selectedGroup.id === group.id) {
+            selectedGroup = group;
+            document.getElementById('current-chat-name').textContent = group.name;
+            updateGroupAvatarDisplay('current-chat-avatar', group.avatar, group.name);
+        }
+
+        loadUsers();
+        loadActiveChats();
+    });
+
+    socket.on('user_joined_group', (data) => {
+        console.log(`${data.user.name} se unió al grupo`);
+        if (selectedGroup && selectedGroup.id === data.groupId) {
+            addSystemMessage(`${data.user.name} se unió al grupo`);
+        }
+    });
+
+    socket.on('user_left_group', (data) => {
+        console.log(`${data.user.name} salió del grupo`);
+        if (selectedGroup && selectedGroup.id === data.groupId) {
+            addSystemMessage(`${data.user.name} salió del grupo`);
+        }
+    });
+
     socket.on('new_message', (messageData) => {
         console.log('Nuevo mensaje recibido:', messageData);
         handleNewMessage(messageData);
+    });
+
+    socket.on('new_group_message', (messageData) => {
+        console.log('Nuevo mensaje grupal recibido:', messageData);
+        handleNewGroupMessage(messageData);
     });
 
     socket.on('unread_counts', (counts) => {
@@ -169,7 +272,6 @@ function setupEventListeners() {
         if (data.from !== currentUser.id) {
             showTypingIndicator(data.from);
             
-            // Actualizar estado en chats activos
             typingUsers.add(data.from);
             updateChatsTypingStatus();
         }
@@ -179,7 +281,6 @@ function setupEventListeners() {
         if (data.from !== currentUser.id) {
             hideTypingIndicator(data.from);
             
-            // Remover estado de escritura en chats activos
             typingUsers.delete(data.from);
             updateChatsTypingStatus();
         }
@@ -214,6 +315,10 @@ function setupEventListeners() {
     socket.on('message_sent', (messageData) => {
         console.log('Mensaje enviado confirmado:', messageData);
     });
+
+    socket.on('group_message_sent', (messageData) => {
+        console.log('Mensaje grupal enviado confirmado:', messageData);
+    });
 }
 
 // Controlar panel lateral
@@ -222,11 +327,9 @@ function togglePanel(show) {
     const overlay = document.getElementById('panel-overlay');
     
     if (show === undefined) {
-        // Toggle
         panel.classList.toggle('active');
         overlay.classList.toggle('active');
     } else {
-        // Mostrar/ocultar específico
         if (show) {
             panel.classList.add('active');
             overlay.classList.add('active');
@@ -246,7 +349,6 @@ function handleNewMessage(messageData) {
         return;
     }
 
-    // Si el mensaje es para el chat actual, mostrarlo
     if (selectedUser && selectedUser.id === messageData.from) {
         console.log('Agregando mensaje a la UI del chat actual');
         addMessageToUI(messageData);
@@ -263,7 +365,29 @@ function handleNewMessage(messageData) {
         unreadCounts[messageData.from] = (unreadCounts[messageData.from] || 0) + 1;
     }
 
-    // Forzar actualización de chats activos
+    loadActiveChats();
+}
+
+// Función para manejar nuevos mensajes grupales
+function handleNewGroupMessage(messageData) {
+    console.log('Manejando nuevo mensaje grupal:', messageData);
+    
+    if (selectedGroup && selectedGroup.id === messageData.groupId) {
+        console.log('Agregando mensaje grupal a la UI del chat actual');
+        addGroupMessageToUI(messageData);
+
+        socket.emit('mark_group_as_read', {
+            userId: currentUser.id,
+            groupId: selectedGroup.id
+        });
+
+        unreadCounts[selectedGroup.id] = 0;
+        updateUnreadBadge(selectedGroup.id, 0);
+    } else {
+        console.log('Incrementando contador para grupo');
+        unreadCounts[messageData.groupId] = (unreadCounts[messageData.groupId] || 0) + 1;
+    }
+
     loadActiveChats();
 }
 
@@ -278,8 +402,7 @@ function updateChatsTypingStatus() {
             lastMessageElement.textContent = 'escribiendo...';
             lastMessageElement.classList.add('typing');
         } else {
-            // Restaurar el último mensaje real
-            const chat = activeChats.find(c => c.user.id === userId);
+            const chat = activeChats.find(c => c.user && c.user.id === userId);
             if (chat && lastMessageElement) {
                 lastMessageElement.textContent = chat.lastMessage || 'Haz clic para chatear';
                 lastMessageElement.classList.remove('typing');
@@ -321,7 +444,7 @@ function showSkeletons() {
     }
 }
 
-// Ocultar skeletons - CORREGIDO
+// Ocultar skeletons
 function hideSkeletons() {
     const chatsSkeleton = document.getElementById('chats-skeleton');
     const usersSkeleton = document.getElementById('users-skeleton');
@@ -346,11 +469,12 @@ function updateFollowCounts() {
     }
 }
 
-// Cargar datos iniciales - CORREGIDO
+// Cargar datos iniciales
 async function loadInitialData() {
     try {
         await loadUsers();
         await loadActiveChats();
+        socket.emit('get_all_groups');
     } catch (error) {
         console.error('Error cargando datos iniciales:', error);
     } finally {
@@ -358,18 +482,18 @@ async function loadInitialData() {
     }
 }
 
-// Cargar lista de usuarios
+// Cargar lista de usuarios Y grupos
 async function loadUsers() {
     try {
-        const response = await fetch('/api/users');
-        allUsers = await response.json();
-
         const usersList = document.getElementById('users-list');
         const emptyState = document.getElementById('users-empty');
 
         const otherUsers = allUsers.filter(user => user.id !== currentUser.id);
+        const publicGroups = allGroups.filter(group => group.isPublic);
 
-        if (otherUsers.length === 0) {
+        const totalItems = otherUsers.length + publicGroups.length;
+
+        if (totalItems === 0) {
             usersList.style.display = 'none';
             emptyState.style.display = 'flex';
         } else {
@@ -378,6 +502,41 @@ async function loadUsers() {
 
             usersList.innerHTML = '';
 
+            // Mostrar grupos públicos primero
+            publicGroups.forEach(group => {
+                const isMember = group.members.includes(currentUser.id);
+                const groupItem = document.createElement('div');
+                groupItem.className = 'user-item';
+                groupItem.dataset.groupId = group.id;
+
+                groupItem.innerHTML = `
+                    <div class="user-avatar group-avatar">
+                        ${group.avatar && group.avatar !== '/default-group-avatar.png' ? 
+                            `<img src="${group.avatar}" alt="${group.name}" onerror="this.style.display='none'">` : 
+                            group.name.charAt(0).toUpperCase()
+                        }
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">${group.name}</div>
+                        <div class="group-info">
+                            <div class="group-members-count">${group.members.length} miembros</div>
+                            ${!isMember ? '<div style="color: var(--primary); font-size: 0.75em; margin-top: 2px;">Toca para unirte</div>' : ''}
+                        </div>
+                    </div>
+                `;
+
+                groupItem.addEventListener('click', (e) => {
+                    if (!isMember) {
+                        showJoinGroupModal(group);
+                    } else {
+                        openGroupChat(group.id);
+                    }
+                });
+
+                usersList.appendChild(groupItem);
+            });
+
+            // Mostrar usuarios
             otherUsers.forEach(user => {
                 if (!user.bio) user.bio = "¡Yo uso SecureChat!";
                 if (!user.avatar) user.avatar = '/default-avatar.png';
@@ -407,7 +566,6 @@ async function loadUsers() {
                     startChat(user.id);
                 });
 
-                // Event listener para el avatar - ABRIR PERFIL
                 const avatarElement = userItem.querySelector('.user-avatar');
                 avatarElement.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -446,15 +604,17 @@ function updateUserStatuses() {
     const userItems = document.querySelectorAll('.user-item');
     userItems.forEach(item => {
         const userId = item.dataset.userId;
-        const user = allUsers.find(u => u.id === userId);
-        if (user) {
-            const isOnline = onlineUsers.find(u => u.id === userId);
-            const statusElement = item.querySelector('.user-status');
-            const statusText = isOnline ? 'En línea' : getLastSeenText(userId);
+        if (userId) {
+            const user = allUsers.find(u => u.id === userId);
+            if (user) {
+                const isOnline = onlineUsers.find(u => u.id === userId);
+                const statusElement = item.querySelector('.user-status');
+                const statusText = isOnline ? 'En línea' : getLastSeenText(userId);
 
-            if (statusElement) {
-                statusElement.textContent = statusText;
-                statusElement.className = `user-status ${isOnline ? 'online' : 'offline'}`;
+                if (statusElement) {
+                    statusElement.textContent = statusText;
+                    statusElement.className = `user-status ${isOnline ? 'online' : 'offline'}`;
+                }
             }
         }
     });
@@ -464,7 +624,7 @@ function updateUserStatuses() {
     }
 }
 
-// Cargar chats activos - SOLO usuarios con conversaciones iniciadas
+// Cargar chats activos - INCLUYENDO GRUPOS
 async function loadActiveChats() {
     try {
         console.log('Cargando chats activos...');
@@ -472,11 +632,7 @@ async function loadActiveChats() {
         const chatsData = await response.json();
 
         console.log('Chats recibidos del servidor:', chatsData);
-
-        // Filtrar solo chats con mensajes
-        activeChats = chatsData.filter(chat => chat.lastMessage && chat.lastMessage !== 'Iniciar conversación');
-
-        console.log('Chats activos filtrados:', activeChats);
+        activeChats = chatsData;
 
         renderActiveChats();
     } catch (error) {
@@ -501,39 +657,72 @@ function renderActiveChats() {
 
         chatsList.innerHTML = '';
         activeChats.forEach(chat => {
-            const unreadCount = unreadCounts[chat.user.id] || 0;
-            const isTyping = typingUsers.has(chat.user.id);
-            const lastMessage = isTyping ? 'escribiendo...' : (chat.lastMessage || 'Haz clic para chatear');
-            
-            const chatItem = document.createElement('div');
-            chatItem.className = 'chat-item';
-            chatItem.dataset.userId = chat.user.id;
-            chatItem.innerHTML = `
-                <div class="chat-avatar">
-                    ${chat.user.avatar !== '/default-avatar.png' ? 
-                        `<img src="${chat.user.avatar}" alt="${chat.user.name}" onerror="this.style.display='none'">` : 
-                        chat.user.name.charAt(0).toUpperCase()
-                    }
-                </div>
-                <div class="chat-info">
-                    <div class="chat-name">${chat.user.name}</div>
-                    <div class="chat-last-message ${isTyping ? 'typing' : ''}">${lastMessage}</div>
-                </div>
-                <div class="chat-time">${isTyping ? '' : (chat.lastTime || '')}</div>
-                ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
-            `;
+            if (chat.type === 'private') {
+                const unreadCount = unreadCounts[chat.user.id] || 0;
+                const isTyping = typingUsers.has(chat.user.id);
+                const lastMessage = isTyping ? 'escribiendo...' : (chat.lastMessage || 'Haz clic para chatear');
+                
+                const chatItem = document.createElement('div');
+                chatItem.className = 'chat-item';
+                chatItem.dataset.userId = chat.user.id;
+                chatItem.innerHTML = `
+                    <div class="chat-avatar">
+                        ${chat.user.avatar !== '/default-avatar.png' ? 
+                            `<img src="${chat.user.avatar}" alt="${chat.user.name}" onerror="this.style.display='none'">` : 
+                            chat.user.name.charAt(0).toUpperCase()
+                        }
+                    </div>
+                    <div class="chat-info">
+                        <div class="chat-name">${chat.user.name}</div>
+                        <div class="chat-last-message ${isTyping ? 'typing' : ''}">${lastMessage}</div>
+                    </div>
+                    <div class="chat-time">${isTyping ? '' : (chat.lastTime || '')}</div>
+                    ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
+                `;
 
-            chatItem.addEventListener('click', () => openChat(chat.user.id));
+                chatItem.addEventListener('click', () => openChat(chat.user.id));
 
-            // Event listener para el avatar en chats - ABRIR PERFIL
-            const avatarElement = chatItem.querySelector('.chat-avatar');
-            avatarElement.addEventListener('click', (e) => {
-                e.stopPropagation();
-                console.log('Mostrando perfil desde chats:', chat.user.name);
-                showOtherUserProfile(chat.user.id);
-            });
+                const avatarElement = chatItem.querySelector('.chat-avatar');
+                avatarElement.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    console.log('Mostrando perfil desde chats:', chat.user.name);
+                    showOtherUserProfile(chat.user.id);
+                });
 
-            chatsList.appendChild(chatItem);
+                chatsList.appendChild(chatItem);
+            } else if (chat.type === 'group') {
+                const unreadCount = unreadCounts[chat.group.id] || 0;
+                const lastMessage = chat.lastMessage || 'Grupo creado';
+                
+                const chatItem = document.createElement('div');
+                chatItem.className = 'chat-item';
+                chatItem.dataset.groupId = chat.group.id;
+                chatItem.innerHTML = `
+                    <div class="chat-avatar group-avatar">
+                        ${chat.group.avatar && chat.group.avatar !== '/default-group-avatar.png' ? 
+                            `<img src="${chat.group.avatar}" alt="${chat.group.name}" onerror="this.style.display='none'">` : 
+                            chat.group.name.charAt(0).toUpperCase()
+                        }
+                    </div>
+                    <div class="chat-info">
+                        <div class="chat-name">${chat.group.name}</div>
+                        <div class="chat-last-message">${lastMessage}</div>
+                    </div>
+                    <div class="chat-time">${chat.lastTime || ''}</div>
+                    ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.group.id}">${unreadCount}</div>` : ''}
+                `;
+
+                chatItem.addEventListener('click', () => openGroupChat(chat.group.id));
+
+                const avatarElement = chatItem.querySelector('.chat-avatar');
+                avatarElement.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    console.log('Mostrando perfil de grupo desde chats:', chat.group.name);
+                    showGroupProfile(chat.group.id);
+                });
+
+                chatsList.appendChild(chatItem);
+            }
         });
     }
 
@@ -552,7 +741,7 @@ function startChat(userId) {
     openChat(userId);
 }
 
-// Abrir chat existente
+// Abrir chat existente con usuario
 function openChat(userId) {
     console.log('Abriendo chat con usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
@@ -562,38 +751,67 @@ function openChat(userId) {
     }
 
     selectedUser = user;
+    selectedGroup = null;
 
-    // Guardar la pestaña actual antes de abrir el chat
-    if (document.getElementById('users-tab').classList.contains('active')) {
-        previousTab = 'users';
-    } else {
-        previousTab = 'chats';
-    }
+    previousTab = document.getElementById('users-tab').classList.contains('active') ? 'users' : 'chats';
 
-    // Mostrar pestaña de chat
     showTab('chat');
 
-    // Actualizar header del chat
     document.getElementById('current-chat-name').textContent = user.name;
     updateAvatarDisplay('current-chat-avatar', user.avatar, user.name);
 
-    // Actualizar estado en línea
     updateUserOnlineStatus(user);
 
-    // Cargar mensajes
     loadMessages(user);
 
-    // Marcar mensajes como leídos y limpiar contador
     socket.emit('mark_as_read', {
         userId: currentUser.id,
         otherUserId: user.id
     });
 
-    // Limpiar contador de no leídos
     unreadCounts[user.id] = 0;
     updateUnreadBadge(user.id, 0);
 
-    // Enfocar input de mensaje
+    setTimeout(() => {
+        const messageInput = document.getElementById('message-input');
+        if (messageInput) {
+            messageInput.focus();
+        }
+    }, 300);
+}
+
+// Abrir chat de grupo
+function openGroupChat(groupId) {
+    console.log('Abriendo chat de grupo ID:', groupId);
+    const group = allGroups.find(g => g.id === groupId);
+    if (!group) {
+        console.error('Grupo no encontrado en openGroupChat');
+        return;
+    }
+
+    selectedGroup = group;
+    selectedUser = null;
+
+    previousTab = document.getElementById('users-tab').classList.contains('active') ? 'users' : 'chats';
+
+    showTab('chat');
+
+    document.getElementById('current-chat-name').textContent = group.name;
+    updateGroupAvatarDisplay('current-chat-avatar', group.avatar, group.name);
+
+    document.getElementById('current-chat-status').textContent = `${group.members.length} miembros`;
+    document.getElementById('current-chat-status').className = 'current-chat-status';
+
+    loadGroupMessages(group);
+
+    socket.emit('mark_group_as_read', {
+        userId: currentUser.id,
+        groupId: group.id
+    });
+
+    unreadCounts[group.id] = 0;
+    updateUnreadBadge(group.id, 0);
+
     setTimeout(() => {
         const messageInput = document.getElementById('message-input');
         if (messageInput) {
@@ -606,6 +824,7 @@ function openChat(userId) {
 function handleChatBack() {
     showTab(previousTab);
     selectedUser = null;
+    selectedGroup = null;
 }
 
 // Actualizar estado en línea del usuario en el chat
@@ -631,7 +850,7 @@ function updateUserOnlineStatus(user) {
     }
 }
 
-// Cargar mensajes del chat
+// Cargar mensajes del chat privado
 async function loadMessages(user) {
     try {
         console.log('Cargando mensajes para usuario:', user.name);
@@ -659,7 +878,6 @@ async function loadMessages(user) {
             });
         }
 
-        // Scroll al final - CORREGIDO
         setTimeout(() => {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }, 100);
@@ -678,47 +896,116 @@ async function loadMessages(user) {
     }
 }
 
+// Cargar mensajes del grupo
+async function loadGroupMessages(group) {
+    try {
+        console.log('Cargando mensajes para grupo:', group.name);
+        const response = await fetch(`/api/group-messages/${group.id}`);
+        const messages = await response.json();
+
+        console.log('Mensajes grupales recibidos:', messages);
+
+        const messagesContainer = document.getElementById('messages-container');
+        messagesContainer.innerHTML = '';
+
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = `
+                <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
+                    <div class="empty-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="empty-title">Bienvenido al grupo</div>
+                    <div class="empty-subtitle">Sé el primero en enviar un mensaje</div>
+                </div>
+            `;
+        } else {
+            messages.forEach(message => {
+                addGroupMessageToUI(message);
+            });
+        }
+
+        setTimeout(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 100);
+    } catch (error) {
+        console.error('Error cargando mensajes grupales:', error);
+        const messagesContainer = document.getElementById('messages-container');
+        messagesContainer.innerHTML = `
+            <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
+                <div class="empty-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="empty-title">Error cargando mensajes</div>
+                <div class="empty-subtitle">Intenta nuevamente</div>
+            </div>
+        `;
+    }
+}
+
 // Enviar mensaje
 async function sendMessage() {
     const messageInput = document.getElementById('message-input');
     const message = messageInput.value.trim();
 
-    if (!message || !selectedUser) {
-        console.log('No hay mensaje o usuario seleccionado');
+    if (!message) {
+        console.log('No hay mensaje para enviar');
         return;
     }
 
-    console.log('Enviando mensaje a:', selectedUser.name, 'Mensaje:', message);
+    if (selectedUser) {
+        // Mensaje privado
+        console.log('Enviando mensaje a:', selectedUser.name, 'Mensaje:', message);
 
-    // Crear mensaje temporal en la UI inmediatamente
-    const tempMessageData = {
-        id: 'temp-' + Date.now(),
-        from: currentUser.id,
-        to: selectedUser.id,
-        message: message,
-        timestamp: new Date().toISOString(),
-        read: false
-    };
+        const tempMessageData = {
+            id: 'temp-' + Date.now(),
+            from: currentUser.id,
+            to: selectedUser.id,
+            message: message,
+            timestamp: new Date().toISOString(),
+            read: false
+        };
 
-    addMessageToUI(tempMessageData);
+        addMessageToUI(tempMessageData);
 
-    // Limpiar input
-    messageInput.value = '';
-    messageInput.style.height = 'auto';
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
 
-    // Enviar mensaje via socket
-    socket.emit('private_message', {
-        to: selectedUser,
-        message: message,
-        from: currentUser
-    });
+        socket.emit('private_message', {
+            to: selectedUser,
+            message: message,
+            from: currentUser
+        });
+    } else if (selectedGroup) {
+        // Mensaje grupal
+        console.log('Enviando mensaje grupal a:', selectedGroup.name, 'Mensaje:', message);
+
+        const tempMessageData = {
+            id: 'temp-group-' + Date.now(),
+            type: 'group',
+            from: currentUser.id,
+            groupId: selectedGroup.id,
+            message: message,
+            timestamp: new Date().toISOString(),
+            readBy: [currentUser.id]
+        };
+
+        addGroupMessageToUI(tempMessageData);
+
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+
+        socket.emit('group_message', {
+            groupId: selectedGroup.id,
+            message: message,
+            from: currentUser
+        });
+    }
 }
 
-// Agregar mensaje a la UI
+// Agregar mensaje privado a la UI
 function addMessageToUI(messageData) {
     const messagesContainer = document.getElementById('messages-container');
 
-    // Remover estado vacío si existe
     const emptyState = messagesContainer.querySelector('.empty-state');
     if (emptyState) {
         emptyState.remove();
@@ -742,7 +1029,64 @@ function addMessageToUI(messageData) {
 
     messagesContainer.appendChild(messageDiv);
 
-    // Scroll al final - CORREGIDO
+    setTimeout(() => {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 50);
+}
+
+// Agregar mensaje grupal a la UI
+function addGroupMessageToUI(messageData) {
+    const messagesContainer = document.getElementById('messages-container');
+
+    const emptyState = messagesContainer.querySelector('.empty-state');
+    if (emptyState) {
+        emptyState.remove();
+    }
+
+    const messageDiv = document.createElement('div');
+
+    const isSent = messageData.from === currentUser.id;
+    const sender = allUsers.find(u => u.id === messageData.from);
+    const senderName = sender ? sender.name : 'Usuario';
+
+    messageDiv.className = `message group-message ${isSent ? 'sent' : 'received'}`;
+    messageDiv.dataset.messageId = messageData.id;
+
+    const time = new Date(messageData.timestamp).toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    messageDiv.innerHTML = `
+        ${!isSent ? `<div class="message-sender">${senderName}</div>` : ''}
+        <div class="message-content">${messageData.message}</div>
+        <div class="message-time">${time}</div>
+    `;
+
+    messagesContainer.appendChild(messageDiv);
+
+    setTimeout(() => {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }, 50);
+}
+
+// Agregar mensaje del sistema (unirse/salir)
+function addSystemMessage(text) {
+    const messagesContainer = document.getElementById('messages-container');
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message system-message';
+    messageDiv.style.alignSelf = 'center';
+    messageDiv.style.background = 'rgba(255, 255, 255, 0.1)';
+    messageDiv.style.color = 'var(--text-secondary)';
+    messageDiv.style.fontSize = '0.8em';
+    messageDiv.style.padding = '8px 12px';
+    messageDiv.style.margin = '8px 0';
+
+    messageDiv.innerHTML = text;
+
+    messagesContainer.appendChild(messageDiv);
+
     setTimeout(() => {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }, 50);
@@ -794,31 +1138,26 @@ function hideTypingIndicator(userId) {
     }
 }
 
-// Función para cambiar pestañas - CORREGIDA
+// Función para cambiar pestañas
 function showTab(tabName) {
     console.log('Cambiando a pestaña:', tabName);
 
-    // Ocultar todas las pestañas
-    document.querySelectorAll('.tab-content, .users-tab-content, .profile-screen, .follow-screen, .edit-profile-screen').forEach(element => {
+    document.querySelectorAll('.tab-content, .users-tab-content, .profile-screen, .follow-screen, .edit-profile-screen, .edit-group-screen, .create-group-screen, .select-members-screen').forEach(element => {
         element.classList.remove('active');
     });
 
-    // Mostrar pestaña seleccionada
     if (tabName === 'users') {
         document.getElementById('users-tab').classList.add('active');
         previousTab = 'users';
     } else if (tabName === 'chat') {
         document.getElementById('chat-tab').classList.add('active');
-        // No cambiamos previousTab aquí para poder volver atrás correctamente
     } else {
         document.getElementById('chats-tab').classList.add('active');
         previousTab = 'chats';
     }
 
-    // Ocultar panel lateral si está abierto
     togglePanel(false);
 
-    // Mostrar/ocultar FAB button - SOLO en pestaña de chats
     const fabButton = document.getElementById('fab-button');
     if (fabButton) {
         if (tabName === 'chats') {
@@ -828,8 +1167,7 @@ function showTab(tabName) {
         }
     }
 
-    // Enfocar input de mensaje si estamos en el chat
-    if (tabName === 'chat' && selectedUser) {
+    if (tabName === 'chat' && (selectedUser || selectedGroup)) {
         setTimeout(() => {
             const messageInput = document.getElementById('message-input');
             if (messageInput) {
@@ -839,19 +1177,560 @@ function showTab(tabName) {
     }
 }
 
-// Mostrar mi perfil
+// GRUPOS - Funcionalidades de pantalla
+function showCreateGroupScreen() {
+    document.getElementById('create-group-screen').classList.add('active');
+    selectedMembers.clear();
+    updateSelectedMembersList();
+}
+
+function hideCreateGroupScreen() {
+    document.getElementById('create-group-screen').classList.remove('active');
+}
+
+function showSelectMembersScreen() {
+    document.getElementById('select-members-screen').classList.add('active');
+    loadMembersForSelection();
+}
+
+function hideSelectMembersScreen() {
+    document.getElementById('select-members-screen').classList.remove('active');
+}
+
+function showEditGroupScreen() {
+    if (!currentProfileGroup) return;
+    
+    document.getElementById('edit-group-screen').classList.add('active');
+    document.getElementById('edit-group-name').value = currentProfileGroup.name;
+    document.getElementById('edit-group-description').value = currentProfileGroup.description;
+    document.getElementById('group-avatar-preview').style.display = 'none';
+    newGroupAvatarFile = null;
+}
+
+function hideEditGroupScreen() {
+    document.getElementById('edit-group-screen').classList.remove('active');
+}
+
+function showJoinGroupModal(group) {
+    currentProfileGroup = group;
+    
+    document.getElementById('join-group-name').textContent = group.name;
+    document.getElementById('join-group-description').textContent = group.description;
+    document.getElementById('join-group-members-count').textContent = group.members.length;
+    
+    updateGroupAvatarDisplay('join-group-avatar', group.avatar, group.name);
+    
+    document.getElementById('join-group-modal').classList.add('active');
+}
+
+function hideJoinGroupModal() {
+    document.getElementById('join-group-modal').classList.remove('active');
+    currentProfileGroup = null;
+}
+
+// GRUPOS - Selección de miembros
+function switchMembersTab(tabName) {
+    document.querySelectorAll('.members-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelectorAll('.members-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    document.getElementById(`${tabName}-members-tab`).classList.add('active');
+}
+
+function loadMembersForSelection() {
+    loadChatsMembers();
+    loadAllMembers();
+}
+
+function loadChatsMembers() {
+    const container = document.getElementById('chats-members-list');
+    container.innerHTML = '';
+    
+    const usersWithChats = activeChats
+        .filter(chat => chat.type === 'private')
+        .map(chat => chat.user);
+    
+    if (usersWithChats.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding: 20px;"><div>No tienes chats activos</div></div>';
+        return;
+    }
+    
+    usersWithChats.forEach(user => {
+        const memberItem = createMemberSelectItem(user);
+        container.appendChild(memberItem);
+    });
+}
+
+function loadAllMembers() {
+    const container = document.getElementById('all-members-list');
+    container.innerHTML = '';
+    
+    const otherUsers = allUsers.filter(user => user.id !== currentUser.id);
+    
+    if (otherUsers.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding: 20px;"><div>No hay otros usuarios</div></div>';
+        return;
+    }
+    
+    otherUsers.forEach(user => {
+        const memberItem = createMemberSelectItem(user);
+        container.appendChild(memberItem);
+    });
+}
+
+function createMemberSelectItem(user) {
+    const memberItem = document.createElement('div');
+    memberItem.className = 'member-select-item';
+    memberItem.dataset.userId = user.id;
+    
+    const isSelected = selectedMembers.has(user.id);
+    
+    memberItem.innerHTML = `
+        <div class="member-select-checkbox"></div>
+        <div class="user-avatar" style="width: 40px; height: 40px; margin-right: 12px;">
+            ${user.avatar !== '/default-avatar.png' ? 
+                `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
+                user.name.charAt(0).toUpperCase()
+            }
+        </div>
+        <div class="user-info">
+            <div class="user-name">${user.name}</div>
+            <div class="user-status">${user.bio}</div>
+        </div>
+    `;
+    
+    if (isSelected) {
+        memberItem.classList.add('selected');
+    }
+    
+    memberItem.addEventListener('click', () => {
+        toggleMemberSelection(user.id);
+    });
+    
+    return memberItem;
+}
+
+function toggleMemberSelection(userId) {
+    if (selectedMembers.has(userId)) {
+        selectedMembers.delete(userId);
+    } else {
+        selectedMembers.add(userId);
+    }
+    
+    document.querySelectorAll(`.member-select-item[data-user-id="${userId}"]`).forEach(item => {
+        item.classList.toggle('selected');
+    });
+    
+    updateSelectedMembersCount();
+}
+
+function filterMembers() {
+    const searchTerm = document.getElementById('members-search-input').value.toLowerCase();
+    
+    document.querySelectorAll('.member-select-item').forEach(item => {
+        const userName = item.querySelector('.user-name').textContent.toLowerCase();
+        if (userName.includes(searchTerm)) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+function updateSelectedMembersCount() {
+    const count = selectedMembers.size;
+    document.getElementById('selected-members-count').textContent = `${count} miembros seleccionados`;
+}
+
+function updateSelectedMembersList() {
+    const container = document.getElementById('selected-members-list');
+    container.innerHTML = '';
+    
+    selectedMembers.forEach(userId => {
+        const user = allUsers.find(u => u.id === userId);
+        if (user) {
+            const selectedMember = document.createElement('div');
+            selectedMember.className = 'selected-member';
+            selectedMember.innerHTML = `
+                ${user.name}
+                <button class="remove-member" data-user-id="${userId}">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            container.appendChild(selectedMember);
+        }
+    });
+    
+    // Agregar event listeners a los botones de eliminar
+    container.querySelectorAll('.remove-member').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const userId = btn.dataset.userId;
+            selectedMembers.delete(userId);
+            updateSelectedMembersList();
+            updateSelectedMembersCount();
+            
+            // Actualizar checkboxes
+            document.querySelectorAll(`.member-select-item[data-user-id="${userId}"]`).forEach(item => {
+                item.classList.remove('selected');
+            });
+        });
+    });
+}
+
+function confirmMembersSelection() {
+    updateSelectedMembersList();
+    hideSelectMembersScreen();
+}
+
+// GRUPOS - Acciones
+async function createGroup() {
+    const name = document.getElementById('create-group-name').value.trim();
+    const description = document.getElementById('create-group-description').value.trim();
+    
+    if (!name) {
+        alert('El nombre del grupo es obligatorio');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('description', description);
+    formData.append('creatorId', currentUser.id);
+    formData.append('creatorName', currentUser.name);
+    formData.append('members', JSON.stringify(Array.from(selectedMembers)));
+    
+    if (newGroupAvatarFile) {
+        formData.append('avatar', newGroupAvatarFile);
+    }
+    
+    try {
+        const response = await fetch('/api/groups', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Grupo creado:', data.group);
+            hideCreateGroupScreen();
+            selectedMembers.clear();
+            
+            // Abrir el grupo recién creado
+            openGroupChat(data.group.id);
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.error);
+        }
+    } catch (error) {
+        console.error('Error creando grupo:', error);
+        alert('Error al crear el grupo');
+    }
+}
+
+async function joinGroup() {
+    if (!currentProfileGroup) return;
+    
+    try {
+        const response = await fetch(`/api/groups/${currentProfileGroup.id}/join`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userId: currentUser.id
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Unido al grupo:', data.group);
+            hideJoinGroupModal();
+            
+            // Abrir el grupo
+            openGroupChat(currentProfileGroup.id);
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.error);
+        }
+    } catch (error) {
+        console.error('Error uniéndose al grupo:', error);
+        alert('Error al unirse al grupo');
+    }
+}
+
+async function leaveGroup() {
+    if (!currentProfileGroup) return;
+    
+    if (!confirm('¿Estás seguro de que quieres salir de este grupo?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/groups/${currentProfileGroup.id}/leave`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userId: currentUser.id
+            })
+        });
+        
+        if (response.ok) {
+            console.log('Salido del grupo');
+            hideGroupProfile();
+            
+            // Si estábamos en el chat del grupo, regresar a chats
+            if (selectedGroup && selectedGroup.id === currentProfileGroup.id) {
+                showTab('chats');
+                selectedGroup = null;
+            }
+            
+            // Recargar datos
+            socket.emit('get_all_groups');
+            loadActiveChats();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.error);
+        }
+    } catch (error) {
+        console.error('Error saliendo del grupo:', error);
+        alert('Error al salir del grupo');
+    }
+}
+
+async function saveGroupChanges() {
+    if (!currentProfileGroup) return;
+    
+    const name = document.getElementById('edit-group-name').value.trim();
+    const description = document.getElementById('edit-group-description').value.trim();
+    
+    if (!name) {
+        alert('El nombre del grupo es obligatorio');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('description', description);
+    formData.append('userId', currentUser.id);
+    
+    if (newGroupAvatarFile) {
+        formData.append('avatar', newGroupAvatarFile);
+    }
+    
+    try {
+        const response = await fetch(`/api/groups/${currentProfileGroup.id}`, {
+            method: 'PUT',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Grupo actualizado:', data.group);
+            hideEditGroupScreen();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.error);
+        }
+    } catch (error) {
+        console.error('Error actualizando grupo:', error);
+        alert('Error al actualizar el grupo');
+    }
+}
+
+// GRUPOS - Perfiles
+function showGroupProfile(groupId) {
+    const group = allGroups.find(g => g.id === groupId);
+    if (!group) {
+        console.error('Grupo no encontrado para perfil');
+        return;
+    }
+
+    currentProfileGroup = group;
+    updateGroupProfileDisplay();
+
+    document.getElementById('group-profile-screen').classList.add('active');
+}
+
+function updateGroupProfileDisplay() {
+    if (!currentProfileGroup) return;
+
+    document.getElementById('group-profile-name').textContent = currentProfileGroup.name;
+    document.getElementById('group-profile-description').textContent = currentProfileGroup.description;
+    document.getElementById('group-members-count').textContent = currentProfileGroup.members.length;
+    
+    updateGroupAvatarDisplay('group-profile-avatar', currentProfileGroup.avatar, currentProfileGroup.name);
+
+    // Mostrar/ocultar botón de edición (solo para admin)
+    const isAdmin = currentProfileGroup.creatorId === currentUser.id;
+    document.getElementById('group-admin-actions').style.display = isAdmin ? 'flex' : 'none';
+
+    // Actualizar lista de miembros
+    updateGroupMembersList();
+}
+
+function updateGroupMembersList() {
+    const container = document.getElementById('group-members-list');
+    container.innerHTML = '';
+
+    currentProfileGroup.members.forEach(memberId => {
+        const user = allUsers.find(u => u.id === memberId);
+        if (user) {
+            const isOnline = onlineUsers.find(u => u.id === user.id);
+            const isAdmin = memberId === currentProfileGroup.creatorId;
+            
+            const memberItem = document.createElement('div');
+            memberItem.className = `member-item ${isAdmin ? 'admin' : ''}`;
+            
+            memberItem.innerHTML = `
+                <div class="member-avatar">
+                    ${user.avatar !== '/default-avatar.png' ? 
+                        `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
+                        user.name.charAt(0).toUpperCase()
+                    }
+                </div>
+                <div class="member-info">
+                    <div class="member-name">${user.name}</div>
+                    <div class="member-status ${isOnline ? 'online' : ''}">
+                        ${isOnline ? 'En línea' : 'Desconectado'}
+                    </div>
+                </div>
+            `;
+
+            // Solo el admin puede eliminar miembros (excepto a sí mismo)
+            const isCurrentUserAdmin = currentProfileGroup.creatorId === currentUser.id;
+            if (isCurrentUserAdmin && memberId !== currentUser.id) {
+                memberItem.style.cursor = 'pointer';
+                memberItem.addEventListener('click', () => {
+                    if (confirm(`¿Eliminar a ${user.name} del grupo?`)) {
+                        removeMemberFromGroup(memberId);
+                    }
+                });
+            }
+
+            container.appendChild(memberItem);
+        }
+    });
+}
+
+async function removeMemberFromGroup(memberId) {
+    if (!currentProfileGroup) return;
+
+    try {
+        const response = await fetch(`/api/groups/${currentProfileGroup.id}/members/${memberId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                adminId: currentUser.id
+            })
+        });
+
+        if (response.ok) {
+            console.log('Miembro eliminado del grupo');
+            // La actualización se manejará via socket
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.error);
+        }
+    } catch (error) {
+        console.error('Error eliminando miembro:', error);
+        alert('Error al eliminar miembro');
+    }
+}
+
+function hideGroupProfile() {
+    document.getElementById('group-profile-screen').classList.remove('active');
+    currentProfileGroup = null;
+}
+
+// GRUPOS - Preview de avatares
+function previewGroupAvatar(event) {
+    const file = event.target.files[0];
+    if (file) {
+        newGroupAvatarFile = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('group-avatar-preview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function previewCreateGroupAvatar(event) {
+    const file = event.target.files[0];
+    if (file) {
+        newGroupAvatarFile = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('create-group-avatar-preview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// GRUPOS - Display de avatares
+function updateGroupAvatarDisplay(elementId, avatarUrl, groupName) {
+    const element = document.getElementById(elementId);
+    if (avatarUrl && avatarUrl !== '/default-group-avatar.png') {
+        element.innerHTML = `
+            <img src="${avatarUrl}" alt="${groupName}" onerror="this.style.display='none'">
+            <div class="group-badge">
+                <i class="fas fa-users"></i>
+            </div>
+        `;
+        const img = element.querySelector('img');
+        img.onerror = function() {
+            this.style.display = 'none';
+            const fallback = document.createElement('div');
+            fallback.textContent = groupName.charAt(0).toUpperCase();
+            fallback.style.display = 'flex';
+            fallback.style.alignItems = 'center';
+            fallback.style.justifyContent = 'center';
+            fallback.style.width = '100%';
+            fallback.style.height = '100%';
+            element.appendChild(fallback);
+            
+            const badge = document.createElement('div');
+            badge.className = 'group-badge';
+            badge.innerHTML = '<i class="fas fa-users"></i>';
+            element.appendChild(badge);
+        };
+    } else {
+        element.innerHTML = `
+            ${groupName.charAt(0).toUpperCase()}
+            <div class="group-badge">
+                <i class="fas fa-users"></i>
+            </div>
+        `;
+    }
+}
+
+// ... (las funciones restantes se mantienen igual que antes)
+
+// Funciones existentes (se mantienen igual)
 function showMyProfile() {
     document.getElementById('my-profile-screen').classList.add('active');
     updateMyProfileDisplay();
     togglePanel(false);
 }
 
-// Ocultar mi perfil
 function hideMyProfile() {
     document.getElementById('my-profile-screen').classList.remove('active');
 }
 
-// Mostrar editar perfil
 function showEditProfile() {
     document.getElementById('edit-profile-screen').classList.add('active');
     document.getElementById('edit-profile-name').value = currentUser.name;
@@ -861,34 +1740,28 @@ function showEditProfile() {
     newAvatarFile = null;
 }
 
-// Ocultar editar perfil
 function hideEditProfile() {
     document.getElementById('edit-profile-screen').classList.remove('active');
 }
 
-// Mostrar seguidores
 function showFollowers() {
     document.getElementById('followers-screen').classList.add('active');
     loadFollowersList();
 }
 
-// Ocultar seguidores
 function hideFollowers() {
     document.getElementById('followers-screen').classList.remove('active');
 }
 
-// Mostrar seguidos
 function showFollowing() {
     document.getElementById('following-screen').classList.add('active');
     loadFollowingList();
 }
 
-// Ocultar seguidos
 function hideFollowing() {
     document.getElementById('following-screen').classList.remove('active');
 }
 
-// Cargar lista de seguidores
 function loadFollowersList() {
     const followersList = document.getElementById('followers-list');
     followersList.innerHTML = '';
@@ -926,7 +1799,6 @@ function loadFollowersList() {
     }
 }
 
-// Cargar lista de seguidos
 function loadFollowingList() {
     const followingList = document.getElementById('following-list');
     followingList.innerHTML = '';
@@ -964,17 +1836,14 @@ function loadFollowingList() {
     }
 }
 
-// Mostrar seguidores de usuario
 function showUserFollowers() {
     alert('Mostrar seguidores de ' + currentProfileUser.name);
 }
 
-// Mostrar seguidos de usuario
 function showUserFollowing() {
     alert('Mostrar seguidos de ' + currentProfileUser.name);
 }
 
-// Previsualizar avatar
 function previewAvatar(event) {
     const file = event.target.files[0];
     if (file) {
@@ -989,7 +1858,6 @@ function previewAvatar(event) {
     }
 }
 
-// Guardar mi perfil
 async function saveMyProfile() {
     const newName = document.getElementById('edit-profile-name').value.trim();
     const newBio = document.getElementById('edit-profile-bio').value.trim();
@@ -1036,14 +1904,12 @@ async function saveMyProfile() {
     }
 }
 
-// Eliminar cuenta
 function deleteAccount() {
     if (confirm('¿Estás seguro de que quieres eliminar tu cuenta? Esta acción no se puede deshacer.')) {
         alert('Funcionalidad de eliminar cuenta - Pendiente de implementar');
     }
 }
 
-// Mostrar perfil de otro usuario
 function showOtherUserProfile(userId) {
     console.log('Mostrando perfil de usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
@@ -1072,7 +1938,6 @@ function showOtherUserProfile(userId) {
     document.getElementById('user-profile-screen').classList.add('active');
 }
 
-// Toggle seguir/dejar de seguir
 function toggleFollow() {
     if (!currentProfileUser) return;
 
@@ -1098,13 +1963,11 @@ function toggleFollow() {
     updateFollowCounts();
 }
 
-// Ocultar perfil de usuario
 function hideUserProfile() {
     document.getElementById('user-profile-screen').classList.remove('active');
     currentProfileUser = null;
 }
 
-// Actualizar display del avatar - SIN puntos verdes
 function updateAvatarDisplay(elementId, avatarUrl, userName) {
     const element = document.getElementById(elementId);
     if (avatarUrl && avatarUrl !== '/default-avatar.png') {
@@ -1126,14 +1989,12 @@ function updateAvatarDisplay(elementId, avatarUrl, userName) {
     }
 }
 
-// Actualizar display del usuario actual
 function updateCurrentUserDisplay() {
     document.getElementById('panel-user-name').textContent = currentUser.name;
     document.getElementById('panel-user-bio').textContent = currentUser.bio;
     updateAvatarDisplay('panel-user-avatar', currentUser.avatar, currentUser.name);
 }
 
-// Actualizar display de mi perfil
 function updateMyProfileDisplay() {
     document.getElementById('my-profile-name').textContent = currentUser.name;
     document.getElementById('my-profile-bio').textContent = currentUser.bio;
@@ -1141,7 +2002,6 @@ function updateMyProfileDisplay() {
     updateFollowCounts();
 }
 
-// Actualizar badge de mensajes no leídos
 function updateUnreadBadge(userId, count) {
     const badge = document.getElementById(`chat-unread-${userId}`);
     if (badge) {
@@ -1154,14 +2014,12 @@ function updateUnreadBadge(userId, count) {
     }
 }
 
-// Actualizar todos los badges
 function updateUnreadBadges() {
     Object.keys(unreadCounts).forEach(userId => {
         updateUnreadBadge(userId, unreadCounts[userId]);
     });
 }
 
-// Cerrar sesión
 function logout() {
     localStorage.removeItem('currentUser');
     window.location.href = '/';
