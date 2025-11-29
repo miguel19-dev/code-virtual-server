@@ -13,6 +13,7 @@ let followers = [];
 let following = [];
 let currentProfileUser = null;
 let previousTab = 'chats';
+let typingUsers = new Set(); // Para controlar usuarios escribiendo en chats activos
 
 // Inicializar la aplicación
 document.addEventListener('DOMContentLoaded', async function() {
@@ -167,12 +168,20 @@ function setupEventListeners() {
     socket.on('user_typing', (data) => {
         if (data.from !== currentUser.id) {
             showTypingIndicator(data.from);
+            
+            // Actualizar estado en chats activos
+            typingUsers.add(data.from);
+            updateChatsTypingStatus();
         }
     });
 
     socket.on('user_stop_typing', (data) => {
         if (data.from !== currentUser.id) {
             hideTypingIndicator(data.from);
+            
+            // Remover estado de escritura en chats activos
+            typingUsers.delete(data.from);
+            updateChatsTypingStatus();
         }
     });
 
@@ -256,6 +265,27 @@ function handleNewMessage(messageData) {
 
     // Forzar actualización de chats activos
     loadActiveChats();
+}
+
+// Actualizar estado "escribiendo" en chats activos
+function updateChatsTypingStatus() {
+    const chatItems = document.querySelectorAll('.chat-item');
+    chatItems.forEach(chatItem => {
+        const userId = chatItem.dataset.userId;
+        const lastMessageElement = chatItem.querySelector('.chat-last-message');
+        
+        if (typingUsers.has(userId)) {
+            lastMessageElement.textContent = 'escribiendo...';
+            lastMessageElement.classList.add('typing');
+        } else {
+            // Restaurar el último mensaje real
+            const chat = activeChats.find(c => c.user.id === userId);
+            if (chat && lastMessageElement) {
+                lastMessageElement.textContent = chat.lastMessage || 'Haz clic para chatear';
+                lastMessageElement.classList.remove('typing');
+            }
+        }
+    });
 }
 
 // Mostrar skeletons de carga
@@ -377,7 +407,7 @@ async function loadUsers() {
                     startChat(user.id);
                 });
 
-                // Event listener para el avatar
+                // Event listener para el avatar - ABRIR PERFIL
                 const avatarElement = userItem.querySelector('.user-avatar');
                 avatarElement.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -472,6 +502,9 @@ function renderActiveChats() {
         chatsList.innerHTML = '';
         activeChats.forEach(chat => {
             const unreadCount = unreadCounts[chat.user.id] || 0;
+            const isTyping = typingUsers.has(chat.user.id);
+            const lastMessage = isTyping ? 'escribiendo...' : (chat.lastMessage || 'Haz clic para chatear');
+            
             const chatItem = document.createElement('div');
             chatItem.className = 'chat-item';
             chatItem.dataset.userId = chat.user.id;
@@ -484,15 +517,15 @@ function renderActiveChats() {
                 </div>
                 <div class="chat-info">
                     <div class="chat-name">${chat.user.name}</div>
-                    <div class="chat-last-message">${chat.lastMessage || 'Haz clic para chatear'}</div>
+                    <div class="chat-last-message ${isTyping ? 'typing' : ''}">${lastMessage}</div>
                 </div>
-                <div class="chat-time">${chat.lastTime || ''}</div>
+                <div class="chat-time">${isTyping ? '' : (chat.lastTime || '')}</div>
                 ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
             `;
 
             chatItem.addEventListener('click', () => openChat(chat.user.id));
 
-            // Event listener para el avatar en chats
+            // Event listener para el avatar en chats - ABRIR PERFIL
             const avatarElement = chatItem.querySelector('.chat-avatar');
             avatarElement.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -612,7 +645,7 @@ async function loadMessages(user) {
 
         if (messages.length === 0) {
             messagesContainer.innerHTML = `
-                <div class="empty-state" style="justify-content: center; height: 100%;">
+                <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
                     <div class="empty-icon">
                         <i class="fas fa-comments"></i>
                     </div>
@@ -626,7 +659,7 @@ async function loadMessages(user) {
             });
         }
 
-        // Scroll al final
+        // Scroll al final - CORREGIDO
         setTimeout(() => {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }, 100);
@@ -634,7 +667,7 @@ async function loadMessages(user) {
         console.error('Error cargando mensajes:', error);
         const messagesContainer = document.getElementById('messages-container');
         messagesContainer.innerHTML = `
-            <div class="empty-state" style="justify-content: center; height: 100%;">
+            <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
                 <div class="empty-icon">
                     <i class="fas fa-exclamation-triangle"></i>
                 </div>
@@ -709,15 +742,10 @@ function addMessageToUI(messageData) {
 
     messagesContainer.appendChild(messageDiv);
 
-    // Scroll al final
+    // Scroll al final - CORREGIDO
     setTimeout(() => {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }, 50);
-
-    // Animación de aparición
-    setTimeout(() => {
-        messageDiv.style.opacity = '1';
-    }, 10);
 }
 
 // Mostrar indicador de escribiendo
@@ -790,10 +818,14 @@ function showTab(tabName) {
     // Ocultar panel lateral si está abierto
     togglePanel(false);
 
-    // Mostrar/ocultar FAB button
+    // Mostrar/ocultar FAB button - SOLO en pestaña de chats
     const fabButton = document.getElementById('fab-button');
     if (fabButton) {
-        fabButton.style.display = (tabName === 'chats') ? 'flex' : 'none';
+        if (tabName === 'chats') {
+            fabButton.style.display = 'flex';
+        } else {
+            fabButton.style.display = 'none';
+        }
     }
 
     // Enfocar input de mensaje si estamos en el chat
