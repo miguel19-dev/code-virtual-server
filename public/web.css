@@ -171,20 +171,8 @@ body {
     z-index: 20;
 }
 
-/* MOSTRAR HEADER SOLO cuando la pestaña de chats está activa */
-#chats-tab.active ~ .main-header {
-    display: flex;
-}
-
-/* OCULTAR HEADER en todas las demás situaciones */
-.users-tab-content.active ~ .main-header,
-#chat-tab.active ~ .main-header,
-.profile-screen.active ~ .main-header,
-.follow-screen.active ~ .main-header,
-.edit-profile-screen.active ~ .main-header {
-    display: none !important;
-}
-
+/* BOTÓN HAMBURGUESA ELIMINADO - Comentado temporalmente */
+/*
 .menu-btn {
     background: none;
     border: none;
@@ -197,13 +185,31 @@ body {
     justify-content: center;
     flex-shrink: 0;
 }
+*/
 
+/* TEXTO SECURECHAT ELIMINADO - Comentado temporalmente */
+/*
 .app-title {
     font-weight: 700;
     font-size: 1.3em;
     background: linear-gradient(90deg, var(--primary), var(--secondary));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+}
+*/
+
+/* MOSTRAR HEADER SOLO cuando la pestaña de chats está activa */
+#chats-tab.active ~ .main-header {
+    display: flex;
+}
+
+/* OCULTAR HEADER en todas las demás situaciones */
+.users-tab-content.active ~ .main-header,
+#chat-tab.active ~ .main-header,
+.profile-screen.active ~ .main-header,
+.follow-screen.active ~ .main-header,
+.edit-profile-screen.active ~ .main-header {
+    display: none !important;
 }
 
 /* Sistema de Pestañas - Pantalla Completa */
@@ -625,14 +631,16 @@ body {
     text-align: right;
 }
 
+/* CONTENEDOR DE MENSAJES DESPLAZADO 1.5cm HACIA ARRIBA */
 .message-input-container {
     padding: 15px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(30, 41, 59, 0.95);
     flex-shrink: 0;
     position: sticky;
-    bottom: 0;
+    bottom: -1.5cm; /* DESPLAZADO 1.5cm HACIA ARRIBA */
     width: 100%;
+    margin-bottom: -1.5cm; /* Compensación para el desplazamiento */
 }
 
 .message-input-wrapper {
