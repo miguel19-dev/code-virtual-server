@@ -12,7 +12,7 @@
     <div class="app-container">
         <!-- Overlay para móvil -->
         <div class="panel-overlay" id="panel-overlay"></div>
-        
+
         <!-- Panel Lateral -->
         <div class="side-panel" id="side-panel">
             <div class="panel-header">
@@ -26,7 +26,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="panel-actions">
                 <button class="panel-action-btn" id="my-profile-btn">
                     <i class="fas fa-user"></i>
@@ -38,17 +38,17 @@
                 </button>
             </div>
         </div>
-        
+
         <!-- Área Principal -->
         <div class="main-area">
-            <!-- Header Principal - SOLO visible en pestaña de chats -->
-            <div class="main-header">
+            <!-- Header CORREGIDO - Usando chats-header -->
+            <div class="chats-header">
                 <button class="menu-btn" id="menu-btn">
                     <i class="fas fa-bars"></i>
                 </button>
                 <div class="app-title">SecureChat</div>
             </div>
-            
+
             <!-- Contenedor de Pestañas -->
             <div class="tabs-container">
                 <!-- Pestaña de Chats -->
@@ -57,7 +57,7 @@
                         <!-- Skeleton loading mientras carga -->
                         <div id="chats-skeleton"></div>
                     </div>
-                    
+
                     <!-- Estado vacío para chats -->
                     <div class="empty-state" id="chats-empty" style="display: none;">
                         <div class="empty-icon">
@@ -70,7 +70,7 @@
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Pestaña de Chat Individual -->
                 <div class="tab-content" id="chat-tab">
                     <div class="chat-area">
@@ -86,11 +86,11 @@
                                 <div class="current-chat-status" id="current-chat-status">Desconectado</div>
                             </div>
                         </div>
-                        
+
                         <div class="messages-container" id="messages-container">
                             <!-- Mensajes se cargarán dinámicamente -->
                         </div>
-                        
+
                         <div class="message-input-container">
                             <div class="message-input-wrapper">
                                 <textarea 
@@ -107,7 +107,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Pestaña de Usuarios -->
             <div class="users-tab-content" id="users-tab">
                 <div class="users-header">
@@ -119,7 +119,7 @@
                 <div class="users-list" id="users-list">
                     <div id="users-skeleton"></div>
                 </div>
-                
+
                 <div class="empty-state" id="users-empty" style="display: none;">
                     <div class="empty-icon">
                         <i class="fas fa-users"></i>
@@ -128,14 +128,14 @@
                     <div class="empty-subtitle">Parece que eres el único usuario registrado por ahora</div>
                 </div>
             </div>
-            
+
             <!-- Botón Flotante -->
             <button class="fab-button" id="fab-button">
                 <i class="fas fa-plus"></i>
                 <div class="fab-tooltip">Todos los usuarios</div>
             </button>
         </div>
-        
+
         <!-- Pantalla de Mi Perfil -->
         <div class="profile-screen" id="my-profile-screen">
             <div class="profile-header">
@@ -158,7 +158,7 @@
                 </div>
                 <div class="profile-name" id="my-profile-name">Usuario</div>
                 <div class="profile-bio" id="my-profile-bio">¡Yo uso SecureChat!</div>
-                
+
                 <div class="profile-stats">
                     <div class="stat-item" id="followers-stat">
                         <div class="stat-number" id="followers-count">0</div>
@@ -171,7 +171,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Pantalla de Perfil de Usuario -->
         <div class="profile-screen" id="user-profile-screen">
             <div class="profile-header">
@@ -186,7 +186,7 @@
                 </div>
                 <div class="profile-name" id="user-profile-name">Usuario</div>
                 <div class="profile-bio" id="user-profile-bio">¡Yo uso SecureChat!</div>
-                
+
                 <div class="profile-stats">
                     <div class="stat-item" id="user-followers-stat">
                         <div class="stat-number" id="user-followers-count">0</div>
@@ -197,11 +197,11 @@
                         <div class="stat-label">Seguidos</div>
                     </div>
                 </div>
-                
+
                 <button class="follow-btn" id="follow-btn">Seguir</button>
             </div>
         </div>
-        
+
         <!-- Pantalla de Editar Perfil -->
         <div class="edit-profile-screen" id="edit-profile-screen">
             <div class="profile-header">
@@ -246,7 +246,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Pantalla de Seguidores -->
         <div class="follow-screen" id="followers-screen">
             <div class="profile-header">
@@ -257,7 +257,7 @@
             </div>
             <div class="follow-list" id="followers-list"></div>
         </div>
-        
+
         <!-- Pantalla de Seguidos -->
         <div class="follow-screen" id="following-screen">
             <div class="profile-header">
