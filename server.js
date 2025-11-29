@@ -63,12 +63,12 @@ function initializeFollowData(userId) {
 // Configuración de multer para upload de avatares
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const isGroupAvatar = req.originalUrl.includes('/group-avatar');
+        const isGroupAvatar = req.originalUrl.includes('/groups') || req.originalUrl.includes('/group-avatar');
         cb(null, isGroupAvatar ? 'uploads/group-avatars/' : 'uploads/avatars/');
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const isGroupAvatar = req.originalUrl.includes('/group-avatar');
+        const isGroupAvatar = req.originalUrl.includes('/groups') || req.originalUrl.includes('/group-avatar');
         const prefix = isGroupAvatar ? 'group-avatar-' : 'avatar-';
         cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
     }
@@ -94,9 +94,28 @@ app.use((req, res, next) => {
     next();
 });
 
+// Middleware de error para multer
+app.use((error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ error: 'El archivo es demasiado grande (máx. 5MB)' });
+        }
+    }
+    next(error);
+});
+
 // Rutas de autenticación
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'auth.html')));
 app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'public', 'web.html')));
+
+// Servir avatares por defecto
+app.get('/default-avatar.png', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'default-avatar.png'));
+});
+
+app.get('/default-group-avatar.png', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'default-group-avatar.png'));
+});
 
 // API de registro
 app.post('/api/register', async (req, res) => {
@@ -371,7 +390,8 @@ app.get('/api/group-messages/:groupId', (req, res) => {
 // API para obtener grupos públicos
 app.get('/api/groups', (req, res) => {
     try {
-        res.json(groups);
+        const publicGroups = groups.filter(group => group.isPublic);
+        res.json(publicGroups);
     } catch (error) {
         console.error('Error obteniendo grupos:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
@@ -406,7 +426,9 @@ app.post('/api/groups', upload.single('avatar'), (req, res) => {
         saveGroups();
 
         // Inicializar mensajes del grupo
-        messages[newGroup.id] = [];
+        if (!messages[newGroup.id]) {
+            messages[newGroup.id] = [];
+        }
         saveMessages();
 
         io.emit('new_group_created', newGroup);
@@ -703,7 +725,8 @@ io.on('connection', (socket) => {
         socket.emit('all_users', safeUsers);
 
         // Enviar grupos al usuario
-        socket.emit('all_groups', groups);
+        const publicGroups = groups.filter(group => group.isPublic);
+        socket.emit('all_groups', publicGroups);
 
         if (!follows[user.id]) {
             initializeFollowData(user.id);
@@ -915,6 +938,81 @@ io.on('connection', (socket) => {
             }
         } catch (error) {
             console.error('Error marcando mensajes grupales como leídos:', error);
+        }
+    });
+
+    socket.on('group_typing', (data) => {
+        try {
+            const { groupId, from } = data;
+            const group = groups.find(g => g.id === groupId);
+            
+            if (group) {
+                // Enviar a todos los miembros del grupo excepto al que está escribiendo
+                group.members.forEach(memberId => {
+                    if (memberId !== from.id) {
+                        const memberSocket = getUserSocket(memberId);
+                        if (memberSocket) {
+                            io.to(memberSocket).emit('group_typing', {
+                                groupId: groupId,
+                                from: from.id
+                            });
+                        }
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error en group_typing:', error);
+        }
+    });
+
+    socket.on('group_stop_typing', (data) => {
+        try {
+            const { groupId, from } = data;
+            const group = groups.find(g => g.id === groupId);
+            
+            if (group) {
+                // Enviar a todos los miembros del grupo excepto al que dejó de escribir
+                group.members.forEach(memberId => {
+                    if (memberId !== from.id) {
+                        const memberSocket = getUserSocket(memberId);
+                        if (memberSocket) {
+                            io.to(memberSocket).emit('group_stop_typing', {
+                                groupId: groupId,
+                                from: from.id
+                            });
+                        }
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error en group_stop_typing:', error);
+        }
+    });
+
+    socket.on('member_removed', (data) => {
+        try {
+            const { groupId, memberId } = data;
+            
+            // Notificar al miembro eliminado
+            const memberSocket = getUserSocket(memberId);
+            if (memberSocket) {
+                io.to(memberSocket).emit('member_removed_from_group', {
+                    groupId: groupId
+                });
+            }
+            
+            // Notificar a todos los miembros del grupo
+            const group = groups.find(g => g.id === groupId);
+            if (group) {
+                group.members.forEach(memberId => {
+                    const memberSocket = getUserSocket(memberId);
+                    if (memberSocket) {
+                        io.to(memberSocket).emit('group_updated', group);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error manejando member_removed:', error);
         }
     });
 
@@ -1138,7 +1236,8 @@ io.on('connection', (socket) => {
 
     socket.on('get_all_groups', () => {
         try {
-            socket.emit('all_groups', groups);
+            const publicGroups = groups.filter(group => group.isPublic);
+            socket.emit('all_groups', publicGroups);
         } catch (error) {
             console.error('Error obteniendo grupos:', error);
         }
@@ -1148,6 +1247,9 @@ io.on('connection', (socket) => {
         const user = onlineUsers.get(socket.id);
         if (user) {
             console.log('Usuario desconectado:', user.name);
+
+            // Notificar que el usuario dejó de escribir en todos los chats
+            io.emit('user_stop_typing', { from: user.id });
 
             io.emit('user_offline', {
                 id: user.id,
@@ -1166,5 +1268,7 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
     console.log(`🚀 Servidor de mensajería ejecutándose en http://localhost:${PORT}`);
     console.log(`✅ Grupos públicos implementados`);
+    console.log(`✅ Eventos de typing para grupos agregados`);
+    console.log(`✅ Manejo de miembros mejorado`);
     console.log(`📁 Datos guardados en: data/`);
 });
