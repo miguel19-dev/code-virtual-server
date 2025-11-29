@@ -198,13 +198,13 @@ body {
     background: rgba(30, 41, 59, 0.95);
     display: flex;
     align-items: center;
-    gap: 5px; /* Menos espacio entre botón y texto */
+    gap: 15px; /* Espacio entre botón y texto */
     flex-shrink: 0;
     position: relative;
     z-index: 20;
 }
 
-/* BOTÓN HAMBURGUESA MODIFICADO - Más grande y desplazado */
+/* BOTÓN HAMBURGUESA MODIFICADO - Esquina superior izquierda */
 .menu-btn {
     background: none;
     border: none;
@@ -216,8 +216,6 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    margin-left: 0.4cm; /* Desplazado 0.1cm menos a la derecha (0.5cm - 0.1cm) */
-    margin-top: 0.4cm; /* Desplazado 0.1cm menos hacia abajo (0.5cm - 0.1cm) */
     transition: all 0.3s ease;
 }
 
@@ -226,14 +224,13 @@ body {
     color: var(--primary);
 }
 
-/* TEXTO SECURECHAT MODIFICADO - Justo al lado derecho del botón */
+/* TEXTO SECURECHAT MODIFICADO - Al lado del botón */
 .app-title {
     font-weight: 700;
     font-size: 1.6em; /* Más grande que el botón */
     background: linear-gradient(90deg, var(--primary), var(--secondary));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    margin-top: 0.4cm; /* Mismo margen superior que el botón */
 }
 
 .chats-list {
@@ -575,6 +572,7 @@ body {
     flex-direction: column;
     overflow: hidden;
     position: relative;
+    padding-bottom: 80px; /* Espacio para la barra de mensajes fija */
 }
 
 .messages-container {
@@ -586,6 +584,14 @@ body {
     gap: 12px;
     -webkit-overflow-scrolling: touch;
     min-height: 0;
+}
+
+/* Asegurar que el último mensaje sea visible */
+.messages-container::after {
+    content: '';
+    display: block;
+    height: 20px; /* Espacio extra al final */
+    flex-shrink: 0;
 }
 
 .message {
