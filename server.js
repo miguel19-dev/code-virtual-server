@@ -117,9 +117,9 @@ app.post('/api/register', async (req, res) => {
         initializeFollowData(newUser.id);
 
         const { password: _, ...safeUser } = newUser;
-        
+
         io.emit('user_updated', safeUser);
-        
+
         res.json({ user: safeUser });
     } catch (error) {
         console.error('Error en registro:', error);
@@ -438,7 +438,7 @@ io.on('connection', (socket) => {
         if (!follows[user.id]) {
             initializeFollowData(user.id);
         }
-        
+
         const userFollows = follows[user.id];
         const followersWithData = userFollows.followers.map(followerId => {
             const userData = users.find(u => u.id === followerId);
@@ -601,7 +601,7 @@ io.on('connection', (socket) => {
                             bio: user.bio
                         } : null;
                     }).filter(Boolean);
-                    
+
                     io.to(followerSocket).emit('follow_data', {
                         followers: followerFollows.followers.map(fId => {
                             const user = users.find(u => u.id === fId);
@@ -712,7 +712,7 @@ io.on('connection', (socket) => {
             });
 
             onlineUsers.delete(socket.id);
-            
+
             const onlineUsersList = Array.from(onlineUsers.values()).map(({ socketId, ...user }) => user);
             io.emit('users_online', onlineUsersList);
         }
