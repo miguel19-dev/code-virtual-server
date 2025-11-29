@@ -11,6 +11,7 @@ let unreadCounts = {};
 let newAvatarFile = null;
 let newGroupAvatarFile = null;
 let typingTimeouts = {};
+let groupTypingTimeouts = {};
 let userLastSeen = {};
 let followers = [];
 let following = [];
@@ -18,7 +19,9 @@ let currentProfileUser = null;
 let currentProfileGroup = null;
 let previousTab = 'chats';
 let typingUsers = new Set();
-let selectedMembers = new Set(); // Para creación de grupos
+let groupTypingUsers = new Map(); // Para controlar typing en grupos
+let selectedMembers = new Set();
+let sentMessageIds = new Set(); // Para prevenir duplicación de mensajes
 
 // Inicializar la aplicación
 document.addEventListener('DOMContentLoaded', async function() {
@@ -58,6 +61,10 @@ function setupEventListeners() {
 
     // Grupos - Botones principales
     document.getElementById('new-group-btn').addEventListener('click', showCreateGroupScreen);
+
+    // Perfiles - Hacer clickeables avatar y nombre en chat
+    document.getElementById('current-chat-avatar').addEventListener('click', openCurrentProfile);
+    document.getElementById('current-chat-name').addEventListener('click', openCurrentProfile);
 
     // Perfiles
     document.getElementById('my-profile-back-btn').addEventListener('click', hideMyProfile);
@@ -111,8 +118,10 @@ function setupEventListeners() {
     document.getElementById('group-avatar-input').addEventListener('change', previewGroupAvatar);
     document.getElementById('create-group-avatar').addEventListener('change', previewCreateGroupAvatar);
 
-    // Mensajes
+    // Mensajes - Enfocar input solo tras interacción
+    document.getElementById('messages-container').addEventListener('click', focusMessageInput);
     document.getElementById('send-button').addEventListener('click', sendMessage);
+    
     document.getElementById('message-input').addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -123,29 +132,14 @@ function setupEventListeners() {
     document.getElementById('message-input').addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        
+        // Manejar estados de escritura
+        handleTyping();
     });
 
-    let typingTimer;
-    document.getElementById('message-input').addEventListener('input', function() {
-        if (!selectedUser && !selectedGroup) return;
-
-        if (selectedUser) {
-            socket.emit('user_typing', {
-                to: selectedUser,
-                from: currentUser
-            });
-        }
-
-        clearTimeout(typingTimer);
-        typingTimer = setTimeout(() => {
-            if (selectedUser) {
-                socket.emit('user_stop_typing', {
-                    to: selectedUser,
-                    from: currentUser
-                });
-            }
-        }, 1000);
-    });
+    // Validación en tiempo real para formularios
+    document.getElementById('create-group-name').addEventListener('input', validateGroupForm);
+    document.getElementById('edit-group-name').addEventListener('input', validateEditGroupForm);
 
     // Tabs de selección de miembros
     document.querySelectorAll('.members-tab-btn').forEach(btn => {
@@ -171,7 +165,7 @@ function setupEventListeners() {
 
     socket.on('all_groups', (groups) => {
         allGroups = groups;
-        loadUsers(); // Los grupos se muestran en la lista de usuarios
+        loadUsers();
     });
 
     socket.on('user_updated', (updatedUser) => {
@@ -286,6 +280,19 @@ function setupEventListeners() {
         }
     });
 
+    // NUEVO: Estados de escritura grupal
+    socket.on('group_typing', (data) => {
+        if (data.from !== currentUser.id && selectedGroup && selectedGroup.id === data.groupId) {
+            showGroupTypingIndicator(data.from);
+        }
+    });
+
+    socket.on('group_stop_typing', (data) => {
+        if (data.from !== currentUser.id && selectedGroup && selectedGroup.id === data.groupId) {
+            hideGroupTypingIndicator(data.from);
+        }
+    });
+
     socket.on('follow_data', (data) => {
         followers = data.followers;
         following = data.following;
@@ -314,11 +321,66 @@ function setupEventListeners() {
 
     socket.on('message_sent', (messageData) => {
         console.log('Mensaje enviado confirmado:', messageData);
+        // Remover de mensajes temporales si existe
+        if (messageData.id && messageData.id.startsWith('temp-')) {
+            const tempMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
+            if (tempMessage) {
+                tempMessage.remove();
+            }
+        }
     });
 
     socket.on('group_message_sent', (messageData) => {
         console.log('Mensaje grupal enviado confirmado:', messageData);
+        // Remover de mensajes temporales si existe
+        if (messageData.id && messageData.id.startsWith('temp-group-')) {
+            const tempMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
+            if (tempMessage) {
+                tempMessage.remove();
+            }
+        }
     });
+}
+
+// FOCUS MEJORADO: Solo tras interacción explícita
+function focusMessageInput() {
+    const messageInput = document.getElementById('message-input');
+    if (messageInput && !messageInput.matches(':focus')) {
+        setTimeout(() => {
+            messageInput.focus();
+        }, 100);
+    }
+}
+
+// CONTROL DE TYPING MEJORADO
+function handleTyping() {
+    if (selectedUser) {
+        socket.emit('user_typing', {
+            to: selectedUser,
+            from: currentUser
+        });
+
+        clearTimeout(typingTimeouts['private']);
+        typingTimeouts['private'] = setTimeout(() => {
+            socket.emit('user_stop_typing', {
+                to: selectedUser,
+                from: currentUser
+            });
+        }, 1000);
+    } else if (selectedGroup) {
+        socket.emit('group_typing', {
+            groupId: selectedGroup.id,
+            from: currentUser
+        });
+
+        clearTimeout(typingTimeouts['group']);
+        typingTimeouts['group'] = setTimeout(() => {
+            socket.emit('group_stop_typing', {
+                groupId: selectedGroup.id,
+                from: currentUser
+            });
+        }, 1000);
+    }
 }
 
 // Controlar panel lateral
@@ -340,9 +402,24 @@ function togglePanel(show) {
     }
 }
 
-// Función para manejar nuevos mensajes en tiempo real
+// MEJORADO: Prevenir duplicación de mensajes
 function handleNewMessage(messageData) {
     console.log('Manejando nuevo mensaje:', messageData);
+    
+    // Verificar si el mensaje ya fue procesado
+    if (sentMessageIds.has(messageData.id)) {
+        console.log('Mensaje duplicado ignorado:', messageData.id);
+        return;
+    }
+    
+    sentMessageIds.add(messageData.id);
+    
+    // Limitar tamaño del cache de IDs
+    if (sentMessageIds.size > 1000) {
+        const firstId = Array.from(sentMessageIds)[0];
+        sentMessageIds.delete(firstId);
+    }
+
     const sender = allUsers.find(u => u.id === messageData.from);
     if (!sender) {
         console.log('Usuario remitente no encontrado');
@@ -368,9 +445,23 @@ function handleNewMessage(messageData) {
     loadActiveChats();
 }
 
-// Función para manejar nuevos mensajes grupales
+// MEJORADO: Prevenir duplicación de mensajes grupales
 function handleNewGroupMessage(messageData) {
     console.log('Manejando nuevo mensaje grupal:', messageData);
+    
+    // Verificar si el mensaje ya fue procesado
+    if (sentMessageIds.has(messageData.id)) {
+        console.log('Mensaje grupal duplicado ignorado:', messageData.id);
+        return;
+    }
+    
+    sentMessageIds.add(messageData.id);
+    
+    // Limitar tamaño del cache de IDs
+    if (sentMessageIds.size > 1000) {
+        const firstId = Array.from(sentMessageIds)[0];
+        sentMessageIds.delete(firstId);
+    }
     
     if (selectedGroup && selectedGroup.id === messageData.groupId) {
         console.log('Agregando mensaje grupal a la UI del chat actual');
@@ -391,6 +482,64 @@ function handleNewGroupMessage(messageData) {
     loadActiveChats();
 }
 
+// NUEVO: Estados de escritura grupal
+function showGroupTypingIndicator(userId) {
+    if (!selectedGroup) return;
+
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+
+    // Agregar usuario a la lista de typing
+    groupTypingUsers.set(userId, user.name);
+
+    updateGroupTypingStatus();
+
+    // Limpiar timeout anterior
+    if (groupTypingTimeouts[userId]) {
+        clearTimeout(groupTypingTimeouts[userId]);
+    }
+
+    // Timeout para remover automáticamente
+    groupTypingTimeouts[userId] = setTimeout(() => {
+        hideGroupTypingIndicator(userId);
+    }, 3000);
+}
+
+function hideGroupTypingIndicator(userId) {
+    groupTypingUsers.delete(userId);
+    updateGroupTypingStatus();
+}
+
+function updateGroupTypingStatus() {
+    const statusElement = document.getElementById('current-chat-status');
+    if (!statusElement) return;
+
+    const typingCount = groupTypingUsers.size;
+
+    if (typingCount === 0) {
+        // Restaurar estado normal
+        if (selectedGroup) {
+            statusElement.textContent = `${selectedGroup.members.length} miembros`;
+            statusElement.className = 'current-chat-status';
+        }
+    } else {
+        // Mostrar estados de escritura
+        const typingNames = Array.from(groupTypingUsers.values());
+        let statusText = '';
+
+        if (typingCount === 1) {
+            statusText = `${typingNames[0]} está escribiendo...`;
+        } else if (typingCount === 2) {
+            statusText = `${typingNames[0]} y ${typingNames[1]} están escribiendo...`;
+        } else {
+            statusText = `${typingCount} personas están escribiendo...`;
+        }
+
+        statusElement.textContent = statusText;
+        statusElement.className = 'current-chat-status typing';
+    }
+}
+
 // Actualizar estado "escribiendo" en chats activos
 function updateChatsTypingStatus() {
     const chatItems = document.querySelectorAll('.chat-item');
@@ -398,7 +547,7 @@ function updateChatsTypingStatus() {
         const userId = chatItem.dataset.userId;
         const lastMessageElement = chatItem.querySelector('.chat-last-message');
         
-        if (typingUsers.has(userId)) {
+        if (userId && typingUsers.has(userId)) {
             lastMessageElement.textContent = 'escribiendo...';
             lastMessageElement.classList.add('typing');
         } else {
@@ -509,23 +658,30 @@ async function loadUsers() {
                 groupItem.className = 'user-item';
                 groupItem.dataset.groupId = group.id;
 
+                // MEJORADO: Sin emojis, diseño limpio
                 groupItem.innerHTML = `
                     <div class="user-avatar group-avatar">
                         ${group.avatar && group.avatar !== '/default-group-avatar.png' ? 
-                            `<img src="${group.avatar}" alt="${group.name}" onerror="this.style.display='none'">` : 
-                            group.name.charAt(0).toUpperCase()
+                            `<img src="${group.avatar}?v=${Date.now()}" alt="${group.name}" onerror="this.style.display='none'">` : 
+                            `<div class="avatar-fallback">${group.name.charAt(0).toUpperCase()}</div>`
                         }
                     </div>
                     <div class="user-info">
                         <div class="user-name">${group.name}</div>
                         <div class="group-info">
                             <div class="group-members-count">${group.members.length} miembros</div>
-                            ${!isMember ? '<div style="color: var(--primary); font-size: 0.75em; margin-top: 2px;">Toca para unirte</div>' : ''}
+                            ${!isMember ? '<div class="join-hint">Toca para unirte</div>' : ''}
                         </div>
                     </div>
                 `;
 
                 groupItem.addEventListener('click', (e) => {
+                    // MEJORADO: Animación táctil
+                    groupItem.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        groupItem.style.transform = '';
+                    }, 150);
+
                     if (!isMember) {
                         showJoinGroupModal(group);
                     } else {
@@ -551,8 +707,8 @@ async function loadUsers() {
                 userItem.innerHTML = `
                     <div class="user-avatar">
                         ${user.avatar !== '/default-avatar.png' ? 
-                            `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                            user.name.charAt(0).toUpperCase()
+                            `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
+                            `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
                         }
                     </div>
                     <div class="user-info">
@@ -562,6 +718,12 @@ async function loadUsers() {
                 `;
 
                 userItem.addEventListener('click', (e) => {
+                    // MEJORADO: Animación táctil
+                    userItem.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        userItem.style.transform = '';
+                    }, 150);
+
                     console.log('Iniciando chat con:', user.name);
                     startChat(user.id);
                 });
@@ -668,8 +830,8 @@ function renderActiveChats() {
                 chatItem.innerHTML = `
                     <div class="chat-avatar">
                         ${chat.user.avatar !== '/default-avatar.png' ? 
-                            `<img src="${chat.user.avatar}" alt="${chat.user.name}" onerror="this.style.display='none'">` : 
-                            chat.user.name.charAt(0).toUpperCase()
+                            `<img src="${chat.user.avatar}?v=${Date.now()}" alt="${chat.user.name}" onerror="this.style.display='none'">` : 
+                            `<div class="avatar-fallback">${chat.user.name.charAt(0).toUpperCase()}</div>`
                         }
                     </div>
                     <div class="chat-info">
@@ -700,8 +862,8 @@ function renderActiveChats() {
                 chatItem.innerHTML = `
                     <div class="chat-avatar group-avatar">
                         ${chat.group.avatar && chat.group.avatar !== '/default-group-avatar.png' ? 
-                            `<img src="${chat.group.avatar}" alt="${chat.group.name}" onerror="this.style.display='none'">` : 
-                            chat.group.name.charAt(0).toUpperCase()
+                            `<img src="${chat.group.avatar}?v=${Date.now()}" alt="${chat.group.name}" onerror="this.style.display='none'">` : 
+                            `<div class="avatar-fallback">${chat.group.name.charAt(0).toUpperCase()}</div>`
                         }
                     </div>
                     <div class="chat-info">
@@ -741,7 +903,7 @@ function startChat(userId) {
     openChat(userId);
 }
 
-// Abrir chat existente con usuario
+// MEJORADO: Abrir chat sin auto-focus
 function openChat(userId) {
     console.log('Abriendo chat con usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
@@ -752,6 +914,9 @@ function openChat(userId) {
 
     selectedUser = user;
     selectedGroup = null;
+
+    // Limpiar estados de escritura grupal
+    groupTypingUsers.clear();
 
     previousTab = document.getElementById('users-tab').classList.contains('active') ? 'users' : 'chats';
 
@@ -772,15 +937,11 @@ function openChat(userId) {
     unreadCounts[user.id] = 0;
     updateUnreadBadge(user.id, 0);
 
-    setTimeout(() => {
-        const messageInput = document.getElementById('message-input');
-        if (messageInput) {
-            messageInput.focus();
-        }
-    }, 300);
+    // MEJORADO: No enfocar automáticamente
+    // El input se enfocará cuando el usuario toque el área del chat
 }
 
-// Abrir chat de grupo
+// MEJORADO: Abrir chat de grupo sin auto-focus
 function openGroupChat(groupId) {
     console.log('Abriendo chat de grupo ID:', groupId);
     const group = allGroups.find(g => g.id === groupId);
@@ -791,6 +952,9 @@ function openGroupChat(groupId) {
 
     selectedGroup = group;
     selectedUser = null;
+
+    // Limpiar estados de escritura
+    typingUsers.clear();
 
     previousTab = document.getElementById('users-tab').classList.contains('active') ? 'users' : 'chats';
 
@@ -812,12 +976,17 @@ function openGroupChat(groupId) {
     unreadCounts[group.id] = 0;
     updateUnreadBadge(group.id, 0);
 
-    setTimeout(() => {
-        const messageInput = document.getElementById('message-input');
-        if (messageInput) {
-            messageInput.focus();
-        }
-    }, 300);
+    // MEJORADO: No enfocar automáticamente
+    // El input se enfocará cuando el usuario toque el área del chat
+}
+
+// NUEVO: Abrir perfil del chat actual
+function openCurrentProfile() {
+    if (selectedUser) {
+        showOtherUserProfile(selectedUser.id);
+    } else if (selectedGroup) {
+        showGroupProfile(selectedGroup.id);
+    }
 }
 
 // Manejar el botón de regresar en el chat
@@ -825,6 +994,10 @@ function handleChatBack() {
     showTab(previousTab);
     selectedUser = null;
     selectedGroup = null;
+    
+    // Limpiar estados de escritura
+    typingUsers.clear();
+    groupTypingUsers.clear();
 }
 
 // Actualizar estado en línea del usuario en el chat
@@ -942,7 +1115,7 @@ async function loadGroupMessages(group) {
     }
 }
 
-// Enviar mensaje
+// MEJORADO: Enviar mensaje con mejor control de duplicados
 async function sendMessage() {
     const messageInput = document.getElementById('message-input');
     const message = messageInput.value.trim();
@@ -952,12 +1125,15 @@ async function sendMessage() {
         return;
     }
 
+    // Generar ID temporal único
+    const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
     if (selectedUser) {
         // Mensaje privado
         console.log('Enviando mensaje a:', selectedUser.name, 'Mensaje:', message);
 
         const tempMessageData = {
-            id: 'temp-' + Date.now(),
+            id: tempId,
             from: currentUser.id,
             to: selectedUser.id,
             message: message,
@@ -975,12 +1151,13 @@ async function sendMessage() {
             message: message,
             from: currentUser
         });
+
     } else if (selectedGroup) {
         // Mensaje grupal
         console.log('Enviando mensaje grupal a:', selectedGroup.name, 'Mensaje:', message);
 
         const tempMessageData = {
-            id: 'temp-group-' + Date.now(),
+            id: tempId,
             type: 'group',
             from: currentUser.id,
             groupId: selectedGroup.id,
@@ -1009,6 +1186,13 @@ function addMessageToUI(messageData) {
     const emptyState = messagesContainer.querySelector('.empty-state');
     if (emptyState) {
         emptyState.remove();
+    }
+
+    // Verificar si el mensaje ya existe
+    const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
+    if (existingMessage) {
+        console.log('Mensaje ya existe en UI:', messageData.id);
+        return;
     }
 
     const messageDiv = document.createElement('div');
@@ -1041,6 +1225,13 @@ function addGroupMessageToUI(messageData) {
     const emptyState = messagesContainer.querySelector('.empty-state');
     if (emptyState) {
         emptyState.remove();
+    }
+
+    // Verificar si el mensaje ya existe
+    const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
+    if (existingMessage) {
+        console.log('Mensaje grupal ya existe en UI:', messageData.id);
+        return;
     }
 
     const messageDiv = document.createElement('div');
@@ -1166,14 +1357,32 @@ function showTab(tabName) {
             fabButton.style.display = 'none';
         }
     }
+}
 
-    if (tabName === 'chat' && (selectedUser || selectedGroup)) {
-        setTimeout(() => {
-            const messageInput = document.getElementById('message-input');
-            if (messageInput) {
-                messageInput.focus();
-            }
-        }, 500);
+// NUEVO: Validación de formularios en tiempo real
+function validateGroupForm() {
+    const name = document.getElementById('create-group-name').value.trim();
+    const submitBtn = document.getElementById('create-group-submit-btn');
+    
+    if (name.length < 2) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+    } else {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+    }
+}
+
+function validateEditGroupForm() {
+    const name = document.getElementById('edit-group-name').value.trim();
+    const submitBtn = document.getElementById('save-group-btn');
+    
+    if (name.length < 2) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+    } else {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
     }
 }
 
@@ -1182,6 +1391,7 @@ function showCreateGroupScreen() {
     document.getElementById('create-group-screen').classList.add('active');
     selectedMembers.clear();
     updateSelectedMembersList();
+    validateGroupForm(); // Validación inicial
 }
 
 function hideCreateGroupScreen() {
@@ -1205,6 +1415,7 @@ function showEditGroupScreen() {
     document.getElementById('edit-group-description').value = currentProfileGroup.description;
     document.getElementById('group-avatar-preview').style.display = 'none';
     newGroupAvatarFile = null;
+    validateEditGroupForm(); // Validación inicial
 }
 
 function hideEditGroupScreen() {
@@ -1293,8 +1504,8 @@ function createMemberSelectItem(user) {
         <div class="member-select-checkbox"></div>
         <div class="user-avatar" style="width: 40px; height: 40px; margin-right: 12px;">
             ${user.avatar !== '/default-avatar.png' ? 
-                `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                user.name.charAt(0).toUpperCase()
+                `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
+                `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
             }
         </div>
         <div class="user-info">
@@ -1398,6 +1609,12 @@ async function createGroup() {
         return;
     }
     
+    // Mostrar loading
+    const submitBtn = document.getElementById('create-group-submit-btn');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando...';
+    submitBtn.disabled = true;
+    
     const formData = new FormData();
     formData.append('name', name);
     formData.append('description', description);
@@ -1418,23 +1635,39 @@ async function createGroup() {
         if (response.ok) {
             const data = await response.json();
             console.log('Grupo creado:', data.group);
-            hideCreateGroupScreen();
-            selectedMembers.clear();
             
-            // Abrir el grupo recién creado
-            openGroupChat(data.group.id);
+            // Feedback de éxito
+            submitBtn.innerHTML = '<i class="fas fa-check"></i> ¡Creado!';
+            setTimeout(() => {
+                hideCreateGroupScreen();
+                selectedMembers.clear();
+                
+                // Abrir el grupo recién creado
+                openGroupChat(data.group.id);
+            }, 1000);
+            
         } else {
             const error = await response.json();
             alert('Error: ' + error.error);
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
         }
     } catch (error) {
         console.error('Error creando grupo:', error);
         alert('Error al crear el grupo');
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
     }
 }
 
 async function joinGroup() {
     if (!currentProfileGroup) return;
+    
+    // Mostrar loading
+    const joinBtn = document.getElementById('confirm-join-group-btn');
+    const originalText = joinBtn.innerHTML;
+    joinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uniendo...';
+    joinBtn.disabled = true;
     
     try {
         const response = await fetch(`/api/groups/${currentProfileGroup.id}/join`, {
@@ -1450,17 +1683,27 @@ async function joinGroup() {
         if (response.ok) {
             const data = await response.json();
             console.log('Unido al grupo:', data.group);
-            hideJoinGroupModal();
             
-            // Abrir el grupo
-            openGroupChat(currentProfileGroup.id);
+            // Feedback de éxito
+            joinBtn.innerHTML = '<i class="fas fa-check"></i> ¡Unido!';
+            setTimeout(() => {
+                hideJoinGroupModal();
+                
+                // Abrir el grupo
+                openGroupChat(currentProfileGroup.id);
+            }, 1000);
+            
         } else {
             const error = await response.json();
             alert('Error: ' + error.error);
+            joinBtn.innerHTML = originalText;
+            joinBtn.disabled = false;
         }
     } catch (error) {
         console.error('Error uniéndose al grupo:', error);
         alert('Error al unirse al grupo');
+        joinBtn.innerHTML = originalText;
+        joinBtn.disabled = false;
     }
 }
 
@@ -1470,6 +1713,12 @@ async function leaveGroup() {
     if (!confirm('¿Estás seguro de que quieres salir de este grupo?')) {
         return;
     }
+    
+    // Mostrar loading
+    const leaveBtn = document.getElementById('leave-group-btn');
+    const originalText = leaveBtn.innerHTML;
+    leaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saliendo...';
+    leaveBtn.disabled = true;
     
     try {
         const response = await fetch(`/api/groups/${currentProfileGroup.id}/leave`, {
@@ -1484,24 +1733,34 @@ async function leaveGroup() {
         
         if (response.ok) {
             console.log('Salido del grupo');
-            hideGroupProfile();
             
-            // Si estábamos en el chat del grupo, regresar a chats
-            if (selectedGroup && selectedGroup.id === currentProfileGroup.id) {
-                showTab('chats');
-                selectedGroup = null;
-            }
+            // Feedback de éxito
+            leaveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Salido!';
+            setTimeout(() => {
+                hideGroupProfile();
+                
+                // Si estábamos en el chat del grupo, regresar a chats
+                if (selectedGroup && selectedGroup.id === currentProfileGroup.id) {
+                    showTab('chats');
+                    selectedGroup = null;
+                }
+                
+                // Recargar datos
+                socket.emit('get_all_groups');
+                loadActiveChats();
+            }, 1000);
             
-            // Recargar datos
-            socket.emit('get_all_groups');
-            loadActiveChats();
         } else {
             const error = await response.json();
             alert('Error: ' + error.error);
+            leaveBtn.innerHTML = originalText;
+            leaveBtn.disabled = false;
         }
     } catch (error) {
         console.error('Error saliendo del grupo:', error);
         alert('Error al salir del grupo');
+        leaveBtn.innerHTML = originalText;
+        leaveBtn.disabled = false;
     }
 }
 
@@ -1515,6 +1774,12 @@ async function saveGroupChanges() {
         alert('El nombre del grupo es obligatorio');
         return;
     }
+    
+    // Mostrar loading
+    const saveBtn = document.getElementById('save-group-btn');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+    saveBtn.disabled = true;
     
     const formData = new FormData();
     formData.append('name', name);
@@ -1534,14 +1799,24 @@ async function saveGroupChanges() {
         if (response.ok) {
             const data = await response.json();
             console.log('Grupo actualizado:', data.group);
-            hideEditGroupScreen();
+            
+            // Feedback de éxito
+            saveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Guardado!';
+            setTimeout(() => {
+                hideEditGroupScreen();
+            }, 1000);
+            
         } else {
             const error = await response.json();
             alert('Error: ' + error.error);
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
         }
     } catch (error) {
         console.error('Error actualizando grupo:', error);
         alert('Error al actualizar el grupo');
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
     }
 }
 
@@ -1592,12 +1867,12 @@ function updateGroupMembersList() {
             memberItem.innerHTML = `
                 <div class="member-avatar">
                     ${user.avatar !== '/default-avatar.png' ? 
-                        `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                        user.name.charAt(0).toUpperCase()
+                        `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
+                        `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
                     }
                 </div>
                 <div class="member-info">
-                    <div class="member-name">${user.name}</div>
+                    <div class="member-name">${user.name}${isAdmin ? ' (Admin)' : ''}</div>
                     <div class="member-status ${isOnline ? 'online' : ''}">
                         ${isOnline ? 'En línea' : 'Desconectado'}
                     </div>
@@ -1608,6 +1883,7 @@ function updateGroupMembersList() {
             const isCurrentUserAdmin = currentProfileGroup.creatorId === currentUser.id;
             if (isCurrentUserAdmin && memberId !== currentUser.id) {
                 memberItem.style.cursor = 'pointer';
+                memberItem.title = `Eliminar a ${user.name} del grupo`;
                 memberItem.addEventListener('click', () => {
                     if (confirm(`¿Eliminar a ${user.name} del grupo?`)) {
                         removeMemberFromGroup(memberId);
@@ -1622,6 +1898,12 @@ function updateGroupMembersList() {
 
 async function removeMemberFromGroup(memberId) {
     if (!currentProfileGroup) return;
+
+    // Mostrar loading
+    const memberItem = document.querySelector(`.member-item[data-user-id="${memberId}"]`);
+    if (memberItem) {
+        memberItem.style.opacity = '0.5';
+    }
 
     try {
         const response = await fetch(`/api/groups/${currentProfileGroup.id}/members/${memberId}`, {
@@ -1640,10 +1922,16 @@ async function removeMemberFromGroup(memberId) {
         } else {
             const error = await response.json();
             alert('Error: ' + error.error);
+            if (memberItem) {
+                memberItem.style.opacity = '1';
+            }
         }
     } catch (error) {
         console.error('Error eliminando miembro:', error);
         alert('Error al eliminar miembro');
+        if (memberItem) {
+            memberItem.style.opacity = '1';
+        }
     }
 }
 
@@ -1681,20 +1969,20 @@ function previewCreateGroupAvatar(event) {
     }
 }
 
-// GRUPOS - Display de avatares
+// MEJORADO: Display de avatares con cache busting
 function updateGroupAvatarDisplay(elementId, avatarUrl, groupName) {
     const element = document.getElementById(elementId);
+    const timestamp = Date.now();
+    
     if (avatarUrl && avatarUrl !== '/default-group-avatar.png') {
         element.innerHTML = `
-            <img src="${avatarUrl}" alt="${groupName}" onerror="this.style.display='none'">
-            <div class="group-badge">
-                <i class="fas fa-users"></i>
-            </div>
+            <img src="${avatarUrl}?v=${timestamp}" alt="${groupName}" onerror="this.style.display='none'">
         `;
         const img = element.querySelector('img');
         img.onerror = function() {
             this.style.display = 'none';
             const fallback = document.createElement('div');
+            fallback.className = 'avatar-fallback';
             fallback.textContent = groupName.charAt(0).toUpperCase();
             fallback.style.display = 'flex';
             fallback.style.alignItems = 'center';
@@ -1702,23 +1990,37 @@ function updateGroupAvatarDisplay(elementId, avatarUrl, groupName) {
             fallback.style.width = '100%';
             fallback.style.height = '100%';
             element.appendChild(fallback);
-            
-            const badge = document.createElement('div');
-            badge.className = 'group-badge';
-            badge.innerHTML = '<i class="fas fa-users"></i>';
-            element.appendChild(badge);
         };
     } else {
         element.innerHTML = `
-            ${groupName.charAt(0).toUpperCase()}
-            <div class="group-badge">
-                <i class="fas fa-users"></i>
-            </div>
+            <div class="avatar-fallback">${groupName.charAt(0).toUpperCase()}</div>
         `;
     }
 }
 
-// ... (las funciones restantes se mantienen igual que antes)
+function updateAvatarDisplay(elementId, avatarUrl, userName) {
+    const element = document.getElementById(elementId);
+    const timestamp = Date.now();
+    
+    if (avatarUrl && avatarUrl !== '/default-avatar.png') {
+        element.innerHTML = `<img src="${avatarUrl}?v=${timestamp}" alt="${userName}" onerror="this.style.display='none'">`;
+        const img = element.querySelector('img');
+        img.onerror = function() {
+            this.style.display = 'none';
+            const fallback = document.createElement('div');
+            fallback.className = 'avatar-fallback';
+            fallback.textContent = userName.charAt(0).toUpperCase();
+            fallback.style.display = 'flex';
+            fallback.style.alignItems = 'center';
+            fallback.style.justifyContent = 'center';
+            fallback.style.width = '100%';
+            fallback.style.height = '100%';
+            element.appendChild(fallback);
+        };
+    } else {
+        element.innerHTML = `<div class="avatar-fallback">${userName.charAt(0).toUpperCase()}</div>`;
+    }
+}
 
 // Funciones existentes (se mantienen igual)
 function showMyProfile() {
@@ -1783,8 +2085,8 @@ function loadFollowersList() {
             userItem.innerHTML = `
                 <div class="user-avatar">
                     ${user.avatar !== '/default-avatar.png' ? 
-                        `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                        user.name.charAt(0).toUpperCase()
+                        `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
+                        `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
                     }
                 </div>
                 <div class="user-info">
@@ -1820,8 +2122,8 @@ function loadFollowingList() {
             userItem.innerHTML = `
                 <div class="user-avatar">
                     ${user.avatar !== '/default-avatar.png' ? 
-                        `<img src="${user.avatar}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                        user.name.charAt(0).toUpperCase()
+                        `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
+                        `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
                     }
                 </div>
                 <div class="user-info">
@@ -1868,6 +2170,12 @@ async function saveMyProfile() {
         return;
     }
 
+    // Mostrar loading
+    const saveBtn = document.getElementById('save-profile-btn');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+    saveBtn.disabled = true;
+
     const formData = new FormData();
     formData.append('name', newName);
     formData.append('bio', newBio || "¡Yo uso SecureChat!");
@@ -1890,17 +2198,26 @@ async function saveMyProfile() {
             const data = await response.json();
             currentUser = data.user;
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            updateCurrentUserDisplay();
-            updateMyProfileDisplay();
-            hideEditProfile();
-            alert('Perfil actualizado correctamente');
+            
+            // Feedback de éxito
+            saveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Guardado!';
+            setTimeout(() => {
+                updateCurrentUserDisplay();
+                updateMyProfileDisplay();
+                hideEditProfile();
+            }, 1000);
+            
         } else {
             const error = await response.json();
             alert('Error: ' + error.error);
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
         }
     } catch (error) {
         console.error('Error guardando perfil:', error);
         alert('Error al guardar el perfil');
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
     }
 }
 
@@ -1966,27 +2283,6 @@ function toggleFollow() {
 function hideUserProfile() {
     document.getElementById('user-profile-screen').classList.remove('active');
     currentProfileUser = null;
-}
-
-function updateAvatarDisplay(elementId, avatarUrl, userName) {
-    const element = document.getElementById(elementId);
-    if (avatarUrl && avatarUrl !== '/default-avatar.png') {
-        element.innerHTML = `<img src="${avatarUrl}" alt="${userName}" onerror="this.style.display='none'">`;
-        const img = element.querySelector('img');
-        img.onerror = function() {
-            this.style.display = 'none';
-            const fallback = document.createElement('div');
-            fallback.textContent = userName.charAt(0).toUpperCase();
-            fallback.style.display = 'flex';
-            fallback.style.alignItems = 'center';
-            fallback.style.justifyContent = 'center';
-            fallback.style.width = '100%';
-            fallback.style.height = '100%';
-            element.appendChild(fallback);
-        };
-    } else {
-        element.innerHTML = userName.charAt(0).toUpperCase();
-    }
 }
 
 function updateCurrentUserDisplay() {
