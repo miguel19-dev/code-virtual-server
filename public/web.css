@@ -191,27 +191,27 @@ body {
     display: flex;
 }
 
-/* Header integrado en la pestaña de chats - MODIFICADO */
+/* Header de chats */
 .chats-header {
     padding: 15px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(30, 41, 59, 0.95);
     display: flex;
     align-items: center;
-    gap: 15px; /* Espacio entre botón y texto */
+    gap: 15px;
     flex-shrink: 0;
     position: relative;
     z-index: 20;
 }
 
-/* BOTÓN HAMBURGUESA MODIFICADO - Esquina superior izquierda */
+/* Botón hamburguesa */
 .menu-btn {
     background: none;
     border: none;
     color: var(--text);
-    font-size: 1.5em; /* Más grande */
+    font-size: 1.2em;
     cursor: pointer;
-    padding: 12px; /* Más grande */
+    padding: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -224,10 +224,10 @@ body {
     color: var(--primary);
 }
 
-/* TEXTO SECURECHAT MODIFICADO - Al lado del botón */
+/* Título de la app */
 .app-title {
     font-weight: 700;
-    font-size: 1.6em; /* Más grande que el botón */
+    font-size: 1.3em;
     background: linear-gradient(90deg, var(--primary), var(--secondary));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -511,6 +511,12 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.back-button:hover {
+    transform: scale(1.1);
+    color: var(--primary);
 }
 
 .current-chat-avatar {
