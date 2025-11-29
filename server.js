@@ -5,7 +5,6 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const { Pool } = require('pg');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,127 +15,62 @@ const io = socketIo(server, {
     } 
 });
 
-// Configuración de PostgreSQL CON RECONEXIÓN
-const pool = new Pool({
-    user: 'securechat_im03_user',
-    host: 'dpg-d4l5530gjchc73ah6j10-a.oregon-postgres.render.com',
-    database: 'securechat_im03',
-    password: 'kruf294SvJ8Ta7BJb5hlpfihQEnWJ3F9',
-    port: 5432,
-    ssl: {
-        rejectUnauthorized: false
-    },
-    // Configuración adicional para mejor estabilidad
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
-    maxUses: 7500,
-});
-
-// Manejo de errores de conexión
-pool.on('error', (err, client) => {
-    console.error('Error inesperado en el pool de PostgreSQL:', err);
-});
-
-// Función para verificar conexión
-async function testConnection() {
-    try {
-        const client = await pool.connect();
-        console.log('✅ Conectado a PostgreSQL exitosamente');
-        client.release();
-        return true;
-    } catch (error) {
-        console.error('❌ Error conectando a PostgreSQL:', error.message);
-        return false;
-    }
-}
-
-// Inicializar tablas de la base de datos
-async function initializeDatabase() {
-    try {
-        // Tabla de usuarios
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                user_id VARCHAR(50) UNIQUE NOT NULL,
-                name VARCHAR(100) NOT NULL,
-                password VARCHAR(255) NOT NULL,
-                avatar VARCHAR(500) DEFAULT '/default-avatar.png',
-                bio TEXT DEFAULT '¡Yo uso SecureChat!',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
-        // Tabla de seguidores
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS follows (
-                id SERIAL PRIMARY KEY,
-                follower_id VARCHAR(50) NOT NULL,
-                following_id VARCHAR(50) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(follower_id, following_id)
-            )
-        `);
-
-        console.log('✅ Tablas de la base de datos inicializadas');
-    } catch (error) {
-        console.error('Error inicializando base de datos:', error);
-    }
-}
-
-// Inicializar la aplicación
-async function initializeApp() {
-    const isConnected = await testConnection();
-    if (isConnected) {
-        await initializeDatabase();
-    } else {
-        console.log('⚠️  Intentando reconectar en 5 segundos...');
-        setTimeout(initializeApp, 5000);
-    }
-}
-
-initializeApp();
-
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Carpetas necesarias para archivos
-['uploads/avatars', 'data'].forEach(d => {
-    if (!fs.existsSync(d)) {
-        fs.mkdirSync(d, { recursive: true });
-    }
-});
+// Carpetas necesarias
+['data', 'uploads/avatars', 'uploads/group-avatars'].forEach(d => !fs.existsSync(d) && fs.mkdirSync(d, { recursive: true }));
 
+const USERS_FILE = 'data/users.json';
 const MESSAGES_FILE = 'data/messages.json';
-let messages = {};
+const FOLLOWS_FILE = 'data/follows.json';
+const GROUPS_FILE = 'data/groups.json';
 
-// Cargar mensajes existentes
-try {
-    if (fs.existsSync(MESSAGES_FILE)) {
-        messages = JSON.parse(fs.readFileSync(MESSAGES_FILE));
-    }
-} catch (error) {
-    console.error('Error cargando mensajes:', error);
-    messages = {};
+// Cargar datos existentes
+let users = fs.existsSync(USERS_FILE) ? JSON.parse(fs.readFileSync(USERS_FILE)) : [];
+let messages = fs.existsSync(MESSAGES_FILE) ? JSON.parse(fs.readFileSync(MESSAGES_FILE)) : {};
+let follows = fs.existsSync(FOLLOWS_FILE) ? JSON.parse(fs.readFileSync(FOLLOWS_FILE)) : {};
+let groups = fs.existsSync(GROUPS_FILE) ? JSON.parse(fs.readFileSync(GROUPS_FILE)) : [];
+
+function saveUsers() {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
 function saveMessages() {
-    try {
-        fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
-    } catch (error) {
-        console.error('Error guardando mensajes:', error);
+    fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
+}
+
+function saveFollows() {
+    fs.writeFileSync(FOLLOWS_FILE, JSON.stringify(follows, null, 2));
+}
+
+function saveGroups() {
+    fs.writeFileSync(GROUPS_FILE, JSON.stringify(groups, null, 2));
+}
+
+// Inicializar datos de seguidores si no existen
+function initializeFollowData(userId) {
+    if (!follows[userId]) {
+        follows[userId] = {
+            followers: [],
+            following: []
+        };
+        saveFollows();
     }
 }
 
 // Configuración de multer para upload de avatares
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'uploads/avatars/');
+        const isGroupAvatar = req.originalUrl.includes('/group-avatar');
+        cb(null, isGroupAvatar ? 'uploads/group-avatars/' : 'uploads/avatars/');
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+        const isGroupAvatar = req.originalUrl.includes('/group-avatar');
+        const prefix = isGroupAvatar ? 'group-avatar-' : 'avatar-';
+        cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
     }
 });
 
@@ -154,24 +88,9 @@ const upload = multer({
     }
 });
 
-// Middleware para logging mejorado
+// Middleware para logging
 app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`, req.body || '');
-    next();
-});
-
-// Middleware para manejo de errores de PostgreSQL
-app.use((req, res, next) => {
-    req.db = {
-        query: async (text, params) => {
-            try {
-                return await pool.query(text, params);
-            } catch (error) {
-                console.error('Error en consulta PostgreSQL:', error);
-                throw error;
-            }
-        }
-    };
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
 });
 
@@ -179,94 +98,67 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'auth.html')));
 app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'public', 'web.html')));
 
-// API de registro - MEJORADO
+// API de registro
 app.post('/api/register', async (req, res) => {
     try {
         const { name, password } = req.body;
-        console.log('Registrando usuario:', { name, passwordLength: password?.length });
 
         if (!name || !password || password.length < 6) {
             return res.status(400).json({ error: 'Nombre y contraseña requeridos (mín. 6 caracteres)' });
         }
 
-        // Verificar si el usuario ya existe
-        const existingUser = await req.db.query(
-            'SELECT * FROM users WHERE LOWER(name) = LOWER($1)',
-            [name.trim()]
-        );
-
-        if (existingUser.rows.length > 0) {
+        if (users.find(u => u.name.toLowerCase() === name.toLowerCase())) {
             return res.status(400).json({ error: 'El usuario ya existe' });
         }
 
-        const userId = Date.now().toString();
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = {
+            id: Date.now().toString(),
+            name: name.trim(),
+            password: await bcrypt.hash(password, 10),
+            avatar: '/default-avatar.png',
+            bio: "¡Yo uso SecureChat!",
+            createdAt: new Date().toISOString()
+        };
 
-        // Insertar nuevo usuario
-        const newUser = await req.db.query(
-            `INSERT INTO users (user_id, name, password, avatar, bio) 
-             VALUES ($1, $2, $3, $4, $5) 
-             RETURNING user_id, name, avatar, bio, created_at`,
-            [userId, name.trim(), hashedPassword, '/default-avatar.png', "¡Yo uso SecureChat!"]
-        );
+        users.push(newUser);
+        saveUsers();
 
-        const safeUser = newUser.rows[0];
-        console.log('Usuario registrado exitosamente:', safeUser.user_id);
+        initializeFollowData(newUser.id);
+
+        const { password: _, ...safeUser } = newUser;
 
         io.emit('user_updated', safeUser);
 
-        res.json({ 
-            user: safeUser,
-            message: 'Usuario registrado exitosamente'
-        });
+        res.json({ user: safeUser });
     } catch (error) {
         console.error('Error en registro:', error);
-        res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
+        res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
 
-// API de login - MEJORADO
+// API de login
 app.post('/api/login', async (req, res) => {
     try {
         const { name, password } = req.body;
-        console.log('Intentando login:', name);
-        
-        const userResult = await req.db.query(
-            'SELECT * FROM users WHERE LOWER(name) = LOWER($1)',
-            [name]
-        );
+        const user = users.find(u => u.name.toLowerCase() === name.toLowerCase());
 
-        if (userResult.rows.length === 0) {
-            console.log('Usuario no encontrado:', name);
-            return res.status(401).json({ error: 'Credenciales incorrectas' });
-        }
-
-        const user = userResult.rows[0];
-        const isValidPassword = await bcrypt.compare(password, user.password);
-
-        if (!isValidPassword) {
-            console.log('Contraseña incorrecta para:', name);
+        if (!user || !await bcrypt.compare(password, user.password)) {
             return res.status(401).json({ error: 'Credenciales incorrectas' });
         }
 
         const { password: _, ...safeUser } = user;
-        console.log('Login exitoso para:', safeUser.user_id);
         res.json({ user: safeUser });
     } catch (error) {
         console.error('Error en login:', error);
-        res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
+        res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
 
-// API para obtener usuarios - MEJORADO
-app.get('/api/users', async (req, res) => {
+// API para obtener usuarios
+app.get('/api/users', (req, res) => {
     try {
-        const usersResult = await req.db.query(
-            'SELECT user_id, name, avatar, bio, created_at FROM users ORDER BY name'
-        );
-        
-        console.log(`Obteniendo ${usersResult.rows.length} usuarios`);
-        res.json(usersResult.rows);
+        const safeUsers = users.map(({ password, ...user }) => user);
+        res.json(safeUsers);
     } catch (error) {
         console.error('Error obteniendo usuarios:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
@@ -274,36 +166,41 @@ app.get('/api/users', async (req, res) => {
 });
 
 // API para obtener datos de seguidores
-app.get('/api/follows/:userId', async (req, res) => {
+app.get('/api/follows/:userId', (req, res) => {
     try {
         const { userId } = req.params;
-        console.log('Obteniendo datos de seguidores para:', userId);
 
-        if (!userId || userId === 'undefined') {
-            return res.status(400).json({ error: 'ID de usuario inválido' });
+        if (!follows[userId]) {
+            initializeFollowData(userId);
         }
 
-        // Obtener seguidores
-        const followersResult = await req.db.query(`
-            SELECT u.user_id, u.name, u.avatar, u.bio 
-            FROM follows f 
-            JOIN users u ON f.follower_id = u.user_id 
-            WHERE f.following_id = $1
-        `, [userId]);
+        const userFollows = follows[userId];
 
-        // Obtener seguidos
-        const followingResult = await req.db.query(`
-            SELECT u.user_id, u.name, u.avatar, u.bio 
-            FROM follows f 
-            JOIN users u ON f.following_id = u.user_id 
-            WHERE f.follower_id = $1
-        `, [userId]);
+        const followersWithData = userFollows.followers.map(followerId => {
+            const user = users.find(u => u.id === followerId);
+            return user ? { 
+                id: user.id, 
+                name: user.name, 
+                avatar: user.avatar, 
+                bio: user.bio
+            } : null;
+        }).filter(Boolean);
+
+        const followingWithData = userFollows.following.map(followingId => {
+            const user = users.find(u => u.id === followingId);
+            return user ? { 
+                id: user.id, 
+                name: user.name, 
+                avatar: user.avatar, 
+                bio: user.bio
+            } : null;
+        }).filter(Boolean);
 
         res.json({
-            followers: followersResult.rows,
-            following: followingResult.rows,
-            followersCount: followersResult.rows.length,
-            followingCount: followingResult.rows.length
+            followers: followersWithData,
+            following: followingWithData,
+            followersCount: followersWithData.length,
+            followingCount: followingWithData.length
         });
     } catch (error) {
         console.error('Error obteniendo datos de seguidores:', error);
@@ -312,99 +209,63 @@ app.get('/api/follows/:userId', async (req, res) => {
 });
 
 // API para seguir/dejar de seguir
-app.post('/api/follow', async (req, res) => {
+app.post('/api/follow', (req, res) => {
     try {
         const { followerId, followingId } = req.body;
-        console.log('Solicitud follow:', { followerId, followingId });
 
-        if (!followerId || !followingId || followerId === 'undefined' || followingId === 'undefined') {
-            return res.status(400).json({ error: 'Se requieren followerId y followingId válidos' });
+        if (!followerId || !followingId) {
+            return res.status(400).json({ error: 'Se requieren followerId y followingId' });
         }
 
-        // Verificar si ya está siguiendo
-        const existingFollow = await req.db.query(
-            'SELECT * FROM follows WHERE follower_id = $1 AND following_id = $2',
-            [followerId, followingId]
-        );
+        if (!follows[followerId]) initializeFollowData(followerId);
+        if (!follows[followingId]) initializeFollowData(followingId);
 
-        if (existingFollow.rows.length > 0) {
-            // Dejar de seguir
-            await req.db.query(
-                'DELETE FROM follows WHERE follower_id = $1 AND following_id = $2',
-                [followerId, followingId]
-            );
-            
-            res.json({
-                success: true,
-                isFollowing: false,
-                followersCount: await getFollowersCount(followingId),
-                followingCount: await getFollowingCount(followerId)
-            });
+        const isFollowing = follows[followerId].following.includes(followingId);
+
+        if (isFollowing) {
+            follows[followerId].following = follows[followerId].following.filter(id => id !== followingId);
+            follows[followingId].followers = follows[followingId].followers.filter(id => id !== followerId);
         } else {
-            // Seguir
-            await req.db.query(
-                'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)',
-                [followerId, followingId]
-            );
-            
-            res.json({
-                success: true,
-                isFollowing: true,
-                followersCount: await getFollowersCount(followingId),
-                followingCount: await getFollowingCount(followerId)
-            });
+            follows[followerId].following.push(followingId);
+            follows[followingId].followers.push(followerId);
         }
+
+        saveFollows();
+
+        res.json({
+            success: true,
+            isFollowing: !isFollowing,
+            followersCount: follows[followingId].followers.length,
+            followingCount: follows[followerId].following.length
+        });
     } catch (error) {
         console.error('Error en follow:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
 
-// Funciones auxiliares para contar seguidores/seguidos
-async function getFollowersCount(userId) {
-    const result = await pool.query(
-        'SELECT COUNT(*) FROM follows WHERE following_id = $1',
-        [userId]
-    );
-    return parseInt(result.rows[0].count);
-}
-
-async function getFollowingCount(userId) {
-    const result = await pool.query(
-        'SELECT COUNT(*) FROM follows WHERE follower_id = $1',
-        [userId]
-    );
-    return parseInt(result.rows[0].count);
-}
-
-// API para obtener chats activos - CORREGIDO
-app.get('/api/chats', async (req, res) => {
+// API para obtener chats activos - INCLUYENDO GRUPOS
+app.get('/api/chats', (req, res) => {
     try {
         const currentUserId = req.query.userId;
-        console.log('Obteniendo chats para userId:', currentUserId);
-
-        if (!currentUserId || currentUserId === 'undefined') {
-            return res.status(400).json({ error: 'Se requiere userId válido' });
+        if (!currentUserId) {
+            return res.status(400).json({ error: 'Se requiere userId' });
         }
 
         const userChats = [];
-        
-        // Obtener todos los usuarios excepto el actual
-        const usersResult = await req.db.query(
-            'SELECT user_id, name, avatar, bio FROM users WHERE user_id != $1',
-            [currentUserId]
-        );
+        const safeUsers = users.map(({ password, ...user }) => user);
 
-        const otherUsers = usersResult.rows;
+        // Chats privados
+        const otherUsers = safeUsers.filter(user => user.id !== currentUserId);
 
-        for (const user of otherUsers) {
-            const chatId = [currentUserId, user.user_id].sort().join('_');
+        otherUsers.forEach(user => {
+            const chatId = [currentUserId, user.id].sort().join('_');
             const chatMessages = messages[chatId] || [];
 
-            // SOLO incluir chats que tienen mensajes
             if (chatMessages.length > 0) {
                 const lastMessage = chatMessages[chatMessages.length - 1];
                 userChats.push({
+                    type: 'private',
                     user: user,
                     lastMessage: lastMessage.message,
                     lastTime: new Date(lastMessage.timestamp).toLocaleTimeString('es-ES', {
@@ -416,35 +277,69 @@ app.get('/api/chats', async (req, res) => {
                     ).length
                 });
             }
-        }
+        });
+
+        // Chats de grupos
+        const userGroups = groups.filter(group => 
+            group.members.includes(currentUserId)
+        );
+
+        userGroups.forEach(group => {
+            const groupMessages = messages[group.id] || [];
+            const lastMessage = groupMessages[groupMessages.length - 1];
+            
+            if (lastMessage) {
+                const sender = users.find(u => u.id === lastMessage.from);
+                userChats.push({
+                    type: 'group',
+                    group: group,
+                    lastMessage: `${sender?.name || 'Usuario'}: ${lastMessage.message}`,
+                    lastTime: new Date(lastMessage.timestamp).toLocaleTimeString('es-ES', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }),
+                    unreadCount: groupMessages.filter(msg => 
+                        !msg.readBy?.includes(currentUserId)
+                    ).length
+                });
+            } else {
+                userChats.push({
+                    type: 'group',
+                    group: group,
+                    lastMessage: 'Grupo creado',
+                    lastTime: new Date(group.createdAt).toLocaleTimeString('es-ES', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }),
+                    unreadCount: 0
+                });
+            }
+        });
 
         userChats.sort((a, b) => {
-            const chatIdA = [currentUserId, a.user.user_id].sort().join('_');
-            const chatIdB = [currentUserId, b.user.user_id].sort().join('_');
-            const timeA = new Date(messages[chatIdA]?.slice(-1)[0]?.timestamp || 0);
-            const timeB = new Date(messages[chatIdB]?.slice(-1)[0]?.timestamp || 0);
+            const timeA = a.type === 'private' 
+                ? new Date(messages[[currentUserId, a.user.id].sort().join('_')]?.slice(-1)[0]?.timestamp || a.lastTime)
+                : new Date(messages[a.group.id]?.slice(-1)[0]?.timestamp || a.group.createdAt);
+                
+            const timeB = b.type === 'private'
+                ? new Date(messages[[currentUserId, b.user.id].sort().join('_')]?.slice(-1)[0]?.timestamp || b.lastTime)
+                : new Date(messages[b.group.id]?.slice(-1)[0]?.timestamp || b.group.createdAt);
+                
             return timeB - timeA;
         });
 
-        console.log(`Enviando ${userChats.length} chats activos`);
         res.json(userChats);
     } catch (error) {
         console.error('Error obteniendo chats:', error);
-        res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
+        res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
 
-// API para obtener mensajes entre dos usuarios - CORREGIDO
+// API para obtener mensajes entre dos usuarios
 app.get('/api/messages/:userId1/:userId2', (req, res) => {
     try {
         const { userId1, userId2 } = req.params;
-        
-        if (!userId1 || !userId2 || userId1 === 'undefined' || userId2 === 'undefined') {
-            return res.status(400).json({ error: 'IDs de usuario inválidos' });
-        }
-
         const chatId = [userId1, userId2].sort().join('_');
-        console.log('Obteniendo mensajes para chat:', chatId);
 
         if (messages[chatId]) {
             res.json(messages[chatId]);
@@ -457,127 +352,269 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
     }
 });
 
-// API para actualizar perfil - CORREGIDO
+// API para obtener mensajes de grupo
+app.get('/api/group-messages/:groupId', (req, res) => {
+    try {
+        const { groupId } = req.params;
+        
+        if (messages[groupId]) {
+            res.json(messages[groupId]);
+        } else {
+            res.json([]);
+        }
+    } catch (error) {
+        console.error('Error obteniendo mensajes de grupo:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// API para obtener grupos públicos
+app.get('/api/groups', (req, res) => {
+    try {
+        res.json(groups);
+    } catch (error) {
+        console.error('Error obteniendo grupos:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// API para crear grupo
+app.post('/api/groups', upload.single('avatar'), (req, res) => {
+    try {
+        const { name, description, creatorId, creatorName, members } = req.body;
+
+        if (!name || !creatorId) {
+            return res.status(400).json({ error: 'Nombre y creador son requeridos' });
+        }
+
+        const memberIds = members ? JSON.parse(members) : [];
+        memberIds.push(creatorId); // El creador siempre es miembro
+
+        const newGroup = {
+            id: 'group_' + Date.now(),
+            name: name.trim(),
+            description: description?.trim() || '',
+            avatar: req.file ? '/uploads/group-avatars/' + req.file.filename : '/default-group-avatar.png',
+            creatorId: creatorId,
+            creatorName: creatorName,
+            members: [...new Set(memberIds)], // Eliminar duplicados
+            createdAt: new Date().toISOString(),
+            isPublic: true
+        };
+
+        groups.push(newGroup);
+        saveGroups();
+
+        // Inicializar mensajes del grupo
+        messages[newGroup.id] = [];
+        saveMessages();
+
+        io.emit('new_group_created', newGroup);
+
+        res.json({ group: newGroup });
+    } catch (error) {
+        console.error('Error creando grupo:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// API para unirse a grupo
+app.post('/api/groups/:groupId/join', (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const { userId } = req.body;
+
+        const group = groups.find(g => g.id === groupId);
+        if (!group) {
+            return res.status(404).json({ error: 'Grupo no encontrado' });
+        }
+
+        if (!group.members.includes(userId)) {
+            group.members.push(userId);
+            saveGroups();
+
+            io.emit('user_joined_group', { 
+                groupId, 
+                userId, 
+                userName: users.find(u => u.id === userId)?.name 
+            });
+            
+            io.emit('group_updated', group);
+        }
+
+        res.json({ success: true, group });
+    } catch (error) {
+        console.error('Error uniéndose al grupo:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// API para salir de grupo
+app.post('/api/groups/:groupId/leave', (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const { userId } = req.body;
+
+        const group = groups.find(g => g.id === groupId);
+        if (!group) {
+            return res.status(404).json({ error: 'Grupo no encontrado' });
+        }
+
+        group.members = group.members.filter(memberId => memberId !== userId);
+        saveGroups();
+
+        io.emit('user_left_group', { 
+            groupId, 
+            userId, 
+            userName: users.find(u => u.id === userId)?.name 
+        });
+        
+        io.emit('group_updated', group);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error saliendo del grupo:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// API para actualizar grupo (solo admin)
+app.put('/api/groups/:groupId', upload.single('avatar'), (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const { name, description, userId } = req.body;
+
+        const group = groups.find(g => g.id === groupId);
+        if (!group) {
+            return res.status(404).json({ error: 'Grupo no encontrado' });
+        }
+
+        if (group.creatorId !== userId) {
+            return res.status(403).json({ error: 'Solo el administrador puede editar el grupo' });
+        }
+
+        group.name = name || group.name;
+        group.description = description || group.description;
+
+        if (req.file) {
+            // Eliminar avatar anterior si no es el default
+            if (group.avatar && group.avatar !== '/default-group-avatar.png' && group.avatar.startsWith('/uploads/group-avatars/')) {
+                const oldAvatarPath = path.join(__dirname, 'public', group.avatar);
+                if (fs.existsSync(oldAvatarPath)) {
+                    fs.unlinkSync(oldAvatarPath);
+                }
+            }
+            group.avatar = '/uploads/group-avatars/' + req.file.filename;
+        }
+
+        saveGroups();
+
+        io.emit('group_updated', group);
+
+        res.json({ group });
+    } catch (error) {
+        console.error('Error actualizando grupo:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// API para eliminar miembro de grupo (solo admin)
+app.delete('/api/groups/:groupId/members/:memberId', (req, res) => {
+    try {
+        const { groupId, memberId } = req.params;
+        const { adminId } = req.body;
+
+        const group = groups.find(g => g.id === groupId);
+        if (!group) {
+            return res.status(404).json({ error: 'Grupo no encontrado' });
+        }
+
+        if (group.creatorId !== adminId) {
+            return res.status(403).json({ error: 'Solo el administrador puede eliminar miembros' });
+        }
+
+        group.members = group.members.filter(member => member !== memberId);
+        saveGroups();
+
+        io.emit('member_removed_from_group', { groupId, memberId });
+        io.emit('group_updated', group);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error eliminando miembro:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// API para actualizar perfil con avatar
 app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
     try {
         const { userId } = req.params;
         const { name, bio, password } = req.body;
 
-        console.log('Actualizando perfil para:', userId);
-
-        if (!userId || userId === 'undefined') {
-            return res.status(400).json({ error: 'ID de usuario inválido' });
-        }
-
-        // Obtener usuario actual para preservar datos existentes
-        const userResult = await req.db.query(
-            'SELECT * FROM users WHERE user_id = $1',
-            [userId]
-        );
-
-        if (userResult.rows.length === 0) {
+        const userIndex = users.findIndex(u => u.id === userId);
+        if (userIndex === -1) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        const currentUser = userResult.rows[0];
-        let updateFields = [];
-        let updateValues = [];
-        let paramCount = 1;
-
-        // Construir consulta dinámica
-        if (name) {
-            updateFields.push(`name = $${paramCount}`);
-            updateValues.push(name);
-            paramCount++;
-        }
-
-        if (bio) {
-            updateFields.push(`bio = $${paramCount}`);
-            updateValues.push(bio);
-            paramCount++;
-        }
+        users[userIndex].name = name || users[userIndex].name;
+        users[userIndex].bio = bio || users[userIndex].bio;
 
         if (password && password.length >= 6) {
-            const hashedPassword = await bcrypt.hash(password, 10);
-            updateFields.push(`password = $${paramCount}`);
-            updateValues.push(hashedPassword);
-            paramCount++;
+            users[userIndex].password = await bcrypt.hash(password, 10);
         }
 
         if (req.file) {
-            // Eliminar avatar anterior si no es el default
-            if (currentUser.avatar && currentUser.avatar !== '/default-avatar.png' && currentUser.avatar.startsWith('/uploads/avatars/')) {
-                const oldAvatarPath = path.join(__dirname, 'public', currentUser.avatar);
+            const oldAvatar = users[userIndex].avatar;
+            if (oldAvatar && oldAvatar !== '/default-avatar.png' && oldAvatar.startsWith('/uploads/avatars/')) {
+                const oldAvatarPath = path.join(__dirname, 'public', oldAvatar);
                 if (fs.existsSync(oldAvatarPath)) {
                     fs.unlinkSync(oldAvatarPath);
                 }
             }
 
-            const newAvatarPath = '/uploads/avatars/' + req.file.filename;
-            updateFields.push(`avatar = $${paramCount}`);
-            updateValues.push(newAvatarPath);
-            paramCount++;
+            users[userIndex].avatar = '/uploads/avatars/' + req.file.filename;
         }
 
-        if (updateFields.length === 0) {
-            return res.status(400).json({ error: 'No hay campos para actualizar' });
-        }
+        saveUsers();
 
-        updateValues.push(userId);
-        const updateQuery = `
-            UPDATE users 
-            SET ${updateFields.join(', ')} 
-            WHERE user_id = $${paramCount} 
-            RETURNING user_id, name, avatar, bio, created_at
-        `;
+        const { password: _, ...updatedUser } = users[userIndex];
 
-        const updatedUser = await req.db.query(updateQuery, updateValues);
+        io.emit('user_updated', updatedUser);
 
-        io.emit('user_updated', updatedUser.rows[0]);
-
-        res.json({ user: updatedUser.rows[0] });
+        res.json({ user: updatedUser });
     } catch (error) {
         console.error('Error actualizando perfil:', error);
-        res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
+        res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
 
 // API para eliminar cuenta
-app.delete('/api/profile/:userId', async (req, res) => {
+app.delete('/api/profile/:userId', (req, res) => {
     try {
         const { userId } = req.params;
 
-        if (!userId || userId === 'undefined') {
-            return res.status(400).json({ error: 'ID de usuario inválido' });
-        }
-
-        // Obtener usuario antes de eliminar
-        const userResult = await req.db.query(
-            'SELECT * FROM users WHERE user_id = $1',
-            [userId]
-        );
-
-        if (userResult.rows.length === 0) {
+        const userIndex = users.findIndex(u => u.id === userId);
+        if (userIndex === -1) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        const deletedUser = userResult.rows[0];
+        const deletedUser = users[userIndex];
 
-        // Eliminar avatar si no es el default
-        if (deletedUser.avatar && deletedUser.avatar !== '/default-avatar.png' && deletedUser.avatar.startsWith('/uploads/avatars/')) {
-            const avatarPath = path.join(__dirname, 'public', deletedUser.avatar);
-            if (fs.existsSync(avatarPath)) {
-                fs.unlinkSync(avatarPath);
-            }
+        users.splice(userIndex, 1);
+        saveUsers();
+
+        if (follows[userId]) {
+            delete follows[userId];
+            saveFollows();
         }
 
-        // Eliminar usuario de la base de datos
-        await req.db.query('DELETE FROM users WHERE user_id = $1', [userId]);
-        
-        // Eliminar relaciones de seguidores
-        await req.db.query('DELETE FROM follows WHERE follower_id = $1 OR following_id = $1', [userId]);
+        // Remover usuario de todos los grupos
+        groups.forEach(group => {
+            group.members = group.members.filter(memberId => memberId !== userId);
+        });
+        saveGroups();
 
-        // Eliminar mensajes del archivo
         Object.keys(messages).forEach(chatId => {
             if (chatId.includes(userId)) {
                 delete messages[chatId];
@@ -611,6 +648,14 @@ function getUnreadCount(userId, otherUserId) {
     ).length;
 }
 
+function getGroupUnreadCount(userId, groupId) {
+    if (!messages[groupId]) return 0;
+
+    return messages[groupId].filter(msg => 
+        !msg.readBy?.includes(userId)
+    ).length;
+}
+
 function updateUnreadCounts(userId1, userId2) {
     const usersToUpdate = [userId1, userId2];
 
@@ -618,17 +663,20 @@ function updateUnreadCounts(userId1, userId2) {
         const userSocket = getUserSocket(userId);
         if (userSocket) {
             const unreadCounts = {};
-            // Obtener todos los usuarios para calcular contadores
-            pool.query('SELECT user_id FROM users WHERE user_id != $1', [userId])
-                .then(result => {
-                    result.rows.forEach(user => {
-                        unreadCounts[user.user_id] = getUnreadCount(userId, user.user_id);
-                    });
-                    io.to(userSocket).emit('unread_counts', unreadCounts);
-                })
-                .catch(error => {
-                    console.error('Error obteniendo usuarios para unread counts:', error);
-                });
+            users.forEach(u => {
+                if (u.id !== userId) {
+                    unreadCounts[u.id] = getUnreadCount(userId, u.id);
+                }
+            });
+            
+            // Agregar contadores de grupos
+            groups.forEach(group => {
+                if (group.members.includes(userId)) {
+                    unreadCounts[group.id] = getGroupUnreadCount(userId, group.id);
+                }
+            });
+            
+            io.to(userSocket).emit('unread_counts', unreadCounts);
         }
     });
 }
@@ -645,47 +693,49 @@ function notifyChatsUpdated(userIds) {
 io.on('connection', (socket) => {
     console.log('Usuario conectado:', socket.id);
 
-    socket.on('user_online', async (user) => {
+    socket.on('user_online', (user) => {
         onlineUsers.set(socket.id, { ...user, socketId: socket.id, lastSeen: null });
 
         const onlineUsersList = Array.from(onlineUsers.values()).map(({ socketId, ...user }) => user);
         io.emit('users_online', onlineUsersList);
 
-        // Enviar todos los usuarios
-        try {
-            const usersResult = await pool.query(
-                'SELECT user_id, name, avatar, bio FROM users'
-            );
-            socket.emit('all_users', usersResult.rows);
-        } catch (error) {
-            console.error('Error obteniendo usuarios para socket:', error);
+        const safeUsers = users.map(({ password, ...user }) => user);
+        socket.emit('all_users', safeUsers);
+
+        // Enviar grupos al usuario
+        socket.emit('all_groups', groups);
+
+        if (!follows[user.id]) {
+            initializeFollowData(user.id);
         }
 
-        // Enviar datos de seguidores
-        try {
-            const followersResult = await pool.query(`
-                SELECT u.user_id, u.name, u.avatar, u.bio 
-                FROM follows f 
-                JOIN users u ON f.follower_id = u.user_id 
-                WHERE f.following_id = $1
-            `, [user.id]);
+        const userFollows = follows[user.id];
+        const followersWithData = userFollows.followers.map(followerId => {
+            const userData = users.find(u => u.id === followerId);
+            return userData ? { 
+                id: userData.id, 
+                name: userData.name, 
+                avatar: userData.avatar, 
+                bio: userData.bio
+            } : null;
+        }).filter(Boolean);
 
-            const followingResult = await pool.query(`
-                SELECT u.user_id, u.name, u.avatar, u.bio 
-                FROM follows f 
-                JOIN users u ON f.following_id = u.user_id 
-                WHERE f.follower_id = $1
-            `, [user.id]);
+        const followingWithData = userFollows.following.map(followingId => {
+            const userData = users.find(u => u.id === followingId);
+            return userData ? { 
+                id: userData.id, 
+                name: userData.name, 
+                avatar: userData.avatar, 
+                bio: userData.bio
+            } : null;
+        }).filter(Boolean);
 
-            socket.emit('follow_data', {
-                followers: followersResult.rows,
-                following: followingResult.rows,
-                followersCount: followersResult.rows.length,
-                followingCount: followingResult.rows.length
-            });
-        } catch (error) {
-            console.error('Error obteniendo datos de seguidores para socket:', error);
-        }
+        socket.emit('follow_data', {
+            followers: followersWithData,
+            following: followingWithData,
+            followersCount: followersWithData.length,
+            followingCount: followingWithData.length
+        });
 
         console.log('Usuario en línea:', user.name);
     });
@@ -735,6 +785,77 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('group_message', (data) => {
+        try {
+            const { groupId, message, from } = data;
+            const timestamp = new Date().toISOString();
+
+            if (!groupId || !message || !from) {
+                socket.emit('message_error', { error: 'Datos de mensaje grupal incompletos' });
+                return;
+            }
+
+            const group = groups.find(g => g.id === groupId);
+            if (!group) {
+                socket.emit('message_error', { error: 'Grupo no encontrado' });
+                return;
+            }
+
+            if (!group.members.includes(from.id)) {
+                socket.emit('message_error', { error: 'No eres miembro de este grupo' });
+                return;
+            }
+
+            if (!messages[groupId]) {
+                messages[groupId] = [];
+            }
+
+            const messageData = {
+                id: 'group_msg_' + Date.now(),
+                type: 'group',
+                from: from.id,
+                groupId: groupId,
+                message: message.trim(),
+                timestamp: timestamp,
+                readBy: [from.id] // El remitente lo ha leído
+            };
+
+            messages[groupId].push(messageData);
+            saveMessages();
+
+            // Enviar a todos los miembros del grupo
+            group.members.forEach(memberId => {
+                const memberSocket = getUserSocket(memberId);
+                if (memberSocket) {
+                    io.to(memberSocket).emit('new_group_message', messageData);
+                }
+            });
+
+            socket.emit('group_message_sent', messageData);
+
+            // Actualizar contadores para todos los miembros
+            group.members.forEach(memberId => {
+                const memberSocket = getUserSocket(memberId);
+                if (memberSocket) {
+                    const unreadCounts = {};
+                    groups.forEach(g => {
+                        if (g.members.includes(memberId)) {
+                            unreadCounts[g.id] = getGroupUnreadCount(memberId, g.id);
+                        }
+                    });
+                    io.to(memberSocket).emit('unread_counts', unreadCounts);
+                }
+            });
+
+            notifyChatsUpdated(group.members);
+
+            console.log(`Mensaje grupal de ${from.name} en ${group.name}: ${message.substring(0, 50)}...`);
+        } catch (error) {
+            console.error('Error enviando mensaje grupal:', error);
+            socket.emit('message_error', { error: 'Error enviando mensaje grupal' });
+        }
+    });
+
     socket.on('mark_as_read', (data) => {
         try {
             const { userId, otherUserId } = data;
@@ -760,7 +881,94 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('toggle_follow', async (data) => {
+    socket.on('mark_group_as_read', (data) => {
+        try {
+            const { userId, groupId } = data;
+
+            if (messages[groupId]) {
+                let updated = false;
+                messages[groupId].forEach(msg => {
+                    if (!msg.readBy?.includes(userId)) {
+                        if (!msg.readBy) msg.readBy = [];
+                        msg.readBy.push(userId);
+                        updated = true;
+                    }
+                });
+
+                if (updated) {
+                    saveMessages();
+                    
+                    // Actualizar contador para este usuario
+                    const userSocket = getUserSocket(userId);
+                    if (userSocket) {
+                        const unreadCounts = {};
+                        groups.forEach(group => {
+                            if (group.members.includes(userId)) {
+                                unreadCounts[group.id] = getGroupUnreadCount(userId, group.id);
+                            }
+                        });
+                        io.to(userSocket).emit('unread_counts', unreadCounts);
+                    }
+                    
+                    notifyChatsUpdated([userId]);
+                }
+            }
+        } catch (error) {
+            console.error('Error marcando mensajes grupales como leídos:', error);
+        }
+    });
+
+    socket.on('join_group', (data) => {
+        try {
+            const { groupId, user } = data;
+            const group = groups.find(g => g.id === groupId);
+            
+            if (group && !group.members.includes(user.id)) {
+                group.members.push(user.id);
+                saveGroups();
+                
+                socket.join(groupId);
+                
+                io.to(groupId).emit('user_joined_group', {
+                    groupId,
+                    user: { id: user.id, name: user.name },
+                    membersCount: group.members.length
+                });
+                
+                io.emit('group_updated', group);
+                socket.emit('all_groups', groups);
+            }
+        } catch (error) {
+            console.error('Error uniéndose al grupo:', error);
+        }
+    });
+
+    socket.on('leave_group', (data) => {
+        try {
+            const { groupId, user } = data;
+            const group = groups.find(g => g.id === groupId);
+            
+            if (group) {
+                group.members = group.members.filter(memberId => memberId !== user.id);
+                saveGroups();
+                
+                socket.leave(groupId);
+                
+                io.to(groupId).emit('user_left_group', {
+                    groupId,
+                    user: { id: user.id, name: user.name },
+                    membersCount: group.members.length
+                });
+                
+                io.emit('group_updated', group);
+                socket.emit('all_groups', groups);
+            }
+        } catch (error) {
+            console.error('Error saliendo del grupo:', error);
+        }
+    });
+
+    socket.on('toggle_follow', (data) => {
         try {
             const { followerId, followingId } = data;
 
@@ -769,52 +977,35 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // Verificar si ya está siguiendo
-            const existingFollow = await pool.query(
-                'SELECT * FROM follows WHERE follower_id = $1 AND following_id = $2',
-                [followerId, followingId]
-            );
+            if (!follows[followerId]) initializeFollowData(followerId);
+            if (!follows[followingId]) initializeFollowData(followingId);
 
-            let isFollowing = existingFollow.rows.length > 0;
+            const isFollowing = follows[followerId].following.includes(followingId);
 
             if (isFollowing) {
-                // Dejar de seguir
-                await pool.query(
-                    'DELETE FROM follows WHERE follower_id = $1 AND following_id = $2',
-                    [followerId, followingId]
-                );
-                isFollowing = false;
+                follows[followerId].following = follows[followerId].following.filter(id => id !== followingId);
+                follows[followingId].followers = follows[followingId].followers.filter(id => id !== followerId);
             } else {
-                // Seguir
-                await pool.query(
-                    'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)',
-                    [followerId, followingId]
-                );
-                isFollowing = true;
+                follows[followerId].following.push(followingId);
+                follows[followingId].followers.push(followerId);
             }
 
-            // Obtener datos actualizados de usuarios
-            const followerResult = await pool.query(
-                'SELECT user_id, name, avatar, bio FROM users WHERE user_id = $1',
-                [followerId]
-            );
+            saveFollows();
 
-            const followingResult = await pool.query(
-                'SELECT user_id, name, avatar, bio FROM users WHERE user_id = $1',
-                [followingId]
-            );
+            const followerData = users.find(u => u.id === followerId);
+            const followingData = users.find(u => u.id === followingId);
 
-            if (followerResult.rows.length > 0 && followingResult.rows.length > 0) {
-                const followerData = followerResult.rows[0];
-                const followingData = followingResult.rows[0];
+            if (followerData && followingData) {
+                const { password: _, ...safeFollower } = followerData;
+                const { password: __, ...safeFollowing } = followingData;
 
                 const followerSocket = getUserSocket(followerId);
                 if (followerSocket) {
                     io.to(followerSocket).emit('follow_updated', {
                         followingId: followingId,
-                        isFollowing: isFollowing,
-                        followingCount: await getFollowingCount(followerId),
-                        user: followingData
+                        isFollowing: !isFollowing,
+                        followingCount: follows[followerId].following.length,
+                        user: safeFollowing
                     });
                 }
 
@@ -822,32 +1013,36 @@ io.on('connection', (socket) => {
                 if (followingSocket) {
                     io.to(followingSocket).emit('follower_updated', {
                         followerId: followerId,
-                        followersCount: await getFollowersCount(followingId),
-                        user: followerData
+                        followersCount: follows[followingId].followers.length,
+                        user: safeFollower
                     });
                 }
 
-                // Enviar datos completos de seguidores al follower
                 if (followerSocket) {
-                    const followersResult = await pool.query(`
-                        SELECT u.user_id, u.name, u.avatar, u.bio 
-                        FROM follows f 
-                        JOIN users u ON f.follower_id = u.user_id 
-                        WHERE f.following_id = $1
-                    `, [followerId]);
-
-                    const followingResult = await pool.query(`
-                        SELECT u.user_id, u.name, u.avatar, u.bio 
-                        FROM follows f 
-                        JOIN users u ON f.following_id = u.user_id 
-                        WHERE f.follower_id = $1
-                    `, [followerId]);
+                    const followerFollows = follows[followerId];
+                    const followingWithData = followerFollows.following.map(fId => {
+                        const user = users.find(u => u.id === fId);
+                        return user ? { 
+                            id: user.id, 
+                            name: user.name, 
+                            avatar: user.avatar, 
+                            bio: user.bio
+                        } : null;
+                    }).filter(Boolean);
 
                     io.to(followerSocket).emit('follow_data', {
-                        followers: followersResult.rows,
-                        following: followingResult.rows,
-                        followersCount: followersResult.rows.length,
-                        followingCount: followingResult.rows.length
+                        followers: followerFollows.followers.map(fId => {
+                            const user = users.find(u => u.id === fId);
+                            return user ? { 
+                                id: user.id, 
+                                name: user.name, 
+                                avatar: user.avatar, 
+                                bio: user.bio
+                            } : null;
+                        }).filter(Boolean),
+                        following: followingWithData,
+                        followersCount: followerFollows.followers.length,
+                        followingCount: followingWithData.length
                     });
                 }
             }
@@ -884,45 +1079,68 @@ io.on('connection', (socket) => {
     socket.on('get_unread_counts', (userId) => {
         try {
             const unreadCounts = {};
-            pool.query('SELECT user_id FROM users WHERE user_id != $1', [userId])
-                .then(result => {
-                    result.rows.forEach(user => {
-                        unreadCounts[user.user_id] = getUnreadCount(userId, user.user_id);
-                    });
-                    socket.emit('unread_counts', unreadCounts);
-                })
-                .catch(error => {
-                    console.error('Error obteniendo usuarios para unread counts:', error);
-                });
+            users.forEach(user => {
+                if (user.id !== userId) {
+                    unreadCounts[user.id] = getUnreadCount(userId, user.id);
+                }
+            });
+            
+            groups.forEach(group => {
+                if (group.members.includes(userId)) {
+                    unreadCounts[group.id] = getGroupUnreadCount(userId, group.id);
+                }
+            });
+            
+            socket.emit('unread_counts', unreadCounts);
         } catch (error) {
             console.error('Error obteniendo contadores no leídos:', error);
         }
     });
 
-    socket.on('get_follow_data', async (userId) => {
+    socket.on('get_follow_data', (userId) => {
         try {
-            const followersResult = await pool.query(`
-                SELECT u.user_id, u.name, u.avatar, u.bio 
-                FROM follows f 
-                JOIN users u ON f.follower_id = u.user_id 
-                WHERE f.following_id = $1
-            `, [userId]);
+            if (!follows[userId]) {
+                initializeFollowData(userId);
+            }
 
-            const followingResult = await pool.query(`
-                SELECT u.user_id, u.name, u.avatar, u.bio 
-                FROM follows f 
-                JOIN users u ON f.following_id = u.user_id 
-                WHERE f.follower_id = $1
-            `, [userId]);
+            const userFollows = follows[userId];
+
+            const followersWithData = userFollows.followers.map(followerId => {
+                const user = users.find(u => u.id === followerId);
+                return user ? { 
+                    id: user.id, 
+                    name: user.name, 
+                    avatar: user.avatar, 
+                    bio: user.bio
+                } : null;
+            }).filter(Boolean);
+
+            const followingWithData = userFollows.following.map(followingId => {
+                const user = users.find(u => u.id === followingId);
+                return user ? { 
+                    id: user.id, 
+                    name: user.name, 
+                    avatar: user.avatar, 
+                    bio: user.bio
+                } : null;
+            }).filter(Boolean);
 
             socket.emit('follow_data', {
-                followers: followersResult.rows,
-                following: followingResult.rows,
-                followersCount: followersResult.rows.length,
-                followingCount: followingResult.rows.length
+                followers: followersWithData,
+                following: followingWithData,
+                followersCount: followersWithData.length,
+                followingCount: followingWithData.length
             });
         } catch (error) {
             console.error('Error obteniendo datos de seguidores:', error);
+        }
+    });
+
+    socket.on('get_all_groups', () => {
+        try {
+            socket.emit('all_groups', groups);
+        } catch (error) {
+            console.error('Error obteniendo grupos:', error);
         }
     });
 
@@ -947,13 +1165,6 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
     console.log(`🚀 Servidor de mensajería ejecutándose en http://localhost:${PORT}`);
-    console.log(`✅ PostgreSQL configurado correctamente`);
-    console.log(`✅ Socket.IO configurado para tiempo real`);
-});
-
-// Manejo graceful de shutdown
-process.on('SIGINT', async () => {
-    console.log('Apagando servidor...');
-    await pool.end();
-    process.exit(0);
+    console.log(`✅ Grupos públicos implementados`);
+    console.log(`📁 Datos guardados en: data/`);
 });
