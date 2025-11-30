@@ -711,27 +711,49 @@ function stopRecording() {
 
 function showRecordingUI() {
     const messageInput = document.getElementById('message-input');
-    const sendButton = document.getElementById('send-button');
     const voiceButton = document.getElementById('voice-button');
-    const attachButton = document.getElementById('attach-button');
     const recordingUI = document.getElementById('recording-ui');
     
-    // Ocultar elementos de mensaje normal
-    if (messageInput) messageInput.style.display = 'none';
-    if (sendButton) sendButton.style.display = 'none';
-    if (attachButton) attachButton.style.display = 'none';
-    
-    // Cambiar botón de voz
+    // Mantener elementos visibles, solo cambiar el botón
     if (voiceButton) {
         voiceButton.innerHTML = '<i class="fas fa-stop"></i>';
         voiceButton.classList.add('recording');
+        voiceButton.style.background = 'var(--error)';
     }
     
-    // Mostrar UI de grabación
+    // Mostrar UI de grabación como widget flotante
     if (recordingUI) {
         recordingUI.classList.add('active');
         document.getElementById('recording-timer').textContent = '0:00';
+        
+        // Posicionar cerca del input
+        const inputContainer = document.querySelector('.message-input-container');
+        if (inputContainer) {
+            const rect = inputContainer.getBoundingClientRect();
+            recordingUI.style.bottom = `${window.innerHeight - rect.top + 10}px`;
+            recordingUI.style.right = '20px';
+        }
     }
+}
+
+function hideRecordingUI() {
+    const voiceButton = document.getElementById('voice-button');
+    const recordingUI = document.getElementById('recording-ui');
+    
+    // Restaurar botón de voz
+    if (voiceButton) {
+        voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+        voiceButton.classList.remove('recording');
+        voiceButton.style.background = '';
+    }
+    
+    // Ocultar UI de grabación
+    if (recordingUI) {
+        recordingUI.classList.remove('active');
+        recordingUI.classList.remove('cancelling');
+    }
+    
+    toggleSendVoiceButton();
 }
 
 function hideRecordingUI() {
