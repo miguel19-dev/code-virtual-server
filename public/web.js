@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     toggleSendVoiceButton();
 });
 
-// Configurar event listeners MEJORADO
+// MEJORADA: Configurar event listeners MEJORADO
 function setupEventListeners() {
     // Event listeners existentes...
     document.getElementById('menu-btn').addEventListener('click', () => togglePanel(true));
@@ -76,10 +76,10 @@ function setupEventListeners() {
     setupMessageInputListeners();
     setupVoiceRecording();
     
-    // Grupos - Botones principales
+    // GRUPOS - Botones principales
     document.getElementById('new-group-btn').addEventListener('click', showCreateGroupScreen);
 
-    // Perfiles
+    // PERFILES
     document.getElementById('current-chat-avatar').addEventListener('click', openCurrentProfile);
     document.getElementById('current-chat-name').addEventListener('click', openCurrentProfile);
     document.getElementById('my-profile-back-btn').addEventListener('click', hideMyProfile);
@@ -89,42 +89,54 @@ function setupEventListeners() {
     document.getElementById('edit-profile-back-btn').addEventListener('click', hideEditProfile);
     document.getElementById('cancel-edit-btn').addEventListener('click', hideEditProfile);
 
-    // Grupos - Edición
+    // GRUPOS - Edición
     document.getElementById('edit-group-btn').addEventListener('click', showEditGroupScreen);
     document.getElementById('edit-group-back-btn').addEventListener('click', hideEditGroupScreen);
     document.getElementById('cancel-edit-group-btn').addEventListener('click', hideEditGroupScreen);
     document.getElementById('save-group-btn').addEventListener('click', saveGroupChanges);
 
-    // Grupos - Creación
+    // GRUPOS - Creación
     document.getElementById('create-group-back-btn').addEventListener('click', hideCreateGroupScreen);
     document.getElementById('cancel-create-group-btn').addEventListener('click', hideCreateGroupScreen);
     document.getElementById('add-members-btn').addEventListener('click', showSelectMembersScreen);
     document.getElementById('create-group-submit-btn').addEventListener('click', createGroup);
 
-    // Grupos - Selección de miembros
+    // GRUPOS - Selección de miembros
     document.getElementById('select-members-back-btn').addEventListener('click', hideSelectMembersScreen);
     document.getElementById('confirm-members-btn').addEventListener('click', confirmMembersSelection);
 
-    // Grupos - Unirse
+    // GRUPOS - Unirse
     document.getElementById('confirm-join-group-btn').addEventListener('click', joinGroup);
     document.getElementById('cancel-join-group-btn').addEventListener('click', hideJoinGroupModal);
     document.getElementById('join-group-close-btn').addEventListener('click', hideJoinGroupModal);
 
-    // Grupos - Salir
+    // GRUPOS - Salir
     document.getElementById('leave-group-btn').addEventListener('click', leaveGroup);
 
-    // Editar perfil
+    // EDITAR PERFIL
     document.getElementById('save-profile-btn').addEventListener('click', saveMyProfile);
     document.getElementById('delete-account-btn').addEventListener('click', deleteAccount);
     document.getElementById('avatar-input').addEventListener('change', previewAvatar);
 
-    // Grupos - Avatares
+    // GRUPOS - Avatares
     document.getElementById('group-avatar-input').addEventListener('change', previewGroupAvatar);
     document.getElementById('create-group-avatar').addEventListener('change', previewCreateGroupAvatar);
 
+    // NUEVO: Listener crítico para el botón de enviar (redundante para máxima seguridad)
+    const sendButton = document.getElementById('send-button');
+    if (sendButton) {
+        sendButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('🔄 Botón enviar clickeado desde setupEventListeners');
+            sendMessage();
+        });
+    } else {
+        console.error('❌ Botón de enviar no encontrado en setupEventListeners');
+    }
+
     // Socket events MEJORADOS
     setupSocketListeners();
-
+    
     // NUEVO: Validación en tiempo real para crear grupo
     const createGroupNameInput = document.getElementById('create-group-name');
     if (createGroupNameInput) {
@@ -175,9 +187,11 @@ function setupEventListeners() {
             switchMembersTab(tabName);
         });
     });
+    
+    console.log('✅ Todos los event listeners configurados correctamente');
 }
 
-// NUEVO: Configurar listeners del input de mensajes
+// CORREGIDA: Configurar listeners del input de mensajes
 function setupMessageInputListeners() {
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
@@ -185,9 +199,14 @@ function setupMessageInputListeners() {
     const voiceButton = document.getElementById('voice-button');
     const cancelReplyButton = document.getElementById('cancel-reply');
 
-    if (!messageInput) return;
+    if (!messageInput) {
+        console.error('❌ message-input no encontrado');
+        return;
+    }
 
-    // Input de texto
+    console.log('🔄 Configurando listeners de input de mensajes...');
+
+    // 1. Input de texto - cambios y ajuste de altura
     messageInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
@@ -199,25 +218,48 @@ function setupMessageInputListeners() {
         handleTyping();
     });
 
+    // 2. Tecla Enter para enviar
     messageInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
+            console.log('🔄 Enter detectado, enviando mensaje...');
             sendMessage();
         }
     });
 
-    // Botón de adjuntar
+    // 3. Botón de adjuntar
     if (attachButton) {
-        attachButton.addEventListener('click', showMediaPicker);
+        attachButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('🔄 Botón adjuntar clickeado');
+            showMediaPicker();
+        });
+    } else {
+        console.error('❌ Botón adjuntar no encontrado');
     }
 
-    // Botón de cancelar respuesta
+    // 4. Botón de enviar (redundancia para asegurar funcionamiento)
+    if (sendButton) {
+        sendButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('🔄 Botón enviar clickeado desde setupMessageInputListeners');
+            sendMessage();
+        });
+    }
+
+    // 5. Botón de cancelar respuesta
     if (cancelReplyButton) {
-        cancelReplyButton.addEventListener('click', cancelReply);
+        cancelReplyButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('🔄 Cancelando respuesta...');
+            cancelReply();
+        });
     }
 
-    // Swipe para respuesta
+    // 6. Swipe para respuesta
     setupSwipeGestures();
+    
+    console.log('✅ Listeners de input de mensajes configurados correctamente');
 }
 
 // NUEVO: Configurar grabación de voz MEJORADA
@@ -685,6 +727,46 @@ function stopRecordingAndSend() {
     hideRecordingUI();
 }
 
+// NUEVA: Función para cancelar grabación
+function cancelRecording() {
+    if (!isRecording || !mediaRecorder) return;
+    
+    console.log('🔄 Cancelando grabación...');
+    
+    // Limpiar timeouts e intervals
+    clearTimeout(recordingTimeout);
+    clearInterval(recordingTimerInterval);
+    
+    // Detener la grabación si está activa
+    if (mediaRecorder.state !== 'inactive') {
+        try {
+            mediaRecorder.stop();
+        } catch (e) {
+            console.log('Grabación ya detenida');
+        }
+    }
+    
+    // Detener todos los tracks del stream
+    if (mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => {
+            track.stop();
+        });
+    }
+    
+    // Resetear estados
+    isRecording = false;
+    audioChunks = [];
+    recordingStartTime = null;
+    
+    // Ocultar UI con estado de cancelación
+    hideRecordingUI();
+    
+    // Mostrar notificación
+    showNotification('Grabación cancelada', 'info');
+    
+    console.log('✅ Grabación cancelada correctamente');
+}
+
 function cancelRecording() {
     if (!isRecording || !mediaRecorder) return;
     
@@ -849,22 +931,29 @@ async function sendAudioMessage() {
     }
 }
 
-// NUEVO: Alternar entre micrófono y enviar
+// CORREGIDA: Alternar entre micrófono y enviar
 function toggleSendVoiceButton() {
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
     const voiceButton = document.getElementById('voice-button');
     
-    if (!messageInput || !sendButton || !voiceButton) return;
+    if (!messageInput || !sendButton || !voiceButton) {
+        console.error('❌ Elementos no encontrados en toggleSendVoiceButton');
+        return;
+    }
     
     const hasText = messageInput.value.trim().length > 0;
+    
+    console.log(`🔄 toggleSendVoiceButton: hasText = ${hasText}`);
     
     if (hasText) {
         sendButton.style.display = 'flex';
         voiceButton.style.display = 'none';
+        console.log('✅ Mostrando botón enviar');
     } else {
         sendButton.style.display = 'none';
         voiceButton.style.display = 'flex';
+        console.log('✅ Mostrando botón micrófono');
     }
 }
 
@@ -945,67 +1034,101 @@ async function uploadAndSendFile(file) {
     }
 }
 
-// CORREGIDO: Enviar mensaje con sistema de respuesta
+// CORREGIDA: Función sendMessage completamente funcional
 async function sendMessage() {
+    console.log('🔄 sendMessage ejecutándose...');
+    
     const messageInput = document.getElementById('message-input');
     const message = messageInput.value.trim();
 
     if (!message) {
+        console.log('❌ Mensaje vacío, no se envía');
         return;
     }
 
-    const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    try {
+        // 1. LIMPIAR EL INPUT INMEDIATAMENTE
+        messageInput.value = '';
+        
+        // 2. RESETEAR LA ALTURA Y ESTADOS DEL INPUT
+        messageInput.style.height = 'auto';
+        toggleSendVoiceButton();
+        
+        console.log('✅ Input limpiado y estados reseteados');
 
-    const messageData = {
-        id: tempId,
-        message: message,
-        timestamp: new Date().toISOString()
-    };
+        const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 
-    // Agregar datos de respuesta si existe
-    if (replyingTo) {
-        messageData.replyTo = {
-            id: replyingTo.id,
-            content: replyingTo.content,
-            isOwn: replyingTo.isOwn,
-            senderName: replyingTo.senderName
+        // Construir el objeto de mensaje básico
+        const messageData = {
+            id: tempId,
+            message: message,
+            timestamp: new Date().toISOString(),
+            from: currentUser.id
         };
+
+        // Agregar datos de respuesta si existe
+        if (replyingTo) {
+            messageData.replyTo = {
+                id: replyingTo.id,
+                content: replyingTo.content,
+                isOwn: replyingTo.isOwn,
+                senderName: replyingTo.senderName
+            };
+        }
+
+        if (selectedUser) {
+            // Mensaje privado
+            messageData.to = selectedUser.id;
+            
+            // Agregar a UI inmediatamente (mensaje temporal)
+            addMessageToUI(messageData);
+            
+            // Enviar al servidor
+            socket.emit('private_message', {
+                to: selectedUser,
+                message: message,
+                from: currentUser,
+                replyTo: messageData.replyTo
+            });
+
+            console.log('✅ Mensaje enviado a:', selectedUser.name);
+
+        } else if (selectedGroup) {
+            // Mensaje grupal
+            messageData.groupId = selectedGroup.id;
+            messageData.type = 'group';
+            
+            // Agregar a UI inmediatamente (mensaje temporal)
+            addGroupMessageToUI(messageData);
+            
+            // Enviar al servidor
+            socket.emit('group_message', {
+                groupId: selectedGroup.id,
+                message: message,
+                from: currentUser,
+                replyTo: messageData.replyTo
+            });
+
+            console.log('✅ Mensaje enviado al grupo:', selectedGroup.name);
+        } else {
+            console.log('❌ No hay usuario o grupo seleccionado');
+            showNotification('No hay chat seleccionado', 'error');
+            return;
+        }
+
+        // Limpiar respuesta después de enviar
+        cancelReply();
+        
+        console.log('✅ Mensaje procesado exitosamente');
+
+    } catch (error) {
+        console.error('❌ Error crítico en sendMessage:', error);
+        showNotification('Error al enviar el mensaje', 'error');
+        
+        // Restaurar el mensaje en caso de error
+        messageInput.value = message;
+        toggleSendVoiceButton();
     }
-
-    if (selectedUser) {
-        messageData.from = currentUser.id;
-        messageData.to = selectedUser.id;
-        
-        addMessageToUI(messageData);
-        messageInput.value = '';
-        resetMessageInput();
-        
-        socket.emit('private_message', {
-            to: selectedUser,
-            message: message,
-            from: currentUser,
-            replyTo: messageData.replyTo
-        });
-
-    } else if (selectedGroup) {
-        messageData.type = 'group';
-        messageData.from = currentUser.id;
-        messageData.groupId = selectedGroup.id;
-        
-        addGroupMessageToUI(messageData);
-        messageInput.value = '';
-        resetMessageInput();
-        
-        socket.emit('group_message', {
-            groupId: selectedGroup.id,
-            message: message,
-            from: currentUser,
-            replyTo: messageData.replyTo
-        });
-    }
-
-    // Limpiar respuesta
-    cancelReply();
 }
 
 function resetMessageInput() {
