@@ -15,22 +15,21 @@ const io = socketIo(server, {
     } 
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static('public'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Carpetas necesarias
-['data', 'uploads/avatars', 'uploads/group-avatars'].forEach(d => !fs.existsSync(d) && fs.mkdirSync(d, { recursive: true }));
+['data', 'uploads/avatars', 'uploads/group-avatars', 'uploads/media'].forEach(d => !fs.existsSync(d) && fs.mkdirSync(d, { recursive: true }));
 
 const USERS_FILE = 'data/users.json';
 const MESSAGES_FILE = 'data/messages.json';
-const FOLLOWS_FILE = 'data/follows.json';
 const GROUPS_FILE = 'data/groups.json';
 
 // Cargar datos existentes
 let users = fs.existsSync(USERS_FILE) ? JSON.parse(fs.readFileSync(USERS_FILE)) : [];
 let messages = fs.existsSync(MESSAGES_FILE) ? JSON.parse(fs.readFileSync(MESSAGES_FILE)) : {};
-let follows = fs.existsSync(FOLLOWS_FILE) ? JSON.parse(fs.readFileSync(FOLLOWS_FILE)) : {};
 let groups = fs.existsSync(GROUPS_FILE) ? JSON.parse(fs.readFileSync(GROUPS_FILE)) : [];
 
 function saveUsers() {
@@ -41,49 +40,43 @@ function saveMessages() {
     fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2));
 }
 
-function saveFollows() {
-    fs.writeFileSync(FOLLOWS_FILE, JSON.stringify(follows, null, 2));
-}
-
 function saveGroups() {
     fs.writeFileSync(GROUPS_FILE, JSON.stringify(groups, null, 2));
 }
 
-// Inicializar datos de seguidores si no existen
-function initializeFollowData(userId) {
-    if (!follows[userId]) {
-        follows[userId] = {
-            followers: [],
-            following: []
-        };
-        saveFollows();
-    }
-}
-
-// Configuración de multer para upload de avatares
+// Configuración de multer para upload de archivos
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const isGroupAvatar = req.originalUrl.includes('/groups') || req.originalUrl.includes('/group-avatar');
-        cb(null, isGroupAvatar ? 'uploads/group-avatars/' : 'uploads/avatars/');
+        if (req.originalUrl.includes('/groups') || req.originalUrl.includes('/group-avatar')) {
+            cb(null, 'uploads/group-avatars/');
+        } else if (req.originalUrl.includes('/media')) {
+            cb(null, 'uploads/media/');
+        } else {
+            cb(null, 'uploads/avatars/');
+        }
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const isGroupAvatar = req.originalUrl.includes('/groups') || req.originalUrl.includes('/group-avatar');
-        const prefix = isGroupAvatar ? 'group-avatar-' : 'avatar-';
-        cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
+        if (req.originalUrl.includes('/groups') || req.originalUrl.includes('/group-avatar')) {
+            cb(null, 'group-avatar-' + uniqueSuffix + path.extname(file.originalname));
+        } else if (req.originalUrl.includes('/media')) {
+            cb(null, 'media-' + uniqueSuffix + path.extname(file.originalname));
+        } else {
+            cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+        }
     }
 });
 
 const upload = multer({
     storage: storage,
     limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB límite
+        fileSize: 10 * 1024 * 1024 // 10MB límite
     },
     fileFilter: function (req, file, cb) {
-        if (file.mimetype.startsWith('image/')) {
+        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/') || file.mimetype.startsWith('audio/')) {
             cb(null, true);
         } else {
-            cb(new Error('Solo se permiten archivos de imagen'));
+            cb(new Error('Solo se permiten archivos de imagen, video o audio'));
         }
     }
 });
@@ -98,7 +91,7 @@ app.use((req, res, next) => {
 app.use((error, req, res, next) => {
     if (error instanceof multer.MulterError) {
         if (error.code === 'LIMIT_FILE_SIZE') {
-            return res.status(400).json({ error: 'El archivo es demasiado grande (máx. 5MB)' });
+            return res.status(400).json({ error: 'El archivo es demasiado grande (máx. 10MB)' });
         }
     }
     next(error);
@@ -136,13 +129,12 @@ app.post('/api/register', async (req, res) => {
             password: await bcrypt.hash(password, 10),
             avatar: '/default-avatar.png',
             bio: "¡Yo uso SecureChat!",
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            lastSeen: new Date().toISOString()
         };
 
         users.push(newUser);
         saveUsers();
-
-        initializeFollowData(newUser.id);
 
         const { password: _, ...safeUser } = newUser;
 
@@ -165,6 +157,10 @@ app.post('/api/login', async (req, res) => {
             return res.status(401).json({ error: 'Credenciales incorrectas' });
         }
 
+        // Actualizar última vez en línea
+        user.lastSeen = new Date().toISOString();
+        saveUsers();
+
         const { password: _, ...safeUser } = user;
         res.json({ user: safeUser });
     } catch (error) {
@@ -180,85 +176,6 @@ app.get('/api/users', (req, res) => {
         res.json(safeUsers);
     } catch (error) {
         console.error('Error obteniendo usuarios:', error);
-        res.status(500).json({ error: 'Error interno del servidor' });
-    }
-});
-
-// API para obtener datos de seguidores
-app.get('/api/follows/:userId', (req, res) => {
-    try {
-        const { userId } = req.params;
-
-        if (!follows[userId]) {
-            initializeFollowData(userId);
-        }
-
-        const userFollows = follows[userId];
-
-        const followersWithData = userFollows.followers.map(followerId => {
-            const user = users.find(u => u.id === followerId);
-            return user ? { 
-                id: user.id, 
-                name: user.name, 
-                avatar: user.avatar, 
-                bio: user.bio
-            } : null;
-        }).filter(Boolean);
-
-        const followingWithData = userFollows.following.map(followingId => {
-            const user = users.find(u => u.id === followingId);
-            return user ? { 
-                id: user.id, 
-                name: user.name, 
-                avatar: user.avatar, 
-                bio: user.bio
-            } : null;
-        }).filter(Boolean);
-
-        res.json({
-            followers: followersWithData,
-            following: followingWithData,
-            followersCount: followersWithData.length,
-            followingCount: followingWithData.length
-        });
-    } catch (error) {
-        console.error('Error obteniendo datos de seguidores:', error);
-        res.status(500).json({ error: 'Error interno del servidor' });
-    }
-});
-
-// API para seguir/dejar de seguir
-app.post('/api/follow', (req, res) => {
-    try {
-        const { followerId, followingId } = req.body;
-
-        if (!followerId || !followingId) {
-            return res.status(400).json({ error: 'Se requieren followerId y followingId' });
-        }
-
-        if (!follows[followerId]) initializeFollowData(followerId);
-        if (!follows[followingId]) initializeFollowData(followingId);
-
-        const isFollowing = follows[followerId].following.includes(followingId);
-
-        if (isFollowing) {
-            follows[followerId].following = follows[followerId].following.filter(id => id !== followingId);
-            follows[followingId].followers = follows[followingId].followers.filter(id => id !== followerId);
-        } else {
-            follows[followerId].following.push(followingId);
-            follows[followingId].followers.push(followerId);
-        }
-
-        saveFollows();
-
-        res.json({
-            success: true,
-            isFollowing: !isFollowing,
-            followersCount: follows[followingId].followers.length,
-            followingCount: follows[followerId].following.length
-        });
-    } catch (error) {
-        console.error('Error en follow:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
@@ -306,7 +223,7 @@ app.get('/api/chats', (req, res) => {
         userGroups.forEach(group => {
             const groupMessages = messages[group.id] || [];
             const lastMessage = groupMessages[groupMessages.length - 1];
-            
+
             if (lastMessage) {
                 const sender = users.find(u => u.id === lastMessage.from);
                 userChats.push({
@@ -339,11 +256,11 @@ app.get('/api/chats', (req, res) => {
             const timeA = a.type === 'private' 
                 ? new Date(messages[[currentUserId, a.user.id].sort().join('_')]?.slice(-1)[0]?.timestamp || a.lastTime)
                 : new Date(messages[a.group.id]?.slice(-1)[0]?.timestamp || a.group.createdAt);
-                
+
             const timeB = b.type === 'private'
                 ? new Date(messages[[currentUserId, b.user.id].sort().join('_')]?.slice(-1)[0]?.timestamp || b.lastTime)
                 : new Date(messages[b.group.id]?.slice(-1)[0]?.timestamp || b.group.createdAt);
-                
+
             return timeB - timeA;
         });
 
@@ -375,7 +292,7 @@ app.get('/api/messages/:userId1/:userId2', (req, res) => {
 app.get('/api/group-messages/:groupId', (req, res) => {
     try {
         const { groupId } = req.params;
-        
+
         if (messages[groupId]) {
             res.json(messages[groupId]);
         } else {
@@ -455,12 +372,25 @@ app.post('/api/groups/:groupId/join', (req, res) => {
             group.members.push(userId);
             saveGroups();
 
+            // Agregar mensaje del sistema
+            const user = users.find(u => u.id === userId);
+            if (user && messages[groupId]) {
+                const systemMessage = {
+                    id: 'system_' + Date.now(),
+                    type: 'system',
+                    message: `${user.name} se unió al grupo`,
+                    timestamp: new Date().toISOString()
+                };
+                messages[groupId].push(systemMessage);
+                saveMessages();
+            }
+
             io.emit('user_joined_group', { 
                 groupId, 
                 userId, 
                 userName: users.find(u => u.id === userId)?.name 
             });
-            
+
             io.emit('group_updated', group);
         }
 
@@ -483,15 +413,40 @@ app.post('/api/groups/:groupId/leave', (req, res) => {
         }
 
         group.members = group.members.filter(memberId => memberId !== userId);
+        
+        // Si el grupo queda vacío, eliminarlo
+        if (group.members.length === 0) {
+            groups = groups.filter(g => g.id !== groupId);
+            delete messages[groupId];
+        } else {
+            // Agregar mensaje del sistema
+            const user = users.find(u => u.id === userId);
+            if (user && messages[groupId]) {
+                const systemMessage = {
+                    id: 'system_' + Date.now(),
+                    type: 'system',
+                    message: `${user.name} salió del grupo`,
+                    timestamp: new Date().toISOString()
+                };
+                messages[groupId].push(systemMessage);
+            }
+        }
+
         saveGroups();
+        saveMessages();
 
         io.emit('user_left_group', { 
             groupId, 
             userId, 
             userName: users.find(u => u.id === userId)?.name 
         });
-        
+
         io.emit('group_updated', group);
+
+        // Si se eliminó el grupo, notificar
+        if (group.members.length === 0) {
+            io.emit('group_deleted', groupId);
+        }
 
         res.json({ success: true });
     } catch (error) {
@@ -521,7 +476,7 @@ app.put('/api/groups/:groupId', upload.single('avatar'), (req, res) => {
         if (req.file) {
             // Eliminar avatar anterior si no es el default
             if (group.avatar && group.avatar !== '/default-group-avatar.png' && group.avatar.startsWith('/uploads/group-avatars/')) {
-                const oldAvatarPath = path.join(__dirname, 'public', group.avatar);
+                const oldAvatarPath = path.join(__dirname, group.avatar);
                 if (fs.existsSync(oldAvatarPath)) {
                     fs.unlinkSync(oldAvatarPath);
                 }
@@ -556,14 +511,48 @@ app.delete('/api/groups/:groupId/members/:memberId', (req, res) => {
         }
 
         group.members = group.members.filter(member => member !== memberId);
+        
+        // Si el grupo queda vacío, eliminarlo
+        if (group.members.length === 0) {
+            groups = groups.filter(g => g.id !== groupId);
+            delete messages[groupId];
+        }
+
         saveGroups();
+        saveMessages();
 
         io.emit('member_removed_from_group', { groupId, memberId });
         io.emit('group_updated', group);
 
+        // Si se eliminó el grupo, notificar
+        if (group.members.length === 0) {
+            io.emit('group_deleted', groupId);
+        }
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error eliminando miembro:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// API para subir archivos multimedia
+app.post('/api/media', upload.single('file'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se proporcionó ningún archivo' });
+        }
+
+        const fileUrl = '/uploads/media/' + req.file.filename;
+        res.json({ 
+            success: true, 
+            fileUrl: fileUrl,
+            fileName: req.file.originalname,
+            fileType: req.file.mimetype,
+            fileSize: req.file.size
+        });
+    } catch (error) {
+        console.error('Error subiendo archivo:', error);
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
@@ -589,7 +578,7 @@ app.put('/api/profile/:userId', upload.single('avatar'), async (req, res) => {
         if (req.file) {
             const oldAvatar = users[userIndex].avatar;
             if (oldAvatar && oldAvatar !== '/default-avatar.png' && oldAvatar.startsWith('/uploads/avatars/')) {
-                const oldAvatarPath = path.join(__dirname, 'public', oldAvatar);
+                const oldAvatarPath = path.join(__dirname, oldAvatar);
                 if (fs.existsSync(oldAvatarPath)) {
                     fs.unlinkSync(oldAvatarPath);
                 }
@@ -626,14 +615,16 @@ app.delete('/api/profile/:userId', (req, res) => {
         users.splice(userIndex, 1);
         saveUsers();
 
-        if (follows[userId]) {
-            delete follows[userId];
-            saveFollows();
-        }
-
         // Remover usuario de todos los grupos
         groups.forEach(group => {
+            const originalLength = group.members.length;
             group.members = group.members.filter(memberId => memberId !== userId);
+            
+            // Si el grupo queda vacío, eliminarlo
+            if (originalLength > 0 && group.members.length === 0) {
+                groups = groups.filter(g => g.id !== group.id);
+                delete messages[group.id];
+            }
         });
         saveGroups();
 
@@ -690,14 +681,14 @@ function updateUnreadCounts(userId1, userId2) {
                     unreadCounts[u.id] = getUnreadCount(userId, u.id);
                 }
             });
-            
+
             // Agregar contadores de grupos
             groups.forEach(group => {
                 if (group.members.includes(userId)) {
                     unreadCounts[group.id] = getGroupUnreadCount(userId, group.id);
                 }
             });
-            
+
             io.to(userSocket).emit('unread_counts', unreadCounts);
         }
     });
@@ -716,6 +707,13 @@ io.on('connection', (socket) => {
     console.log('Usuario conectado:', socket.id);
 
     socket.on('user_online', (user) => {
+        // Actualizar última vez en línea
+        const userIndex = users.findIndex(u => u.id === user.id);
+        if (userIndex !== -1) {
+            users[userIndex].lastSeen = new Date().toISOString();
+            saveUsers();
+        }
+
         onlineUsers.set(socket.id, { ...user, socketId: socket.id, lastSeen: null });
 
         const onlineUsersList = Array.from(onlineUsers.values()).map(({ socketId, ...user }) => user);
@@ -728,44 +726,12 @@ io.on('connection', (socket) => {
         const publicGroups = groups.filter(group => group.isPublic);
         socket.emit('all_groups', publicGroups);
 
-        if (!follows[user.id]) {
-            initializeFollowData(user.id);
-        }
-
-        const userFollows = follows[user.id];
-        const followersWithData = userFollows.followers.map(followerId => {
-            const userData = users.find(u => u.id === followerId);
-            return userData ? { 
-                id: userData.id, 
-                name: userData.name, 
-                avatar: userData.avatar, 
-                bio: userData.bio
-            } : null;
-        }).filter(Boolean);
-
-        const followingWithData = userFollows.following.map(followingId => {
-            const userData = users.find(u => u.id === followingId);
-            return userData ? { 
-                id: userData.id, 
-                name: userData.name, 
-                avatar: userData.avatar, 
-                bio: userData.bio
-            } : null;
-        }).filter(Boolean);
-
-        socket.emit('follow_data', {
-            followers: followersWithData,
-            following: followingWithData,
-            followersCount: followersWithData.length,
-            followingCount: followingWithData.length
-        });
-
         console.log('Usuario en línea:', user.name);
     });
 
     socket.on('private_message', (data) => {
         try {
-            const { to, message, from } = data;
+            const { to, message, from, replyTo, file } = data;
             const timestamp = new Date().toISOString();
 
             if (!to || !message || !from) {
@@ -786,6 +752,19 @@ io.on('connection', (socket) => {
                 timestamp: timestamp,
                 read: false
             };
+
+            // Agregar datos de respuesta si existe
+            if (replyTo) {
+                messageData.replyTo = replyTo;
+            }
+
+            // Agregar datos de archivo si existe
+            if (file) {
+                messageData.file = file;
+                messageData.type = file.type.startsWith('image/') ? 'image' : 
+                                 file.type.startsWith('video/') ? 'video' : 
+                                 file.type.startsWith('audio/') ? 'audio' : 'file';
+            }
 
             messages[chatId].push(messageData);
             saveMessages();
@@ -810,7 +789,7 @@ io.on('connection', (socket) => {
 
     socket.on('group_message', (data) => {
         try {
-            const { groupId, message, from } = data;
+            const { groupId, message, from, replyTo, file } = data;
             const timestamp = new Date().toISOString();
 
             if (!groupId || !message || !from) {
@@ -842,6 +821,19 @@ io.on('connection', (socket) => {
                 timestamp: timestamp,
                 readBy: [from.id] // El remitente lo ha leído
             };
+
+            // Agregar datos de respuesta si existe
+            if (replyTo) {
+                messageData.replyTo = replyTo;
+            }
+
+            // Agregar datos de archivo si existe
+            if (file) {
+                messageData.file = file;
+                messageData.type = file.type.startsWith('image/') ? 'image' : 
+                                 file.type.startsWith('video/') ? 'video' : 
+                                 file.type.startsWith('audio/') ? 'audio' : 'file';
+            }
 
             messages[groupId].push(messageData);
             saveMessages();
@@ -920,7 +912,7 @@ io.on('connection', (socket) => {
 
                 if (updated) {
                     saveMessages();
-                    
+
                     // Actualizar contador para este usuario
                     const userSocket = getUserSocket(userId);
                     if (userSocket) {
@@ -932,7 +924,7 @@ io.on('connection', (socket) => {
                         });
                         io.to(userSocket).emit('unread_counts', unreadCounts);
                     }
-                    
+
                     notifyChatsUpdated([userId]);
                 }
             }
@@ -945,7 +937,7 @@ io.on('connection', (socket) => {
         try {
             const { groupId, from } = data;
             const group = groups.find(g => g.id === groupId);
-            
+
             if (group) {
                 // Enviar a todos los miembros del grupo excepto al que está escribiendo
                 group.members.forEach(memberId => {
@@ -969,7 +961,7 @@ io.on('connection', (socket) => {
         try {
             const { groupId, from } = data;
             const group = groups.find(g => g.id === groupId);
-            
+
             if (group) {
                 // Enviar a todos los miembros del grupo excepto al que dejó de escribir
                 group.members.forEach(memberId => {
@@ -992,7 +984,7 @@ io.on('connection', (socket) => {
     socket.on('member_removed', (data) => {
         try {
             const { groupId, memberId } = data;
-            
+
             // Notificar al miembro eliminado
             const memberSocket = getUserSocket(memberId);
             if (memberSocket) {
@@ -1000,7 +992,7 @@ io.on('connection', (socket) => {
                     groupId: groupId
                 });
             }
-            
+
             // Notificar a todos los miembros del grupo
             const group = groups.find(g => g.id === groupId);
             if (group) {
@@ -1020,19 +1012,19 @@ io.on('connection', (socket) => {
         try {
             const { groupId, user } = data;
             const group = groups.find(g => g.id === groupId);
-            
+
             if (group && !group.members.includes(user.id)) {
                 group.members.push(user.id);
                 saveGroups();
-                
+
                 socket.join(groupId);
-                
+
                 io.to(groupId).emit('user_joined_group', {
                     groupId,
                     user: { id: user.id, name: user.name },
                     membersCount: group.members.length
                 });
-                
+
                 io.emit('group_updated', group);
                 socket.emit('all_groups', groups);
             }
@@ -1045,108 +1037,34 @@ io.on('connection', (socket) => {
         try {
             const { groupId, user } = data;
             const group = groups.find(g => g.id === groupId);
-            
+
             if (group) {
                 group.members = group.members.filter(memberId => memberId !== user.id);
-                saveGroups();
                 
+                // Si el grupo queda vacío, eliminarlo
+                if (group.members.length === 0) {
+                    groups = groups.filter(g => g.id !== groupId);
+                    delete messages[groupId];
+                    saveGroups();
+                    saveMessages();
+                    io.emit('group_deleted', groupId);
+                } else {
+                    saveGroups();
+                }
+
                 socket.leave(groupId);
-                
+
                 io.to(groupId).emit('user_left_group', {
                     groupId,
                     user: { id: user.id, name: user.name },
                     membersCount: group.members.length
                 });
-                
+
                 io.emit('group_updated', group);
                 socket.emit('all_groups', groups);
             }
         } catch (error) {
             console.error('Error saliendo del grupo:', error);
-        }
-    });
-
-    socket.on('toggle_follow', (data) => {
-        try {
-            const { followerId, followingId } = data;
-
-            if (!followerId || !followingId) {
-                socket.emit('follow_error', { error: 'Datos incompletos' });
-                return;
-            }
-
-            if (!follows[followerId]) initializeFollowData(followerId);
-            if (!follows[followingId]) initializeFollowData(followingId);
-
-            const isFollowing = follows[followerId].following.includes(followingId);
-
-            if (isFollowing) {
-                follows[followerId].following = follows[followerId].following.filter(id => id !== followingId);
-                follows[followingId].followers = follows[followingId].followers.filter(id => id !== followerId);
-            } else {
-                follows[followerId].following.push(followingId);
-                follows[followingId].followers.push(followerId);
-            }
-
-            saveFollows();
-
-            const followerData = users.find(u => u.id === followerId);
-            const followingData = users.find(u => u.id === followingId);
-
-            if (followerData && followingData) {
-                const { password: _, ...safeFollower } = followerData;
-                const { password: __, ...safeFollowing } = followingData;
-
-                const followerSocket = getUserSocket(followerId);
-                if (followerSocket) {
-                    io.to(followerSocket).emit('follow_updated', {
-                        followingId: followingId,
-                        isFollowing: !isFollowing,
-                        followingCount: follows[followerId].following.length,
-                        user: safeFollowing
-                    });
-                }
-
-                const followingSocket = getUserSocket(followingId);
-                if (followingSocket) {
-                    io.to(followingSocket).emit('follower_updated', {
-                        followerId: followerId,
-                        followersCount: follows[followingId].followers.length,
-                        user: safeFollower
-                    });
-                }
-
-                if (followerSocket) {
-                    const followerFollows = follows[followerId];
-                    const followingWithData = followerFollows.following.map(fId => {
-                        const user = users.find(u => u.id === fId);
-                        return user ? { 
-                            id: user.id, 
-                            name: user.name, 
-                            avatar: user.avatar, 
-                            bio: user.bio
-                        } : null;
-                    }).filter(Boolean);
-
-                    io.to(followerSocket).emit('follow_data', {
-                        followers: followerFollows.followers.map(fId => {
-                            const user = users.find(u => u.id === fId);
-                            return user ? { 
-                                id: user.id, 
-                                name: user.name, 
-                                avatar: user.avatar, 
-                                bio: user.bio
-                            } : null;
-                        }).filter(Boolean),
-                        following: followingWithData,
-                        followersCount: followerFollows.followers.length,
-                        followingCount: followingWithData.length
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error en toggle_follow:', error);
-            socket.emit('follow_error', { error: 'Error interno del servidor' });
         }
     });
 
@@ -1182,55 +1100,16 @@ io.on('connection', (socket) => {
                     unreadCounts[user.id] = getUnreadCount(userId, user.id);
                 }
             });
-            
+
             groups.forEach(group => {
                 if (group.members.includes(userId)) {
                     unreadCounts[group.id] = getGroupUnreadCount(userId, group.id);
                 }
             });
-            
+
             socket.emit('unread_counts', unreadCounts);
         } catch (error) {
             console.error('Error obteniendo contadores no leídos:', error);
-        }
-    });
-
-    socket.on('get_follow_data', (userId) => {
-        try {
-            if (!follows[userId]) {
-                initializeFollowData(userId);
-            }
-
-            const userFollows = follows[userId];
-
-            const followersWithData = userFollows.followers.map(followerId => {
-                const user = users.find(u => u.id === followerId);
-                return user ? { 
-                    id: user.id, 
-                    name: user.name, 
-                    avatar: user.avatar, 
-                    bio: user.bio
-                } : null;
-            }).filter(Boolean);
-
-            const followingWithData = userFollows.following.map(followingId => {
-                const user = users.find(u => u.id === followingId);
-                return user ? { 
-                    id: user.id, 
-                    name: user.name, 
-                    avatar: user.avatar, 
-                    bio: user.bio
-                } : null;
-            }).filter(Boolean);
-
-            socket.emit('follow_data', {
-                followers: followersWithData,
-                following: followingWithData,
-                followersCount: followersWithData.length,
-                followingCount: followingWithData.length
-            });
-        } catch (error) {
-            console.error('Error obteniendo datos de seguidores:', error);
         }
     });
 
@@ -1247,6 +1126,13 @@ io.on('connection', (socket) => {
         const user = onlineUsers.get(socket.id);
         if (user) {
             console.log('Usuario desconectado:', user.name);
+
+            // Actualizar última vez en línea
+            const userIndex = users.findIndex(u => u.id === user.id);
+            if (userIndex !== -1) {
+                users[userIndex].lastSeen = new Date().toISOString();
+                saveUsers();
+            }
 
             // Notificar que el usuario dejó de escribir en todos los chats
             io.emit('user_stop_typing', { from: user.id });
@@ -1267,8 +1153,8 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
     console.log(`🚀 Servidor de mensajería ejecutándose en http://localhost:${PORT}`);
-    console.log(`✅ Grupos públicos implementados`);
-    console.log(`✅ Eventos de typing para grupos agregados`);
-    console.log(`✅ Manejo de miembros mejorado`);
+    console.log(`✅ Sistema de mensajes de voz y archivos implementado`);
+    console.log(`✅ Gestión mejorada de grupos`);
+    console.log(`✅ Sistema de respuesta a mensajes`);
     console.log(`📁 Datos guardados en: data/`);
 });
