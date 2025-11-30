@@ -17,6 +17,9 @@ let typingUsers = new Set();
 let groupTypingUsers = new Map();
 let selectedMembers = new Set();
 let sentMessageIds = new Set();
+let previousTab = 'chats';
+let currentProfileUser = null;
+let currentProfileGroup = null;
 
 // NUEVAS VARIABLES PARA MEJORAS
 const avatarCache = new Map();
@@ -122,14 +125,40 @@ function setupEventListeners() {
     // Socket events MEJORADOS
     setupSocketListeners();
 
+    // NUEVO: Validación en tiempo real para crear grupo
+    const createGroupNameInput = document.getElementById('create-group-name');
+    if (createGroupNameInput) {
+        createGroupNameInput.addEventListener('input', validateGroupForm);
+        // Validación inicial
+        setTimeout(validateGroupForm, 100);
+    }
+
+    // NUEVO: Inicialización específica para crear grupo
+    const createGroupScreen = document.getElementById('create-group-screen');
+    if (createGroupScreen) {
+        // Observar cuando se muestra la pantalla de crear grupo
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.attributeName === 'class') {
+                    if (createGroupScreen.classList.contains('active')) {
+                        // Reiniciar formulario y validar
+                        setTimeout(() => {
+                            validateGroupForm();
+                        }, 100);
+                    }
+                }
+            });
+        });
+        
+        observer.observe(createGroupScreen, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    }
+    
     // Validación de formularios en tiempo real
-    const groupNameInput = document.getElementById('create-group-name');
     const editGroupNameInput = document.getElementById('edit-group-name');
     const membersSearchInput = document.getElementById('members-search-input');
-    
-    if (groupNameInput) {
-        groupNameInput.addEventListener('input', validateGroupForm);
-    }
     
     if (editGroupNameInput) {
         editGroupNameInput.addEventListener('input', validateEditGroupForm);
@@ -2119,12 +2148,15 @@ function validateGroupForm() {
     const submitBtn = document.getElementById('create-group-submit-btn');
     
     if (submitBtn) {
-        if (name.length < 2) {
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.6';
+        const isValid = name.length >= 2;
+        submitBtn.disabled = !isValid;
+        submitBtn.style.opacity = isValid ? '1' : '0.6';
+        
+        // Añadir clases para feedback visual
+        if (name.length > 0 && name.length < 2) {
+            submitBtn.title = 'El nombre debe tener al menos 2 caracteres';
         } else {
-            submitBtn.disabled = false;
-            submitBtn.style.opacity = '1';
+            submitBtn.title = '';
         }
     }
 }
@@ -2134,12 +2166,14 @@ function validateEditGroupForm() {
     const submitBtn = document.getElementById('save-group-btn');
     
     if (submitBtn) {
-        if (name.length < 2) {
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.6';
+        const isValid = name.length >= 2;
+        submitBtn.disabled = !isValid;
+        submitBtn.style.opacity = isValid ? '1' : '0.6';
+        
+        if (name.length > 0 && name.length < 2) {
+            submitBtn.title = 'El nombre debe tener al menos 2 caracteres';
         } else {
-            submitBtn.disabled = false;
-            submitBtn.style.opacity = '1';
+            submitBtn.title = '';
         }
     }
 }
@@ -2233,18 +2267,37 @@ function hideJoinGroupModal() {
 
 // GRUPOS - Selección de miembros
 function switchMembersTab(tabName) {
+    // Remover active de todos los botones y contenidos
     document.querySelectorAll('.members-tab-btn').forEach(btn => {
         btn.classList.remove('active');
-    });
-    document.querySelectorAll('.members-tab-content').forEach(content => {
-        content.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
     });
     
+    document.querySelectorAll('.members-tab-content').forEach(content => {
+        content.classList.remove('active');
+        content.setAttribute('hidden', 'true');
+    });
+    
+    // Activar el tab seleccionado
     const activeBtn = document.querySelector(`[data-tab="${tabName}"]`);
     const activeContent = document.getElementById(`${tabName}-members-tab`);
     
-    if (activeBtn) activeBtn.classList.add('active');
-    if (activeContent) activeContent.classList.add('active');
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.setAttribute('aria-selected', 'true');
+    }
+    
+    if (activeContent) {
+        activeContent.classList.add('active');
+        activeContent.removeAttribute('hidden');
+    }
+    
+    // Cargar los datos del tab si es necesario
+    if (tabName === 'chats') {
+        loadChatsMembers();
+    } else if (tabName === 'users') {
+        loadAllMembers();
+    }
 }
 
 function loadMembersForSelection() {
@@ -2263,7 +2316,15 @@ function loadChatsMembers() {
         .map(chat => chat.user);
     
     if (usersWithChats.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding: 20px;"><div>No tienes chats activos</div></div>';
+        container.innerHTML = `
+            <div class="empty-state" style="padding: 40px 20px; height: auto;">
+                <div class="empty-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <div class="empty-title">No tienes chats activos</div>
+                <div class="empty-subtitle">Inicia conversaciones para ver usuarios aquí</div>
+            </div>
+        `;
         return;
     }
     
@@ -2282,7 +2343,15 @@ function loadAllMembers() {
     const otherUsers = allUsers.filter(user => user.id !== currentUser.id);
     
     if (otherUsers.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding: 20px;"><div>No hay otros usuarios</div></div>';
+        container.innerHTML = `
+            <div class="empty-state" style="padding: 40px 20px; height: auto;">
+                <div class="empty-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="empty-title">No hay otros usuarios</div>
+                <div class="empty-subtitle">Parece que eres el único usuario registrado por ahora</div>
+            </div>
+        `;
         return;
     }
     
@@ -2510,6 +2579,90 @@ async function leaveGroup() {
         if (leaveBtn) {
             leaveBtn.innerHTML = originalText;
             leaveBtn.disabled = false;
+        }
+    }
+}
+
+// MEJORADO: Función para crear grupo
+async function createGroup() {
+    const name = document.getElementById('create-group-name')?.value.trim() || '';
+    const description = document.getElementById('create-group-description')?.value.trim() || '';
+    
+    if (!name || name.length < 2) {
+        showNotification('El nombre del grupo debe tener al menos 2 caracteres', 'error');
+        return;
+    }
+    
+    const submitBtn = document.getElementById('create-group-submit-btn');
+    const originalText = submitBtn?.innerHTML || '';
+    
+    if (submitBtn) {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando...';
+        submitBtn.disabled = true;
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('description', description);
+        formData.append('creatorId', currentUser.id);
+        formData.append('creatorName', currentUser.name);
+        
+        // Agregar miembros seleccionados
+        if (selectedMembers.size > 0) {
+            formData.append('members', JSON.stringify(Array.from(selectedMembers)));
+        }
+        
+        if (newGroupAvatarFile) {
+            formData.append('avatar', newGroupAvatarFile);
+        }
+        
+        const response = await fetch('/api/groups', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="fas fa-check"></i> ¡Creado!';
+            }
+            
+            showNotification('Grupo creado exitosamente', 'success');
+            
+            setTimeout(() => {
+                hideCreateGroupScreen();
+                
+                // Limpiar formulario
+                document.getElementById('create-group-name').value = '';
+                document.getElementById('create-group-description').value = '';
+                document.getElementById('create-group-avatar-preview').style.display = 'none';
+                selectedMembers.clear();
+                updateSelectedMembersList();
+                
+                // Recargar datos
+                socket.emit('get_all_groups');
+                loadActiveChats();
+                
+                // Abrir el nuevo grupo
+                openGroupChat(data.group.id);
+            }, 1000);
+            
+        } else {
+            const error = await response.json();
+            showNotification('Error: ' + error.error, 'error');
+            if (submitBtn) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('Error creando grupo:', error);
+        showNotification('Error al crear el grupo', 'error');
+        if (submitBtn) {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
         }
     }
 }
