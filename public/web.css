@@ -1395,7 +1395,7 @@ body {
     max-width: 400px;
 }
 
-/* Estadísticas de Seguidores/Seguidos */
+/* ELIMINADO: Estadísticas de Seguidores/Seguidos - Se mantienen solo para grupos */
 .profile-stats {
     display: flex;
     gap: 30px;
