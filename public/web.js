@@ -13,11 +13,6 @@ let newGroupAvatarFile = null;
 let typingTimeouts = {};
 let groupTypingTimeouts = {};
 let userLastSeen = {};
-let followers = [];
-let following = [];
-let currentProfileUser = null;
-let currentProfileGroup = null;
-let previousTab = 'chats';
 let typingUsers = new Set();
 let groupTypingUsers = new Map();
 let selectedMembers = new Set();
@@ -25,13 +20,14 @@ let sentMessageIds = new Set();
 
 // NUEVAS VARIABLES PARA MEJORAS
 const avatarCache = new Map();
-const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 let replyingTo = null;
 let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let recordingStartTime = null;
 let recordingTimeout = null;
+let recordingTimerInterval = null;
 
 // Inicializar la aplicación MEJORADA
 document.addEventListener('DOMContentLoaded', async function() {
@@ -44,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     if (!currentUser.bio) currentUser.bio = "¡Yo uso SecureChat!";
     if (!currentUser.avatar) currentUser.avatar = '/default-avatar.png';
+    if (!currentUser.lastSeen) currentUser.lastSeen = new Date().toISOString();
 
     updateCurrentUserDisplay();
     showSkeletons();
@@ -52,7 +49,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     socket.emit('user_online', currentUser);
     await loadInitialData();
     socket.emit('get_unread_counts', currentUser.id);
-    loadFollowData();
+    socket.emit('get_all_groups');
     showTab('chats');
     
     // Inicializar botones dinámicos
@@ -113,17 +110,6 @@ function setupEventListeners() {
     // Grupos - Salir
     document.getElementById('leave-group-btn').addEventListener('click', leaveGroup);
 
-    // Seguidores/seguidos
-    document.getElementById('followers-stat').addEventListener('click', showFollowers);
-    document.getElementById('following-stat').addEventListener('click', showFollowing);
-    document.getElementById('followers-back-btn').addEventListener('click', hideFollowers);
-    document.getElementById('following-back-btn').addEventListener('click', hideFollowing);
-
-    // Seguir/dejar de seguir
-    document.getElementById('follow-btn').addEventListener('click', toggleFollow);
-    document.getElementById('user-followers-stat').addEventListener('click', showUserFollowers);
-    document.getElementById('user-following-stat').addEventListener('click', showUserFollowing);
-
     // Editar perfil
     document.getElementById('save-profile-btn').addEventListener('click', saveMyProfile);
     document.getElementById('delete-account-btn').addEventListener('click', deleteAccount);
@@ -135,6 +121,31 @@ function setupEventListeners() {
 
     // Socket events MEJORADOS
     setupSocketListeners();
+
+    // Validación de formularios en tiempo real
+    const groupNameInput = document.getElementById('create-group-name');
+    const editGroupNameInput = document.getElementById('edit-group-name');
+    const membersSearchInput = document.getElementById('members-search-input');
+    
+    if (groupNameInput) {
+        groupNameInput.addEventListener('input', validateGroupForm);
+    }
+    
+    if (editGroupNameInput) {
+        editGroupNameInput.addEventListener('input', validateEditGroupForm);
+    }
+    
+    if (membersSearchInput) {
+        membersSearchInput.addEventListener('input', filterMembers);
+    }
+    
+    // Inicializar tabs de selección de miembros
+    document.querySelectorAll('.members-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabName = this.dataset.tab;
+            switchMembersTab(tabName);
+        });
+    });
 }
 
 // NUEVO: Configurar listeners del input de mensajes
@@ -180,7 +191,7 @@ function setupMessageInputListeners() {
     setupSwipeGestures();
 }
 
-// NUEVO: Configurar grabación de voz
+// NUEVO: Configurar grabación de voz MEJORADA
 function setupVoiceRecording() {
     const voiceButton = document.getElementById('voice-button');
     if (!voiceButton) return;
@@ -285,23 +296,45 @@ function setupSocketListeners() {
         loadActiveChats();
     });
 
+    socket.on('group_deleted', (groupId) => {
+        allGroups = allGroups.filter(g => g.id !== groupId);
+        
+        if (selectedGroup && selectedGroup.id === groupId) {
+            showTab('chats');
+            selectedGroup = null;
+            showNotification('El grupo ha sido eliminado', 'info');
+        }
+        
+        loadUsers();
+        loadActiveChats();
+    });
+
     socket.on('user_joined_group', (data) => {
         if (selectedGroup && selectedGroup.id === data.groupId) {
-            addSystemMessage(`${data.user.name} se unió al grupo`);
+            addSystemMessage(`${data.userName} se unió al grupo`);
         }
     });
 
     socket.on('user_left_group', (data) => {
         if (selectedGroup && selectedGroup.id === data.groupId) {
-            addSystemMessage(`${data.user.name} salió del grupo`);
+            addSystemMessage(`${data.userName} salió del grupo`);
         }
     });
 
-    // MEJORADO: Prevenir mensajes de otros chats
+    // MEJORADO: Prevenir mensajes duplicados
     socket.on('new_message', (messageData) => {
         if ((selectedUser && selectedUser.id === messageData.from) || 
             (!selectedUser && !selectedGroup)) {
-            handleNewMessage(messageData);
+            // Verificar si el mensaje ya existe para evitar duplicados
+            if (!sentMessageIds.has(messageData.id)) {
+                handleNewMessage(messageData);
+                sentMessageIds.add(messageData.id);
+                
+                // Limpiar IDs antiguos después de un tiempo
+                setTimeout(() => {
+                    sentMessageIds.delete(messageData.id);
+                }, 5000);
+            }
         } else {
             // Solo incrementar contador, no mostrar mensaje
             unreadCounts[messageData.from] = (unreadCounts[messageData.from] || 0) + 1;
@@ -311,7 +344,16 @@ function setupSocketListeners() {
 
     socket.on('new_group_message', (messageData) => {
         if (selectedGroup && selectedGroup.id === messageData.groupId) {
-            handleNewGroupMessage(messageData);
+            // Verificar si el mensaje ya existe para evitar duplicados
+            if (!sentMessageIds.has(messageData.id)) {
+                handleNewGroupMessage(messageData);
+                sentMessageIds.add(messageData.id);
+                
+                // Limpiar IDs antiguos después de un tiempo
+                setTimeout(() => {
+                    sentMessageIds.delete(messageData.id);
+                }, 5000);
+            }
         } else {
             // Solo incrementar contador, no mostrar mensaje
             unreadCounts[messageData.groupId] = (unreadCounts[messageData.groupId] || 0) + 1;
@@ -322,12 +364,6 @@ function setupSocketListeners() {
     socket.on('unread_counts', (counts) => {
         unreadCounts = { ...unreadCounts, ...counts };
         updateUnreadBadges();
-        loadActiveChats();
-    });
-
-    socket.on('unread_count_update', (data) => {
-        unreadCounts[data.userId] = data.count;
-        updateUnreadBadge(data.userId, data.count);
         loadActiveChats();
     });
 
@@ -367,32 +403,12 @@ function setupSocketListeners() {
         }
     });
 
-    socket.on('follow_data', (data) => {
-        followers = data.followers;
-        following = data.following;
-        updateFollowCounts();
-    });
-
-    socket.on('follow_updated', (data) => {
-        const userIndex = following.findIndex(u => u.id === data.followingId);
-        if (data.isFollowing && userIndex === -1) {
-            const user = allUsers.find(u => u.id === data.followingId);
-            if (user) following.push(user);
-        } else if (!data.isFollowing && userIndex !== -1) {
-            following.splice(userIndex, 1);
-        }
-        updateFollowCounts();
-    });
-
-    socket.on('follower_updated', (data) => {
-        loadFollowData();
-    });
-
     socket.on('chats_updated', () => {
         loadActiveChats();
     });
 
     socket.on('message_sent', (messageData) => {
+        // Eliminar mensaje temporal si existe
         if (messageData.id && messageData.id.startsWith('temp-')) {
             const tempMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
             if (tempMessage) {
@@ -402,6 +418,7 @@ function setupSocketListeners() {
     });
 
     socket.on('group_message_sent', (messageData) => {
+        // Eliminar mensaje temporal si existe
         if (messageData.id && messageData.id.startsWith('temp-group-')) {
             const tempMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
             if (tempMessage) {
@@ -431,6 +448,7 @@ function updateAvatarDisplay(elementId, avatarUrl, userName) {
     let avatarHTML = '';
     
     if (avatarUrl && avatarUrl !== '/default-avatar.png' && avatarUrl !== '/default-group-avatar.png') {
+        // Usar timestamp diario para cache
         const dailyTimestamp = new Date().toDateString();
         const cacheSafeUrl = `${avatarUrl}?v=${dailyTimestamp}`;
         
@@ -553,13 +571,16 @@ function setupSwipeGestures() {
 
 function showReplyUI(messageElement) {
     const messageId = messageElement.dataset.messageId;
-    const messageContent = messageElement.querySelector('.message-content')?.textContent || '';
+    const messageContent = messageElement.querySelector('.message-content')?.textContent || 
+                          messageElement.querySelector('.media-message')?.dataset.fileName || '';
     const isOwnMessage = messageElement.classList.contains('sent');
+    const senderName = messageElement.querySelector('.message-sender')?.textContent || (isOwnMessage ? 'Tú' : 'Usuario');
     
     replyingTo = {
         id: messageId,
         content: messageContent,
-        isOwn: isOwnMessage
+        isOwn: isOwnMessage,
+        senderName: senderName
     };
     
     // Mostrar UI de respuesta
@@ -567,8 +588,13 @@ function showReplyUI(messageElement) {
     const replyContent = document.getElementById('reply-content');
     
     if (replyUI && replyContent) {
-        replyContent.textContent = messageContent.length > 50 ? 
+        const displayContent = messageContent.length > 50 ? 
             messageContent.substring(0, 50) + '...' : messageContent;
+        
+        replyContent.innerHTML = `
+            <strong>${senderName}</strong><br>
+            ${displayContent}
+        `;
         
         replyUI.classList.add('active');
         
@@ -585,15 +611,25 @@ function cancelReply() {
     }
 }
 
-// NUEVO: Grabación de voz
+// NUEVO: Grabación de voz MEJORADA
 async function startRecording(e) {
     e.preventDefault();
     
     if (isRecording) return;
     
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                sampleRate: 44100
+            } 
+        });
+        
+        mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'audio/webm;codecs=opus'
+        });
+        
         audioChunks = [];
         
         mediaRecorder.ondataavailable = (event) => {
@@ -604,15 +640,15 @@ async function startRecording(e) {
         
         mediaRecorder.onstop = sendAudioMessage;
         
-        mediaRecorder.start();
+        mediaRecorder.start(100); // Capturar cada 100ms
         isRecording = true;
         recordingStartTime = Date.now();
         
-        // UI de grabación
+        // UI de grabación MEJORADA
         showRecordingUI();
         
-        // Actualizar timer
-        updateRecordingTimer();
+        // Iniciar timer
+        recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
         
         // Timeout automático (60 segundos)
         recordingTimeout = setTimeout(() => {
@@ -629,6 +665,7 @@ function stopRecording() {
     if (!isRecording || !mediaRecorder) return;
     
     clearTimeout(recordingTimeout);
+    clearInterval(recordingTimerInterval);
     
     if (mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
@@ -644,19 +681,57 @@ function stopRecording() {
 }
 
 function showRecordingUI() {
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
     const voiceButton = document.getElementById('voice-button');
+    const attachButton = document.getElementById('attach-button');
     const recordingUI = document.getElementById('recording-ui');
     
-    if (voiceButton) voiceButton.classList.add('recording');
-    if (recordingUI) recordingUI.classList.add('active');
+    // Ocultar elementos de mensaje normal
+    if (messageInput) messageInput.style.display = 'none';
+    if (sendButton) sendButton.style.display = 'none';
+    if (attachButton) attachButton.style.display = 'none';
+    
+    // Cambiar botón de voz
+    if (voiceButton) {
+        voiceButton.innerHTML = '<i class="fas fa-stop"></i>';
+        voiceButton.classList.add('recording');
+    }
+    
+    // Mostrar UI de grabación
+    if (recordingUI) {
+        recordingUI.classList.add('active');
+        document.getElementById('recording-timer').textContent = '0:00';
+    }
 }
 
 function hideRecordingUI() {
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
     const voiceButton = document.getElementById('voice-button');
+    const attachButton = document.getElementById('attach-button');
     const recordingUI = document.getElementById('recording-ui');
     
-    if (voiceButton) voiceButton.classList.remove('recording');
-    if (recordingUI) recordingUI.classList.remove('active');
+    // Restaurar elementos de mensaje normal
+    if (messageInput) {
+        messageInput.style.display = '';
+        messageInput.value = '';
+    }
+    if (attachButton) attachButton.style.display = 'flex';
+    
+    // Restaurar botón de voz
+    if (voiceButton) {
+        voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+        voiceButton.classList.remove('recording');
+    }
+    
+    // Ocultar UI de grabación
+    if (recordingUI) {
+        recordingUI.classList.remove('active');
+        recordingUI.classList.remove('cancelling');
+    }
+    
+    toggleSendVoiceButton();
 }
 
 function showCancelRecordingUI() {
@@ -683,24 +758,67 @@ function updateRecordingTimer() {
         const seconds = elapsed % 60;
         timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
-    
-    setTimeout(updateRecordingTimer, 1000);
 }
 
-function sendAudioMessage() {
+async function sendAudioMessage() {
     if (audioChunks.length === 0) return;
     
-    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const duration = Math.round((Date.now() - recordingStartTime) / 1000);
-    
-    // Por ahora mostramos un mensaje de demo
-    // En una implementación real, enviarías el blob al servidor
-    showNotification('Mensaje de voz grabado (' + duration + 's). En una implementación real se enviaría al servidor.', 'info');
-    
-    // Limpiar
-    audioChunks = [];
-    recordingStartTime = null;
+    try {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const duration = Math.round((Date.now() - recordingStartTime) / 1000);
+        
+        // Subir archivo al servidor
+        const formData = new FormData();
+        formData.append('file', audioBlob, `audio_${Date.now()}.webm`);
+        
+        const response = await fetch('/api/media', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            // Enviar mensaje de audio
+            const messageData = {
+                file: {
+                    url: result.fileUrl,
+                    type: 'audio/webm',
+                    name: `audio_${Date.now()}.webm`,
+                    size: result.fileSize,
+                    duration: duration
+                },
+                type: 'audio'
+            };
+            
+            if (selectedUser) {
+                socket.emit('private_message', {
+                    to: selectedUser,
+                    message: '🎤 Mensaje de voz',
+                    from: currentUser,
+                    file: messageData.file
+                });
+            } else if (selectedGroup) {
+                socket.emit('group_message', {
+                    groupId: selectedGroup.id,
+                    message: '🎤 Mensaje de voz',
+                    from: currentUser,
+                    file: messageData.file
+                });
+            }
+            
+            showNotification('Mensaje de voz enviado (' + duration + 's)', 'success');
+        } else {
+            throw new Error('Error subiendo audio');
+        }
+    } catch (error) {
+        console.error('Error enviando mensaje de voz:', error);
+        showNotification('Error al enviar mensaje de voz', 'error');
+    } finally {
+        // Limpiar
+        audioChunks = [];
+        recordingStartTime = null;
+    }
 }
 
 // NUEVO: Alternar entre micrófono y enviar
@@ -722,42 +840,81 @@ function toggleSendVoiceButton() {
     }
 }
 
-// NUEVO: Selector de medios
+// NUEVO: Selector de medios MEJORADO
 function showMediaPicker() {
     // Crear input de archivo dinámicamente
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = 'image/*,video/*';
-    fileInput.multiple = true;
+    fileInput.accept = 'image/*,video/*,audio/*';
+    fileInput.multiple = false;
     
-    fileInput.onchange = (e) => {
-        const files = Array.from(e.target.files);
-        files.forEach(file => {
-            if (file.type.startsWith('image/')) {
-                previewAndSendImage(file);
-            } else if (file.type.startsWith('video/')) {
-                previewAndSendVideo(file);
-            }
-        });
+    fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            await uploadAndSendFile(file);
+        }
     };
     
     fileInput.click();
 }
 
-function previewAndSendImage(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        // En una implementación real, enviarías el archivo al servidor
-        showNotification('Imagen seleccionada: ' + file.name, 'info');
-        // sendMediaMessage(file, 'image');
-    };
-    reader.readAsDataURL(file);
-}
-
-function previewAndSendVideo(file) {
-    // En una implementación real, enviarías el archivo al servidor
-    showNotification('Video seleccionado: ' + file.name, 'info');
-    // sendMediaMessage(file, 'video');
+async function uploadAndSendFile(file) {
+    try {
+        showNotification('Subiendo archivo...', 'info');
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/media', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            const fileData = {
+                url: result.fileUrl,
+                type: result.fileType,
+                name: result.fileName,
+                size: result.fileSize
+            };
+            
+            let messageText = '';
+            if (file.type.startsWith('image/')) {
+                messageText = '📷 Imagen';
+            } else if (file.type.startsWith('video/')) {
+                messageText = '🎥 Video';
+            } else if (file.type.startsWith('audio/')) {
+                messageText = '🎵 Audio';
+            } else {
+                messageText = '📄 Archivo';
+            }
+            
+            if (selectedUser) {
+                socket.emit('private_message', {
+                    to: selectedUser,
+                    message: messageText,
+                    from: currentUser,
+                    file: fileData
+                });
+            } else if (selectedGroup) {
+                socket.emit('group_message', {
+                    groupId: selectedGroup.id,
+                    message: messageText,
+                    from: currentUser,
+                    file: fileData
+                });
+            }
+            
+            showNotification('Archivo enviado', 'success');
+        } else {
+            throw new Error('Error subiendo archivo');
+        }
+    } catch (error) {
+        console.error('Error subiendo archivo:', error);
+        showNotification('Error al enviar archivo', 'error');
+    }
 }
 
 // MEJORADO: Enviar mensaje con sistema de respuesta
@@ -782,7 +939,8 @@ async function sendMessage() {
         messageData.replyTo = {
             id: replyingTo.id,
             content: replyingTo.content,
-            isOwn: replyingTo.isOwn
+            isOwn: replyingTo.isOwn,
+            senderName: replyingTo.senderName
         };
     }
 
@@ -830,7 +988,7 @@ function resetMessageInput() {
     }
 }
 
-// MEJORADO: Agregar mensaje a UI con sistema de respuesta
+// MEJORADO: Agregar mensaje a UI con sistema de respuesta y archivos
 function addMessageToUI(messageData) {
     const messagesContainer = document.getElementById('messages-container');
     if (!messagesContainer) return;
@@ -860,7 +1018,7 @@ function addMessageToUI(messageData) {
             <div class="message-reply">
                 <div class="reply-indicator"></div>
                 <div class="reply-content">
-                    <div class="reply-author">${messageData.replyTo.isOwn ? 'Tú' : 'Usuario'}</div>
+                    <div class="reply-author">${messageData.replyTo.senderName}</div>
                     <div class="reply-text">${messageData.replyTo.content}</div>
                 </div>
             </div>
@@ -868,16 +1026,55 @@ function addMessageToUI(messageData) {
     }
 
     let contentHTML = '';
-    if (messageData.type === 'audio') {
-        contentHTML = `
-            <div class="audio-message">
-                <button class="play-audio-btn" onclick="playAudio('${messageData.audioUrl}')">
-                    <i class="fas fa-play"></i>
-                </button>
-                <div class="audio-waveform"></div>
-                <div class="audio-duration">${messageData.duration}s</div>
-            </div>
-        `;
+    if (messageData.file) {
+        if (messageData.file.type.startsWith('image/')) {
+            contentHTML = `
+                <div class="media-message image-message" data-file-name="${messageData.file.name}">
+                    <img src="${messageData.file.url}" alt="Imagen" onclick="openMediaViewer('${messageData.file.url}', 'image')">
+                    <div class="media-caption">${messageData.message}</div>
+                </div>
+            `;
+        } else if (messageData.file.type.startsWith('video/')) {
+            contentHTML = `
+                <div class="media-message video-message" data-file-name="${messageData.file.name}">
+                    <video controls onclick="openMediaViewer('${messageData.file.url}', 'video')">
+                        <source src="${messageData.file.url}" type="${messageData.file.type}">
+                        Tu navegador no soporta el elemento video.
+                    </video>
+                    <div class="media-caption">${messageData.message}</div>
+                </div>
+            `;
+        } else if (messageData.file.type.startsWith('audio/')) {
+            contentHTML = `
+                <div class="media-message audio-message" data-file-name="${messageData.file.name}">
+                    <div class="audio-player">
+                        <button class="play-audio-btn" onclick="toggleAudioPlayback(this)">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div class="audio-info">
+                            <div class="audio-title">Mensaje de voz</div>
+                            <div class="audio-duration">${messageData.file.duration || '0'}s</div>
+                        </div>
+                        <audio src="${messageData.file.url}" preload="none"></audio>
+                    </div>
+                </div>
+            `;
+        } else {
+            contentHTML = `
+                <div class="media-message file-message" data-file-name="${messageData.file.name}">
+                    <div class="file-info">
+                        <i class="fas fa-file"></i>
+                        <div class="file-details">
+                            <div class="file-name">${messageData.file.name}</div>
+                            <div class="file-size">${formatFileSize(messageData.file.size)}</div>
+                        </div>
+                        <a href="${messageData.file.url}" download="${messageData.file.name}" class="download-btn">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
     } else {
         contentHTML = `<div class="message-content">${messageData.message}</div>`;
     }
@@ -936,17 +1133,71 @@ function addGroupMessageToUI(messageData) {
             <div class="message-reply">
                 <div class="reply-indicator"></div>
                 <div class="reply-content">
-                    <div class="reply-author">${messageData.replyTo.isOwn ? 'Tú' : 'Usuario'}</div>
+                    <div class="reply-author">${messageData.replyTo.senderName}</div>
                     <div class="reply-text">${messageData.replyTo.content}</div>
                 </div>
             </div>
         `;
     }
 
+    let contentHTML = '';
+    if (messageData.file) {
+        if (messageData.file.type.startsWith('image/')) {
+            contentHTML = `
+                <div class="media-message image-message" data-file-name="${messageData.file.name}">
+                    <img src="${messageData.file.url}" alt="Imagen" onclick="openMediaViewer('${messageData.file.url}', 'image')">
+                    <div class="media-caption">${messageData.message}</div>
+                </div>
+            `;
+        } else if (messageData.file.type.startsWith('video/')) {
+            contentHTML = `
+                <div class="media-message video-message" data-file-name="${messageData.file.name}">
+                    <video controls onclick="openMediaViewer('${messageData.file.url}', 'video')">
+                        <source src="${messageData.file.url}" type="${messageData.file.type}">
+                        Tu navegador no soporta el elemento video.
+                    </video>
+                    <div class="media-caption">${messageData.message}</div>
+                </div>
+            `;
+        } else if (messageData.file.type.startsWith('audio/')) {
+            contentHTML = `
+                <div class="media-message audio-message" data-file-name="${messageData.file.name}">
+                    <div class="audio-player">
+                        <button class="play-audio-btn" onclick="toggleAudioPlayback(this)">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <div class="audio-info">
+                            <div class="audio-title">Mensaje de voz</div>
+                            <div class="audio-duration">${messageData.file.duration || '0'}s</div>
+                        </div>
+                        <audio src="${messageData.file.url}" preload="none"></audio>
+                    </div>
+                </div>
+            `;
+        } else {
+            contentHTML = `
+                <div class="media-message file-message" data-file-name="${messageData.file.name}">
+                    <div class="file-info">
+                        <i class="fas fa-file"></i>
+                        <div class="file-details">
+                            <div class="file-name">${messageData.file.name}</div>
+                            <div class="file-size">${formatFileSize(messageData.file.size)}</div>
+                        </div>
+                        <a href="${messageData.file.url}" download="${messageData.file.name}" class="download-btn">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+    } else {
+        contentHTML = `<div class="message-content">${messageData.message}</div>`;
+    }
+
     messageDiv.innerHTML = `
         ${!isSent ? `<div class="message-sender">${senderName}</div>` : ''}
         ${replyHTML}
-        <div class="message-content">${messageData.message}</div>
+        ${contentHTML}
         <div class="message-time">${time}</div>
     `;
 
@@ -965,61 +1216,74 @@ function addGroupMessageToUI(messageData) {
     scrollToBottom();
 }
 
-// MEJORADO: Gestión de grupos
-async function createGroup() {
-    const name = document.getElementById('create-group-name').value.trim();
-    const description = document.getElementById('create-group-description').value.trim();
+// NUEVO: Funciones para manejar archivos multimedia
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function toggleAudioPlayback(button) {
+    const audioPlayer = button.closest('.audio-player');
+    const audio = audioPlayer.querySelector('audio');
+    const icon = button.querySelector('i');
     
-    if (!name) {
-        showNotification('El nombre del grupo es obligatorio', 'error');
-        return;
+    if (audio.paused) {
+        audio.play();
+        icon.className = 'fas fa-pause';
+    } else {
+        audio.pause();
+        icon.className = 'fas fa-play';
     }
     
-    const submitBtn = document.getElementById('create-group-submit-btn');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando...';
-    submitBtn.disabled = true;
+    audio.onended = function() {
+        icon.className = 'fas fa-play';
+    };
+}
+
+function openMediaViewer(url, type) {
+    // Crear visor de medios simple
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        cursor: pointer;
+    `;
     
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('description', description);
-    formData.append('creatorId', currentUser.id);
-    formData.append('creatorName', currentUser.name);
-    formData.append('members', JSON.stringify(Array.from(selectedMembers)));
-    
-    if (newGroupAvatarFile) {
-        formData.append('avatar', newGroupAvatarFile);
+    let mediaElement;
+    if (type === 'image') {
+        mediaElement = document.createElement('img');
+        mediaElement.src = url;
+        mediaElement.style.maxWidth = '90%';
+        mediaElement.style.maxHeight = '90%';
+        mediaElement.style.objectFit = 'contain';
+    } else if (type === 'video') {
+        mediaElement = document.createElement('video');
+        mediaElement.src = url;
+        mediaElement.controls = true;
+        mediaElement.autoplay = true;
+        mediaElement.style.maxWidth = '90%';
+        mediaElement.style.maxHeight = '90%';
     }
     
-    try {
-        const response = await fetch('/api/groups', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            showNotification('¡Grupo creado exitosamente!', 'success');
-            
-            submitBtn.innerHTML = '<i class="fas fa-check"></i> ¡Creado!';
-            setTimeout(() => {
-                hideCreateGroupScreen();
-                selectedMembers.clear();
-                openGroupChat(data.group.id);
-            }, 1000);
-            
-        } else {
-            const error = await response.json();
-            showNotification('Error: ' + error.error, 'error');
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
+    overlay.appendChild(mediaElement);
+    document.body.appendChild(overlay);
+    
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
         }
-    } catch (error) {
-        console.error('Error creando grupo:', error);
-        showNotification('Error al crear el grupo', 'error');
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-    }
+    });
 }
 
 // NUEVO: Sistema de notificaciones
@@ -1099,7 +1363,6 @@ async function loadInitialData() {
             loadUsers(),
             loadActiveChats()
         ]);
-        socket.emit('get_all_groups');
     } catch (error) {
         console.error('Error cargando datos iniciales:', error);
     } finally {
@@ -1171,26 +1434,6 @@ function hideSkeletons() {
     if (usersSkeleton) usersSkeleton.style.display = 'none';
 }
 
-function loadFollowData() {
-    socket.emit('get_follow_data', currentUser.id);
-}
-
-function updateFollowCounts() {
-    const followersCount = document.getElementById('followers-count');
-    const followingCount = document.getElementById('following-count');
-    
-    if (followersCount) followersCount.textContent = followers.length;
-    if (followingCount) followingCount.textContent = following.length;
-
-    if (currentProfileUser) {
-        const userFollowersCount = document.getElementById('user-followers-count');
-        const userFollowingCount = document.getElementById('user-following-count');
-        
-        if (userFollowersCount) userFollowersCount.textContent = '0';
-        if (userFollowingCount) userFollowingCount.textContent = '0';
-    }
-}
-
 // MEJORADO: Cargar usuarios con cache inteligente
 async function loadUsers() {
     try {
@@ -1253,13 +1496,14 @@ async function loadUsers() {
             otherUsers.forEach(user => {
                 if (!user.bio) user.bio = "¡Yo uso SecureChat!";
                 if (!user.avatar) user.avatar = '/default-avatar.png';
+                if (!user.lastSeen) user.lastSeen = new Date().toISOString();
 
                 const userItem = document.createElement('div');
                 userItem.className = 'user-item';
                 userItem.dataset.userId = user.id;
 
                 const isOnline = onlineUsers.find(u => u.id === user.id);
-                const statusText = isOnline ? 'En línea' : getLastSeenText(user.id);
+                const statusText = isOnline ? 'En línea' : getLastSeenText(user.lastSeen);
 
                 userItem.innerHTML = `
                     <div class="user-avatar">
@@ -1318,20 +1562,18 @@ function getCachedAvatarHTML(avatarUrl, name, type = 'user') {
 }
 
 // MEJORADO: Obtener texto de última vez conectado
-function getLastSeenText(userId) {
-    const lastSeen = userLastSeen[userId];
-    if (lastSeen) {
-        const lastSeenTime = new Date(lastSeen);
-        const now = new Date();
-        const diffMinutes = Math.floor((now - lastSeenTime) / (1000 * 60));
+function getLastSeenText(lastSeen) {
+    if (!lastSeen) return 'Desconectado';
+    
+    const lastSeenTime = new Date(lastSeen);
+    const now = new Date();
+    const diffMinutes = Math.floor((now - lastSeenTime) / (1000 * 60));
 
-        if (diffMinutes < 1) return 'Ahora mismo';
-        if (diffMinutes < 60) return `Hace ${diffMinutes} min`;
-        if (diffMinutes < 1440) return `Hace ${Math.floor(diffMinutes / 60)} h`;
+    if (diffMinutes < 1) return 'Ahora mismo';
+    if (diffMinutes < 60) return `Hace ${diffMinutes} min`;
+    if (diffMinutes < 1440) return `Hace ${Math.floor(diffMinutes / 60)} h`;
 
-        return `Últ. vez ${lastSeenTime.toLocaleDateString('es-ES')}`;
-    }
-    return 'Desconectado';
+    return `Últ. vez ${lastSeenTime.toLocaleDateString('es-ES')}`;
 }
 
 // MEJORADO: Actualizar estados de usuarios en tiempo real
@@ -1344,7 +1586,7 @@ function updateUserStatuses() {
             if (user) {
                 const isOnline = onlineUsers.find(u => u.id === userId);
                 const statusElement = item.querySelector('.user-status');
-                const statusText = isOnline ? 'En línea' : getLastSeenText(userId);
+                const statusText = isOnline ? 'En línea' : getLastSeenText(user.lastSeen);
 
                 if (statusElement) {
                     statusElement.textContent = statusText;
@@ -1440,7 +1682,7 @@ function renderActiveChats() {
 
                 chatItem.addEventListener('click', () => openGroupChat(chat.group.id));
 
-               const avatarElement = chatItem.querySelector('.chat-avatar');
+                const avatarElement = chatItem.querySelector('.chat-avatar');
                 if (avatarElement) {
                     avatarElement.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -1576,13 +1818,24 @@ function updateUserOnlineStatus(user) {
         statusElement.textContent = 'En línea';
         statusElement.className = 'current-chat-status';
     } else {
-        const lastSeen = userLastSeen[user.id];
+        const lastSeen = user.lastSeen || userLastSeen[user.id];
         if (lastSeen) {
-            const lastSeenTime = new Date(lastSeen).toLocaleTimeString('es-ES', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            statusElement.textContent = `Últ. vez ${lastSeenTime}`;
+            const lastSeenTime = new Date(lastSeen);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - lastSeenTime) / (1000 * 60));
+            
+            let statusText = '';
+            if (diffMinutes < 1) {
+                statusText = 'Ahora mismo';
+            } else if (diffMinutes < 60) {
+                statusText = `Hace ${diffMinutes} min`;
+            } else if (diffMinutes < 1440) {
+                statusText = `Hace ${Math.floor(diffMinutes / 60)} h`;
+            } else {
+                statusText = `Últ. vez ${lastSeenTime.toLocaleDateString('es-ES')}`;
+            }
+            
+            statusElement.textContent = statusText;
         } else {
             statusElement.textContent = 'Desconectado';
         }
@@ -1658,7 +1911,11 @@ async function loadGroupMessages(group) {
             `;
         } else {
             messages.forEach(message => {
-                addGroupMessageToUI(message);
+                if (message.type === 'system') {
+                    addSystemMessage(message.message);
+                } else {
+                    addGroupMessageToUI(message);
+                }
             });
         }
 
@@ -1687,13 +1944,6 @@ function addSystemMessage(text) {
 
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message system-message';
-    messageDiv.style.alignSelf = 'center';
-    messageDiv.style.background = 'rgba(255, 255, 255, 0.1)';
-    messageDiv.style.color = 'var(--text-secondary)';
-    messageDiv.style.fontSize = '0.8em';
-    messageDiv.style.padding = '8px 12px';
-    messageDiv.style.margin = '8px 0';
-
     messageDiv.innerHTML = text;
 
     messagesContainer.appendChild(messageDiv);
@@ -1832,7 +2082,7 @@ function updateChatsTypingStatus() {
 // MEJORADO: Función para cambiar pestañas
 function showTab(tabName) {
     // Ocultar todas las pestañas
-    document.querySelectorAll('.tab-content, .users-tab-content, .profile-screen, .follow-screen, .edit-profile-screen, .edit-group-screen, .create-group-screen, .select-members-screen').forEach(element => {
+    document.querySelectorAll('.tab-content, .users-tab-content, .profile-screen, .edit-profile-screen, .edit-group-screen, .create-group-screen, .select-members-screen').forEach(element => {
         element.classList.remove('active');
     });
 
@@ -2390,7 +2640,7 @@ function updateGroupMembersList() {
                 <div class="member-info">
                     <div class="member-name">${user.name}${isAdmin ? ' (Admin)' : ''}</div>
                     <div class="member-status ${isOnline ? 'online' : ''}">
-                        ${isOnline ? 'En línea' : 'Desconectado'}
+                        ${isOnline ? 'En línea' : getLastSeenText(user.lastSeen)}
                     </div>
                 </div>
             `;
@@ -2433,6 +2683,7 @@ async function removeMemberFromGroup(memberId) {
 
         if (response.ok) {
             showNotification('Miembro eliminado del grupo', 'success');
+            updateGroupProfileDisplay();
         } else {
             const error = await response.json();
             showNotification('Error: ' + error.error, 'error');
@@ -2530,120 +2781,6 @@ function hideEditProfile() {
     const screen = document.getElementById('edit-profile-screen');
     if (screen) {
         screen.classList.remove('active');
-    }
-}
-
-function showFollowers() {
-    const screen = document.getElementById('followers-screen');
-    if (screen) {
-        screen.classList.add('active');
-    }
-    loadFollowersList();
-}
-
-function hideFollowers() {
-    const screen = document.getElementById('followers-screen');
-    if (screen) {
-        screen.classList.remove('active');
-    }
-}
-
-function showFollowing() {
-    const screen = document.getElementById('following-screen');
-    if (screen) {
-        screen.classList.add('active');
-    }
-    loadFollowingList();
-}
-
-function hideFollowing() {
-    const screen = document.getElementById('following-screen');
-    if (screen) {
-        screen.classList.remove('active');
-    }
-}
-
-function loadFollowersList() {
-    const followersList = document.getElementById('followers-list');
-    if (!followersList) return;
-
-    followersList.innerHTML = '';
-
-    if (followers.length === 0) {
-        followersList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="empty-title">No tienes seguidores</div>
-                <div class="empty-subtitle">Comparte tu perfil para conseguir seguidores</div>
-            </div>
-        `;
-    } else {
-        followers.forEach(user => {
-            const userItem = document.createElement('div');
-            userItem.className = 'user-item';
-            userItem.innerHTML = `
-                <div class="user-avatar">
-                    ${getCachedAvatarHTML(user.avatar, user.name, 'user')}
-                </div>
-                <div class="user-info">
-                    <div class="user-name">${user.name}</div>
-                    <div class="user-bio-small">${user.bio}</div>
-                </div>
-            `;
-
-            userItem.addEventListener('click', () => showOtherUserProfile(user.id));
-            followersList.appendChild(userItem);
-        });
-    }
-}
-
-function loadFollowingList() {
-    const followingList = document.getElementById('following-list');
-    if (!followingList) return;
-
-    followingList.innerHTML = '';
-
-    if (following.length === 0) {
-        followingList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">
-                    <i class="fas fa-user-plus"></i>
-                </div>
-                <div class="empty-title">No sigues a nadie</div>
-                <div class="empty-subtitle">Encuentra usuarios interesantes para seguir</div>
-            </div>
-        `;
-    } else {
-        following.forEach(user => {
-            const userItem = document.createElement('div');
-            userItem.className = 'user-item';
-            userItem.innerHTML = `
-                <div class="user-avatar">
-                    ${getCachedAvatarHTML(user.avatar, user.name, 'user')}
-                </div>
-                <div class="user-info">
-                    <div class="user-name">${user.name}</div>
-                    <div class="user-bio-small">${user.bio}</div>
-                </div>
-            `;
-
-            userItem.addEventListener('click', () => showOtherUserProfile(user.id));
-            followingList.appendChild(userItem);
-        });
-    }
-}
-
-function showUserFollowers() {
-    if (currentProfileUser) {
-        showNotification('Mostrar seguidores de ' + currentProfileUser.name, 'info');
-    }
-}
-
-function showUserFollowing() {
-    if (currentProfileUser) {
-        showNotification('Mostrar seguidos de ' + currentProfileUser.name, 'info');
     }
 }
 
@@ -2749,9 +2886,6 @@ function showOtherUserProfile(userId) {
 
     const nameElement = document.getElementById('user-profile-name');
     const bioElement = document.getElementById('user-profile-bio');
-    const followersCount = document.getElementById('user-followers-count');
-    const followingCount = document.getElementById('user-following-count');
-    const followBtn = document.getElementById('follow-btn');
     
     if (nameElement) nameElement.textContent = user.name;
     if (bioElement) bioElement.textContent = user.bio;
@@ -2763,46 +2897,10 @@ function showOtherUserProfile(userId) {
         statusElement.className = `online-status ${isOnline ? 'online' : ''}`;
     }
 
-    if (followersCount) followersCount.textContent = '0';
-    if (followingCount) followingCount.textContent = '0';
-
-    if (followBtn) {
-        const isFollowing = following.some(u => u.id === user.id);
-        followBtn.textContent = isFollowing ? 'Dejar de seguir' : 'Seguir';
-        followBtn.className = isFollowing ? 'follow-btn following' : 'follow-btn';
-    }
-
     const screen = document.getElementById('user-profile-screen');
     if (screen) {
         screen.classList.add('active');
     }
-}
-
-function toggleFollow() {
-    if (!currentProfileUser) return;
-
-    const isFollowing = following.some(u => u.id === currentProfileUser.id);
-
-    socket.emit('toggle_follow', {
-        followerId: currentUser.id,
-        followingId: currentProfileUser.id
-    });
-
-    const followBtn = document.getElementById('follow-btn');
-    if (followBtn) {
-        if (isFollowing) {
-            following = following.filter(u => u.id !== currentProfileUser.id);
-            followBtn.textContent = 'Seguir';
-            followBtn.className = 'follow-btn';
-        } else {
-            const user = allUsers.find(u => u.id === currentProfileUser.id);
-            if (user) following.push(user);
-            followBtn.textContent = 'Dejar de seguir';
-            followBtn.className = 'follow-btn following';
-        }
-    }
-
-    updateFollowCounts();
 }
 
 function hideUserProfile() {
@@ -2829,7 +2927,6 @@ function updateMyProfileDisplay() {
     if (nameElement) nameElement.textContent = currentUser.name;
     if (bioElement) bioElement.textContent = currentUser.bio;
     updateAvatarDisplay('my-profile-avatar', currentUser.avatar, currentUser.name);
-    updateFollowCounts();
 }
 
 function updateUnreadBadge(userId, count) {
@@ -2869,34 +2966,59 @@ function refreshAvatar(elementId, newAvatarUrl, name) {
     }
 }
 
-// Inicializar validación de formularios
-document.addEventListener('DOMContentLoaded', function() {
-    const groupNameInput = document.getElementById('create-group-name');
-    const editGroupNameInput = document.getElementById('edit-group-name');
-    const membersSearchInput = document.getElementById('members-search-input');
-    
-    if (groupNameInput) {
-        groupNameInput.addEventListener('input', validateGroupForm);
-    }
-    
-    if (editGroupNameInput) {
-        editGroupNameInput.addEventListener('input', validateEditGroupForm);
-    }
-    
-    if (membersSearchInput) {
-        membersSearchInput.addEventListener('input', filterMembers);
-    }
-    
-    // Inicializar tabs de selección de miembros
-    document.querySelectorAll('.members-tab-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tabName = this.dataset.tab;
-            switchMembersTab(tabName);
+// MEJORADO: Manejar estados de escritura
+function handleTyping() {
+    if (selectedUser) {
+        socket.emit('user_typing', {
+            to: selectedUser,
+            from: currentUser
         });
-    });
-});
+        
+        clearTimeout(typingTimeouts['typing']);
+        typingTimeouts['typing'] = setTimeout(() => {
+            socket.emit('user_stop_typing', {
+                to: selectedUser,
+                from: currentUser
+            });
+        }, 1000);
+    } else if (selectedGroup) {
+        socket.emit('group_typing', {
+            groupId: selectedGroup.id,
+            from: currentUser
+        });
+        
+        clearTimeout(groupTypingTimeouts['typing']);
+        groupTypingTimeouts['typing'] = setTimeout(() => {
+            socket.emit('group_stop_typing', {
+                groupId: selectedGroup.id,
+                from: currentUser
+            });
+        }, 1000);
+    }
+}
 
-// Limpiar cache cada hora
+// MEJORADO: Manejar nuevos mensajes
+function handleNewMessage(messageData) {
+    addMessageToUI(messageData);
+    
+    // Marcar como leído
+    socket.emit('mark_as_read', {
+        userId: currentUser.id,
+        otherUserId: messageData.from
+    });
+}
+
+function handleNewGroupMessage(messageData) {
+    addGroupMessageToUI(messageData);
+    
+    // Marcar como leído
+    socket.emit('mark_group_as_read', {
+        userId: currentUser.id,
+        groupId: messageData.groupId
+    });
+}
+
+// Limpiar cache cada 24 horas
 setInterval(() => {
     const now = Date.now();
     for (let [key, value] of avatarCache.entries()) {
@@ -2904,4 +3026,4 @@ setInterval(() => {
             avatarCache.delete(key);
         }
     }
-}, 60 * 60 * 1000);
+}, 24 * 60 * 60 * 1000);
