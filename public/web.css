@@ -966,16 +966,15 @@ body {
 }
 
 /* NUEVO: UI de grabación MEJORADA */
-/* NUEVO: UI de grabación como widget flotante */
 .recording-ui {
     position: absolute;
-    bottom: 70px;
-    right: 20px;
-    width: 220px;
-    padding: 16px;
-    background: rgba(30, 41, 59, 0.95);
+    bottom: 80px;
+    left: 15px;
+    right: 15px;
+    background: var(--surface);
     border: 2px solid var(--primary);
     border-radius: 16px;
+    padding: 15px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     z-index: 1000;
     opacity: 0;
@@ -983,9 +982,8 @@ body {
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 15px;
 }
 
 .recording-ui.active {
@@ -994,42 +992,49 @@ body {
     transform: translateY(-10px);
 }
 
-.recording-ui.cancelling {
-    border-color: var(--error);
-    background: rgba(239, 68, 68, 0.1);
-}
-
-.recording-waveform {
-    width: 100%;
+.cancel-recording-btn {
+    background: var(--error);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
     height: 40px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    position: relative;
-    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
 }
 
-.recording-waveform::before {
-    content: '🎤 Grabando...';
-    color: var(--text);
-    font-size: 0.9em;
-    font-weight: 500;
+.cancel-recording-btn:hover {
+    transform: scale(1.1);
+    background: #dc2626;
 }
 
 .recording-timer {
     font-size: 1.2em;
     color: var(--text);
     font-weight: 600;
+    flex: 1;
     text-align: center;
+}
+
+.recording-waveform {
+    flex: 2;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    position: relative;
+    overflow: hidden;
 }
 
 .recording-hint {
     color: var(--text-secondary);
-    text-align: center;
     font-size: 0.8em;
-    line-height: 1.4;
+    text-align: center;
+    margin-top: 8px;
+    width: 100%;
 }
 
 .recording-ui.active {
