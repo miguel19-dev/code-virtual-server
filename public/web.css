@@ -960,7 +960,7 @@ body {
     transform: none;
 }
 
-/* NUEVO: UI de grabación */
+/* NUEVO: UI de grabación MEJORADA */
 .recording-ui {
     position: fixed;
     top: 0;
@@ -1084,19 +1084,47 @@ body {
     text-align: right;
 }
 
-/* NUEVO: Mensajes de audio */
+/* NUEVO: Mensajes multimedia MEJORADOS */
+.media-message {
+    margin: 8px 0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.image-message img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.image-message img:hover {
+    transform: scale(1.02);
+}
+
+.video-message video {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
 .audio-message {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 12px;
+}
+
+.audio-player {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
 }
 
 .play-audio-btn {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border: none;
     border-radius: 50%;
     background: var(--primary);
@@ -1110,30 +1138,70 @@ body {
 
 .play-audio-btn:hover {
     transform: scale(1.1);
+    background: var(--primary-dark);
 }
 
-.audio-waveform {
+.audio-info {
     flex: 1;
-    height: 20px;
-    background: linear-gradient(90deg, 
-        var(--primary) 0%, 
-        var(--secondary) 50%, 
-        var(--primary) 100%);
-    border-radius: 10px;
-    opacity: 0.7;
-    animation: waveform 2s infinite;
 }
 
-@keyframes waveform {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 0.8; }
+.audio-title {
+    font-weight: 600;
+    margin-bottom: 2px;
 }
 
 .audio-duration {
     font-size: 0.8em;
     color: var(--text-secondary);
-    min-width: 30px;
-    text-align: right;
+}
+
+.file-message {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px;
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.file-info i {
+    font-size: 1.5em;
+    color: var(--primary);
+}
+
+.file-details {
+    flex: 1;
+}
+
+.file-name {
+    font-weight: 600;
+    margin-bottom: 2px;
+    word-break: break-all;
+}
+
+.file-size {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+.download-btn {
+    color: var(--primary);
+    padding: 8px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.download-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.media-caption {
+    margin-top: 8px;
+    font-size: 0.9em;
+    color: var(--text-secondary);
 }
 
 /* Mensaje del sistema */
@@ -1340,7 +1408,6 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    cursor: pointer;
     padding: 15px;
     border-radius: 10px;
     transition: all 0.3s ease;
@@ -1478,33 +1545,6 @@ body {
     gap: 10px;
     width: 100%;
     max-width: 400px;
-}
-
-/* Botón de seguir */
-.follow-btn {
-    padding: 10px 25px;
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    border: none;
-    border-radius: 20px;
-    color: white;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    margin-bottom: 20px;
-}
-
-.follow-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4);
-}
-
-.follow-btn:active {
-    transform: translateY(0);
-}
-
-.follow-btn.following {
-    background: var(--surface-light);
-    color: var(--text);
 }
 
 .profile-actions {
@@ -2004,31 +2044,6 @@ body {
     flex: 1;
 }
 
-/* Pantallas de Seguidores/Seguidos */
-.follow-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--background);
-    z-index: 1000;
-    display: none;
-    flex-direction: column;
-}
-
-.follow-screen.active {
-    display: flex;
-}
-
-.follow-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px 0;
-    -webkit-overflow-scrolling: touch;
-    scroll-behavior: smooth;
-}
-
 /* Overlay para cerrar panel */
 .panel-overlay {
     position: fixed;
@@ -2213,50 +2228,50 @@ textarea:focus-visible {
     .profile-stats {
         gap: 20px;
     }
-    
+
     .stat-item {
         min-width: 80px;
         padding: 10px;
     }
-    
+
     .modal-content {
         margin: 10px;
     }
-    
+
     .members-tab-btn {
         padding: 12px 10px;
         font-size: 0.9em;
     }
-    
+
     .profile-name {
         font-size: 1.5em;
     }
-    
+
     .profile-avatar {
         width: 100px;
         height: 100px;
         font-size: 2em;
     }
-    
+
     .chat-avatar, .user-avatar {
         width: 45px;
         height: 45px;
     }
-    
+
     .current-chat-avatar {
         width: 40px;
         height: 40px;
     }
-    
+
     .message-input-wrapper {
         gap: 6px;
     }
-    
+
     .attach-button, .voice-button, .send-button {
         width: 40px;
         height: 40px;
     }
-    
+
     .reply-preview {
         padding: 10px 12px;
     }
@@ -2271,11 +2286,11 @@ textarea:focus-visible {
         --surface: #1a1a1a;
         --surface-light: #333333;
     }
-    
+
     .chat-avatar, .user-avatar, .profile-avatar {
         border-width: 2px;
     }
-    
+
     .message {
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
