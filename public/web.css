@@ -966,21 +966,70 @@ body {
 }
 
 /* NUEVO: UI de grabación MEJORADA */
+/* NUEVO: UI de grabación como widget flotante */
 .recording-ui {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    position: absolute;
+    bottom: 70px;
+    right: 20px;
+    width: 220px;
+    padding: 16px;
+    background: rgba(30, 41, 59, 0.95);
+    border: 2px solid var(--primary);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     z-index: 1000;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.recording-ui.active {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateY(-10px);
+}
+
+.recording-ui.cancelling {
+    border-color: var(--error);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.recording-waveform {
+    width: 100%;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.recording-waveform::before {
+    content: '🎤 Grabando...';
+    color: var(--text);
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.recording-timer {
+    font-size: 1.2em;
+    color: var(--text);
+    font-weight: 600;
+    text-align: center;
+}
+
+.recording-hint {
+    color: var(--text-secondary);
+    text-align: center;
+    font-size: 0.8em;
+    line-height: 1.4;
 }
 
 .recording-ui.active {
