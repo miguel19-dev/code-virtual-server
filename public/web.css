@@ -2569,4 +2569,19 @@ textarea:focus-visible {
         opacity: 0;
         transform: translateX(100%);
     }
+    
+/* Logo de la app */
+.app-logo {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.app-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 }
