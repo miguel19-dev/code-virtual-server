@@ -1,4 +1,4 @@
-// Variables globales
+// Variables globales MEJORADAS
 const socket = io();
 let currentUser = null;
 let selectedUser = null;
@@ -19,11 +19,21 @@ let currentProfileUser = null;
 let currentProfileGroup = null;
 let previousTab = 'chats';
 let typingUsers = new Set();
-let groupTypingUsers = new Map(); // Para controlar typing en grupos
+let groupTypingUsers = new Map();
 let selectedMembers = new Set();
-let sentMessageIds = new Set(); // Para prevenir duplicación de mensajes
+let sentMessageIds = new Set();
 
-// Inicializar la aplicación
+// NUEVAS VARIABLES PARA MEJORAS
+const avatarCache = new Map();
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos
+let replyingTo = null;
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let recordingStartTime = null;
+let recordingTimeout = null;
+
+// Inicializar la aplicación MEJORADA
 document.addEventListener('DOMContentLoaded', async function() {
     currentUser = JSON.parse(localStorage.getItem('currentUser'));
 
@@ -44,11 +54,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     socket.emit('get_unread_counts', currentUser.id);
     loadFollowData();
     showTab('chats');
+    
+    // Inicializar botones dinámicos
+    toggleSendVoiceButton();
 });
 
-// Configurar event listeners
+// Configurar event listeners MEJORADO
 function setupEventListeners() {
-    // Botón hamburguesa y panel
+    // Event listeners existentes...
     document.getElementById('menu-btn').addEventListener('click', () => togglePanel(true));
     document.getElementById('panel-overlay').addEventListener('click', () => togglePanel(false));
     document.getElementById('my-profile-btn').addEventListener('click', showMyProfile);
@@ -59,14 +72,16 @@ function setupEventListeners() {
     document.getElementById('chat-back-btn').addEventListener('click', handleChatBack);
     document.getElementById('users-back-btn').addEventListener('click', () => showTab('chats'));
 
+    // NUEVOS EVENT LISTENERS PARA MEJORAS
+    setupMessageInputListeners();
+    setupVoiceRecording();
+    
     // Grupos - Botones principales
     document.getElementById('new-group-btn').addEventListener('click', showCreateGroupScreen);
 
-    // Perfiles - Hacer clickeables avatar y nombre en chat
+    // Perfiles
     document.getElementById('current-chat-avatar').addEventListener('click', openCurrentProfile);
     document.getElementById('current-chat-name').addEventListener('click', openCurrentProfile);
-
-    // Perfiles
     document.getElementById('my-profile-back-btn').addEventListener('click', hideMyProfile);
     document.getElementById('user-profile-back-btn').addEventListener('click', hideUserProfile);
     document.getElementById('group-profile-back-btn').addEventListener('click', hideGroupProfile);
@@ -118,41 +133,93 @@ function setupEventListeners() {
     document.getElementById('group-avatar-input').addEventListener('change', previewGroupAvatar);
     document.getElementById('create-group-avatar').addEventListener('change', previewCreateGroupAvatar);
 
-    // Mensajes - Enfocar input solo tras interacción
-    document.getElementById('messages-container').addEventListener('click', focusMessageInput);
-    document.getElementById('send-button').addEventListener('click', sendMessage);
-    
-    document.getElementById('message-input').addEventListener('keypress', function(e) {
+    // Socket events MEJORADOS
+    setupSocketListeners();
+}
+
+// NUEVO: Configurar listeners del input de mensajes
+function setupMessageInputListeners() {
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const attachButton = document.getElementById('attach-button');
+    const voiceButton = document.getElementById('voice-button');
+    const cancelReplyButton = document.getElementById('cancel-reply');
+
+    if (!messageInput) return;
+
+    // Input de texto
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        
+        // Alternar entre micrófono y enviar
+        toggleSendVoiceButton();
+        
+        // Manejar estados de escritura
+        handleTyping();
+    });
+
+    messageInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
 
-    document.getElementById('message-input').addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    // Botón de adjuntar
+    if (attachButton) {
+        attachButton.addEventListener('click', showMediaPicker);
+    }
+
+    // Botón de cancelar respuesta
+    if (cancelReplyButton) {
+        cancelReplyButton.addEventListener('click', cancelReply);
+    }
+
+    // Swipe para respuesta
+    setupSwipeGestures();
+}
+
+// NUEVO: Configurar grabación de voz
+function setupVoiceRecording() {
+    const voiceButton = document.getElementById('voice-button');
+    if (!voiceButton) return;
+
+    let startX = 0;
+    let isSwiping = false;
+
+    voiceButton.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        startRecording(e);
+    });
+    
+    voiceButton.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        startRecording(e);
+    });
+
+    voiceButton.addEventListener('touchend', stopRecording);
+    voiceButton.addEventListener('mouseup', stopRecording);
+    voiceButton.addEventListener('mouseleave', stopRecording);
+
+    // Swipe para cancelar
+    document.addEventListener('touchmove', function(e) {
+        if (!isRecording) return;
         
-        // Manejar estados de escritura
-        handleTyping();
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - startX;
+        
+        if (deltaX < -50) { // Swipe izquierda
+            isSwiping = true;
+            showCancelRecordingUI();
+        } else {
+            hideCancelRecordingUI();
+        }
     });
+}
 
-    // Validación en tiempo real para formularios
-    document.getElementById('create-group-name').addEventListener('input', validateGroupForm);
-    document.getElementById('edit-group-name').addEventListener('input', validateEditGroupForm);
-
-    // Tabs de selección de miembros
-    document.querySelectorAll('.members-tab-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tabName = this.dataset.tab;
-            switchMembersTab(tabName);
-        });
-    });
-
-    // Búsqueda de miembros
-    document.getElementById('members-search-input').addEventListener('input', filterMembers);
-
-    // Socket events
+// NUEVO: Configurar listeners de socket
+function setupSocketListeners() {
     socket.on('users_online', (users) => {
         onlineUsers = users;
         updateUserStatuses();
@@ -219,27 +286,37 @@ function setupEventListeners() {
     });
 
     socket.on('user_joined_group', (data) => {
-        console.log(`${data.user.name} se unió al grupo`);
         if (selectedGroup && selectedGroup.id === data.groupId) {
             addSystemMessage(`${data.user.name} se unió al grupo`);
         }
     });
 
     socket.on('user_left_group', (data) => {
-        console.log(`${data.user.name} salió del grupo`);
         if (selectedGroup && selectedGroup.id === data.groupId) {
             addSystemMessage(`${data.user.name} salió del grupo`);
         }
     });
 
+    // MEJORADO: Prevenir mensajes de otros chats
     socket.on('new_message', (messageData) => {
-        console.log('Nuevo mensaje recibido:', messageData);
-        handleNewMessage(messageData);
+        if ((selectedUser && selectedUser.id === messageData.from) || 
+            (!selectedUser && !selectedGroup)) {
+            handleNewMessage(messageData);
+        } else {
+            // Solo incrementar contador, no mostrar mensaje
+            unreadCounts[messageData.from] = (unreadCounts[messageData.from] || 0) + 1;
+            loadActiveChats();
+        }
     });
 
     socket.on('new_group_message', (messageData) => {
-        console.log('Nuevo mensaje grupal recibido:', messageData);
-        handleNewGroupMessage(messageData);
+        if (selectedGroup && selectedGroup.id === messageData.groupId) {
+            handleNewGroupMessage(messageData);
+        } else {
+            // Solo incrementar contador, no mostrar mensaje
+            unreadCounts[messageData.groupId] = (unreadCounts[messageData.groupId] || 0) + 1;
+            loadActiveChats();
+        }
     });
 
     socket.on('unread_counts', (counts) => {
@@ -263,24 +340,21 @@ function setupEventListeners() {
     });
 
     socket.on('user_typing', (data) => {
-        if (data.from !== currentUser.id) {
+        if (data.from !== currentUser.id && selectedUser && selectedUser.id === data.from) {
             showTypingIndicator(data.from);
-            
             typingUsers.add(data.from);
             updateChatsTypingStatus();
         }
     });
 
     socket.on('user_stop_typing', (data) => {
-        if (data.from !== currentUser.id) {
+        if (data.from !== currentUser.id && selectedUser && selectedUser.id === data.from) {
             hideTypingIndicator(data.from);
-            
             typingUsers.delete(data.from);
             updateChatsTypingStatus();
         }
     });
 
-    // NUEVO: Estados de escritura grupal
     socket.on('group_typing', (data) => {
         if (data.from !== currentUser.id && selectedGroup && selectedGroup.id === data.groupId) {
             showGroupTypingIndicator(data.from);
@@ -315,13 +389,10 @@ function setupEventListeners() {
     });
 
     socket.on('chats_updated', () => {
-        console.log('Chats actualizados en tiempo real');
         loadActiveChats();
     });
 
     socket.on('message_sent', (messageData) => {
-        console.log('Mensaje enviado confirmado:', messageData);
-        // Remover de mensajes temporales si existe
         if (messageData.id && messageData.id.startsWith('temp-')) {
             const tempMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
             if (tempMessage) {
@@ -331,8 +402,6 @@ function setupEventListeners() {
     });
 
     socket.on('group_message_sent', (messageData) => {
-        console.log('Mensaje grupal enviado confirmado:', messageData);
-        // Remover de mensajes temporales si existe
         if (messageData.id && messageData.id.startsWith('temp-group-')) {
             const tempMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
             if (tempMessage) {
@@ -342,48 +411,704 @@ function setupEventListeners() {
     });
 }
 
-// FOCUS MEJORADO: Solo tras interacción explícita
-function focusMessageInput() {
+// MEJORADO: Sistema de cache para avatares
+function updateAvatarDisplay(elementId, avatarUrl, userName) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const now = Date.now();
+    const cacheKey = `${elementId}-${avatarUrl}`;
+    
+    // Verificar cache
+    if (avatarCache.has(cacheKey)) {
+        const cached = avatarCache.get(cacheKey);
+        if (now - cached.timestamp < CACHE_DURATION) {
+            element.innerHTML = cached.html;
+            return;
+        }
+    }
+    
+    let avatarHTML = '';
+    
+    if (avatarUrl && avatarUrl !== '/default-avatar.png' && avatarUrl !== '/default-group-avatar.png') {
+        const dailyTimestamp = new Date().toDateString();
+        const cacheSafeUrl = `${avatarUrl}?v=${dailyTimestamp}`;
+        
+        avatarHTML = `
+            <img src="${cacheSafeUrl}" alt="${userName}" 
+                 onerror="handleAvatarError(this, '${userName}')"
+                 loading="lazy">
+        `;
+    } else {
+        avatarHTML = `<div class="avatar-fallback">${userName.charAt(0).toUpperCase()}</div>`;
+    }
+    
+    element.innerHTML = avatarHTML;
+    
+    // Guardar en cache
+    avatarCache.set(cacheKey, {
+        html: avatarHTML,
+        timestamp: now
+    });
+}
+
+function updateGroupAvatarDisplay(elementId, avatarUrl, groupName) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const now = Date.now();
+    const cacheKey = `${elementId}-${avatarUrl}`;
+    
+    if (avatarCache.has(cacheKey)) {
+        const cached = avatarCache.get(cacheKey);
+        if (now - cached.timestamp < CACHE_DURATION) {
+            element.innerHTML = cached.html;
+            return;
+        }
+    }
+    
+    let avatarHTML = '';
+    
+    if (avatarUrl && avatarUrl !== '/default-group-avatar.png') {
+        const dailyTimestamp = new Date().toDateString();
+        const cacheSafeUrl = `${avatarUrl}?v=${dailyTimestamp}`;
+        
+        avatarHTML = `
+            <img src="${cacheSafeUrl}" alt="${groupName}" 
+                 onerror="handleAvatarError(this, '${groupName}')"
+                 loading="lazy">
+        `;
+    } else {
+        avatarHTML = `<div class="avatar-fallback">${groupName.charAt(0).toUpperCase()}</div>`;
+    }
+    
+    element.innerHTML = avatarHTML;
+    
+    avatarCache.set(cacheKey, {
+        html: avatarHTML,
+        timestamp: now
+    });
+}
+
+function handleAvatarError(imgElement, name) {
+    imgElement.style.display = 'none';
+    const parent = imgElement.parentElement;
+    const existingFallback = parent.querySelector('.avatar-fallback');
+    
+    if (!existingFallback) {
+        const fallback = document.createElement('div');
+        fallback.className = 'avatar-fallback';
+        fallback.textContent = name.charAt(0).toUpperCase();
+        fallback.style.display = 'flex';
+        parent.appendChild(fallback);
+    } else {
+        existingFallback.style.display = 'flex';
+    }
+}
+
+// NUEVO: Sistema de respuesta a mensajes
+function setupSwipeGestures() {
+    const messagesContainer = document.getElementById('messages-container');
+    if (!messagesContainer) return;
+
+    let startX = 0;
+    let currentMessage = null;
+
+    messagesContainer.addEventListener('touchstart', (e) => {
+        const messageElement = e.target.closest('.message');
+        if (messageElement && !messageElement.classList.contains('system-message')) {
+            currentMessage = messageElement;
+            startX = e.touches[0].clientX;
+        }
+    });
+
+    messagesContainer.addEventListener('touchmove', (e) => {
+        if (!currentMessage) return;
+        
+        const currentX = e.touches[0].clientX;
+        const deltaX = currentX - startX;
+        
+        if (deltaX > 50) { // Swipe derecha
+            currentMessage.style.transform = `translateX(${Math.min(deltaX, 100)}px)`;
+            currentMessage.style.transition = 'transform 0.2s ease';
+        }
+    });
+
+    messagesContainer.addEventListener('touchend', (e) => {
+        if (!currentMessage) return;
+        
+        const endX = e.changedTouches[0].clientX;
+        const deltaX = endX - startX;
+        
+        if (deltaX > 100) { // Swipe suficiente para respuesta
+            showReplyUI(currentMessage);
+        }
+        
+        // Reset transform
+        currentMessage.style.transform = '';
+        currentMessage.style.transition = 'transform 0.3s ease';
+        currentMessage = null;
+    });
+}
+
+function showReplyUI(messageElement) {
+    const messageId = messageElement.dataset.messageId;
+    const messageContent = messageElement.querySelector('.message-content')?.textContent || '';
+    const isOwnMessage = messageElement.classList.contains('sent');
+    
+    replyingTo = {
+        id: messageId,
+        content: messageContent,
+        isOwn: isOwnMessage
+    };
+    
+    // Mostrar UI de respuesta
+    const replyUI = document.getElementById('reply-preview');
+    const replyContent = document.getElementById('reply-content');
+    
+    if (replyUI && replyContent) {
+        replyContent.textContent = messageContent.length > 50 ? 
+            messageContent.substring(0, 50) + '...' : messageContent;
+        
+        replyUI.classList.add('active');
+        
+        // Scroll to bottom
+        scrollToBottom();
+    }
+}
+
+function cancelReply() {
+    replyingTo = null;
+    const replyUI = document.getElementById('reply-preview');
+    if (replyUI) {
+        replyUI.classList.remove('active');
+    }
+}
+
+// NUEVO: Grabación de voz
+async function startRecording(e) {
+    e.preventDefault();
+    
+    if (isRecording) return;
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+        
+        mediaRecorder.onstop = sendAudioMessage;
+        
+        mediaRecorder.start();
+        isRecording = true;
+        recordingStartTime = Date.now();
+        
+        // UI de grabación
+        showRecordingUI();
+        
+        // Actualizar timer
+        updateRecordingTimer();
+        
+        // Timeout automático (60 segundos)
+        recordingTimeout = setTimeout(() => {
+            stopRecording();
+        }, 60000);
+        
+    } catch (error) {
+        console.error('Error al acceder al micrófono:', error);
+        showNotification('No se pudo acceder al micrófono. Permite el acceso e intenta nuevamente.', 'error');
+    }
+}
+
+function stopRecording() {
+    if (!isRecording || !mediaRecorder) return;
+    
+    clearTimeout(recordingTimeout);
+    
+    if (mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    
+    // Detener stream
+    if (mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+    
+    isRecording = false;
+    hideRecordingUI();
+}
+
+function showRecordingUI() {
+    const voiceButton = document.getElementById('voice-button');
+    const recordingUI = document.getElementById('recording-ui');
+    
+    if (voiceButton) voiceButton.classList.add('recording');
+    if (recordingUI) recordingUI.classList.add('active');
+}
+
+function hideRecordingUI() {
+    const voiceButton = document.getElementById('voice-button');
+    const recordingUI = document.getElementById('recording-ui');
+    
+    if (voiceButton) voiceButton.classList.remove('recording');
+    if (recordingUI) recordingUI.classList.remove('active');
+}
+
+function showCancelRecordingUI() {
+    const recordingUI = document.getElementById('recording-ui');
+    if (recordingUI) {
+        recordingUI.classList.add('cancelling');
+    }
+}
+
+function hideCancelRecordingUI() {
+    const recordingUI = document.getElementById('recording-ui');
+    if (recordingUI) {
+        recordingUI.classList.remove('cancelling');
+    }
+}
+
+function updateRecordingTimer() {
+    if (!isRecording) return;
+    
+    const timerElement = document.getElementById('recording-timer');
+    if (timerElement) {
+        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
+    setTimeout(updateRecordingTimer, 1000);
+}
+
+function sendAudioMessage() {
+    if (audioChunks.length === 0) return;
+    
+    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const duration = Math.round((Date.now() - recordingStartTime) / 1000);
+    
+    // Por ahora mostramos un mensaje de demo
+    // En una implementación real, enviarías el blob al servidor
+    showNotification('Mensaje de voz grabado (' + duration + 's). En una implementación real se enviaría al servidor.', 'info');
+    
+    // Limpiar
+    audioChunks = [];
+    recordingStartTime = null;
+}
+
+// NUEVO: Alternar entre micrófono y enviar
+function toggleSendVoiceButton() {
     const messageInput = document.getElementById('message-input');
-    if (messageInput && !messageInput.matches(':focus')) {
-        setTimeout(() => {
-            messageInput.focus();
-        }, 100);
+    const sendButton = document.getElementById('send-button');
+    const voiceButton = document.getElementById('voice-button');
+    
+    if (!messageInput || !sendButton || !voiceButton) return;
+    
+    const hasText = messageInput.value.trim().length > 0;
+    
+    if (hasText) {
+        sendButton.style.display = 'flex';
+        voiceButton.style.display = 'none';
+    } else {
+        sendButton.style.display = 'none';
+        voiceButton.style.display = 'flex';
     }
 }
 
-// CONTROL DE TYPING MEJORADO
-function handleTyping() {
+// NUEVO: Selector de medios
+function showMediaPicker() {
+    // Crear input de archivo dinámicamente
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,video/*';
+    fileInput.multiple = true;
+    
+    fileInput.onchange = (e) => {
+        const files = Array.from(e.target.files);
+        files.forEach(file => {
+            if (file.type.startsWith('image/')) {
+                previewAndSendImage(file);
+            } else if (file.type.startsWith('video/')) {
+                previewAndSendVideo(file);
+            }
+        });
+    };
+    
+    fileInput.click();
+}
+
+function previewAndSendImage(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        // En una implementación real, enviarías el archivo al servidor
+        showNotification('Imagen seleccionada: ' + file.name, 'info');
+        // sendMediaMessage(file, 'image');
+    };
+    reader.readAsDataURL(file);
+}
+
+function previewAndSendVideo(file) {
+    // En una implementación real, enviarías el archivo al servidor
+    showNotification('Video seleccionado: ' + file.name, 'info');
+    // sendMediaMessage(file, 'video');
+}
+
+// MEJORADO: Enviar mensaje con sistema de respuesta
+async function sendMessage() {
+    const messageInput = document.getElementById('message-input');
+    const message = messageInput.value.trim();
+
+    if (!message && !replyingTo) {
+        return;
+    }
+
+    const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+    const messageData = {
+        id: tempId,
+        message: message,
+        timestamp: new Date().toISOString()
+    };
+
+    // Agregar datos de respuesta si existe
+    if (replyingTo) {
+        messageData.replyTo = {
+            id: replyingTo.id,
+            content: replyingTo.content,
+            isOwn: replyingTo.isOwn
+        };
+    }
+
     if (selectedUser) {
-        socket.emit('user_typing', {
+        messageData.from = currentUser.id;
+        messageData.to = selectedUser.id;
+        
+        addMessageToUI(messageData);
+        messageInput.value = '';
+        resetMessageInput();
+        
+        socket.emit('private_message', {
             to: selectedUser,
-            from: currentUser
+            message: message,
+            from: currentUser,
+            replyTo: messageData.replyTo
         });
 
-        clearTimeout(typingTimeouts['private']);
-        typingTimeouts['private'] = setTimeout(() => {
-            socket.emit('user_stop_typing', {
-                to: selectedUser,
-                from: currentUser
-            });
-        }, 1000);
     } else if (selectedGroup) {
-        socket.emit('group_typing', {
+        messageData.type = 'group';
+        messageData.from = currentUser.id;
+        messageData.groupId = selectedGroup.id;
+        
+        addGroupMessageToUI(messageData);
+        messageInput.value = '';
+        resetMessageInput();
+        
+        socket.emit('group_message', {
             groupId: selectedGroup.id,
-            from: currentUser
+            message: message,
+            from: currentUser,
+            replyTo: messageData.replyTo
         });
+    }
 
-        clearTimeout(typingTimeouts['group']);
-        typingTimeouts['group'] = setTimeout(() => {
-            socket.emit('group_stop_typing', {
-                groupId: selectedGroup.id,
-                from: currentUser
-            });
-        }, 1000);
+    // Limpiar respuesta
+    cancelReply();
+}
+
+function resetMessageInput() {
+    const messageInput = document.getElementById('message-input');
+    if (messageInput) {
+        messageInput.style.height = 'auto';
+        toggleSendVoiceButton();
     }
 }
 
-// Controlar panel lateral
+// MEJORADO: Agregar mensaje a UI con sistema de respuesta
+function addMessageToUI(messageData) {
+    const messagesContainer = document.getElementById('messages-container');
+    if (!messagesContainer) return;
+    
+    const emptyState = messagesContainer.querySelector('.empty-state');
+    
+    if (emptyState) {
+        emptyState.remove();
+    }
+
+    const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
+    if (existingMessage) return;
+
+    const messageDiv = document.createElement('div');
+    const isSent = messageData.from === currentUser.id;
+    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+    messageDiv.dataset.messageId = messageData.id;
+
+    const time = new Date(messageData.timestamp).toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    let replyHTML = '';
+    if (messageData.replyTo) {
+        replyHTML = `
+            <div class="message-reply">
+                <div class="reply-indicator"></div>
+                <div class="reply-content">
+                    <div class="reply-author">${messageData.replyTo.isOwn ? 'Tú' : 'Usuario'}</div>
+                    <div class="reply-text">${messageData.replyTo.content}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    let contentHTML = '';
+    if (messageData.type === 'audio') {
+        contentHTML = `
+            <div class="audio-message">
+                <button class="play-audio-btn" onclick="playAudio('${messageData.audioUrl}')">
+                    <i class="fas fa-play"></i>
+                </button>
+                <div class="audio-waveform"></div>
+                <div class="audio-duration">${messageData.duration}s</div>
+            </div>
+        `;
+    } else {
+        contentHTML = `<div class="message-content">${messageData.message}</div>`;
+    }
+
+    messageDiv.innerHTML = `
+        ${replyHTML}
+        ${contentHTML}
+        <div class="message-time">${time}</div>
+    `;
+
+    messagesContainer.appendChild(messageDiv);
+
+    // Animación de entrada
+    messageDiv.style.opacity = '0';
+    messageDiv.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+        messageDiv.style.transition = 'all 0.3s ease';
+        messageDiv.style.opacity = '1';
+        messageDiv.style.transform = 'translateY(0)';
+    }, 10);
+
+    scrollToBottom();
+}
+
+// MEJORADO: Agregar mensaje grupal a UI
+function addGroupMessageToUI(messageData) {
+    const messagesContainer = document.getElementById('messages-container');
+    if (!messagesContainer) return;
+
+    const emptyState = messagesContainer.querySelector('.empty-state');
+    if (emptyState) {
+        emptyState.remove();
+    }
+
+    const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
+    if (existingMessage) return;
+
+    const messageDiv = document.createElement('div');
+
+    const isSent = messageData.from === currentUser.id;
+    const sender = allUsers.find(u => u.id === messageData.from);
+    const senderName = sender ? sender.name : 'Usuario';
+
+    messageDiv.className = `message group-message ${isSent ? 'sent' : 'received'}`;
+    messageDiv.dataset.messageId = messageData.id;
+
+    const time = new Date(messageData.timestamp).toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    let replyHTML = '';
+    if (messageData.replyTo) {
+        replyHTML = `
+            <div class="message-reply">
+                <div class="reply-indicator"></div>
+                <div class="reply-content">
+                    <div class="reply-author">${messageData.replyTo.isOwn ? 'Tú' : 'Usuario'}</div>
+                    <div class="reply-text">${messageData.replyTo.content}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    messageDiv.innerHTML = `
+        ${!isSent ? `<div class="message-sender">${senderName}</div>` : ''}
+        ${replyHTML}
+        <div class="message-content">${messageData.message}</div>
+        <div class="message-time">${time}</div>
+    `;
+
+    messagesContainer.appendChild(messageDiv);
+
+    // Animación de entrada
+    messageDiv.style.opacity = '0';
+    messageDiv.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+        messageDiv.style.transition = 'all 0.3s ease';
+        messageDiv.style.opacity = '1';
+        messageDiv.style.transform = 'translateY(0)';
+    }, 10);
+
+    scrollToBottom();
+}
+
+// MEJORADO: Gestión de grupos
+async function createGroup() {
+    const name = document.getElementById('create-group-name').value.trim();
+    const description = document.getElementById('create-group-description').value.trim();
+    
+    if (!name) {
+        showNotification('El nombre del grupo es obligatorio', 'error');
+        return;
+    }
+    
+    const submitBtn = document.getElementById('create-group-submit-btn');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando...';
+    submitBtn.disabled = true;
+    
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('description', description);
+    formData.append('creatorId', currentUser.id);
+    formData.append('creatorName', currentUser.name);
+    formData.append('members', JSON.stringify(Array.from(selectedMembers)));
+    
+    if (newGroupAvatarFile) {
+        formData.append('avatar', newGroupAvatarFile);
+    }
+    
+    try {
+        const response = await fetch('/api/groups', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('¡Grupo creado exitosamente!', 'success');
+            
+            submitBtn.innerHTML = '<i class="fas fa-check"></i> ¡Creado!';
+            setTimeout(() => {
+                hideCreateGroupScreen();
+                selectedMembers.clear();
+                openGroupChat(data.group.id);
+            }, 1000);
+            
+        } else {
+            const error = await response.json();
+            showNotification('Error: ' + error.error, 'error');
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('Error creando grupo:', error);
+        showNotification('Error al crear el grupo', 'error');
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
+}
+
+// NUEVO: Sistema de notificaciones
+function showNotification(message, type = 'info') {
+    // Crear notificación toast
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas fa-${getNotificationIcon(type)}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    // Estilos básicos para la notificación
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${getNotificationColor(type)};
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        max-width: 300px;
+        animation: slideInRight 0.3s ease;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remover después de 3 segundos
+    setTimeout(() => {
+        notification.style.animation = 'slideOutRight 0.3s ease';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+function getNotificationIcon(type) {
+    const icons = {
+        'success': 'check-circle',
+        'error': 'exclamation-circle',
+        'warning': 'exclamation-triangle',
+        'info': 'info-circle'
+    };
+    return icons[type] || 'info-circle';
+}
+
+function getNotificationColor(type) {
+    const colors = {
+        'success': '#10b981',
+        'error': '#ef4444',
+        'warning': '#f59e0b',
+        'info': '#3b82f6'
+    };
+    return colors[type] || '#3b82f6';
+}
+
+// MEJORADO: Scroll to bottom optimizado
+function scrollToBottom() {
+    const messagesContainer = document.getElementById('messages-container');
+    if (messagesContainer) {
+        requestAnimationFrame(() => {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        });
+    }
+}
+
+// MEJORADO: Cargar datos iniciales optimizado
+async function loadInitialData() {
+    try {
+        await Promise.all([
+            loadUsers(),
+            loadActiveChats()
+        ]);
+        socket.emit('get_all_groups');
+    } catch (error) {
+        console.error('Error cargando datos iniciales:', error);
+    } finally {
+        hideSkeletons();
+    }
+}
+
+// FUNCIONES EXISTENTES MANTENIDAS CON MEJORAS
+
 function togglePanel(show) {
     const panel = document.getElementById('side-panel');
     const overlay = document.getElementById('panel-overlay');
@@ -402,84 +1127,628 @@ function togglePanel(show) {
     }
 }
 
-// MEJORADO: Prevenir duplicación de mensajes
-function handleNewMessage(messageData) {
-    console.log('Manejando nuevo mensaje:', messageData);
-    
-    // Verificar si el mensaje ya fue procesado
-    if (sentMessageIds.has(messageData.id)) {
-        console.log('Mensaje duplicado ignorado:', messageData.id);
-        return;
-    }
-    
-    sentMessageIds.add(messageData.id);
-    
-    // Limitar tamaño del cache de IDs
-    if (sentMessageIds.size > 1000) {
-        const firstId = Array.from(sentMessageIds)[0];
-        sentMessageIds.delete(firstId);
-    }
-
-    const sender = allUsers.find(u => u.id === messageData.from);
-    if (!sender) {
-        console.log('Usuario remitente no encontrado');
-        return;
+function showSkeletons() {
+    const chatsSkeleton = document.getElementById('chats-skeleton');
+    if (chatsSkeleton) {
+        chatsSkeleton.innerHTML = '';
+        for (let i = 0; i < 3; i++) {
+            const skeletonItem = document.createElement('div');
+            skeletonItem.className = 'chat-item';
+            skeletonItem.innerHTML = `
+                <div class="skeleton skeleton-avatar"></div>
+                <div class="chat-info">
+                    <div class="skeleton skeleton-text short"></div>
+                    <div class="skeleton skeleton-text medium"></div>
+                </div>
+            `;
+            chatsSkeleton.appendChild(skeletonItem);
+        }
     }
 
-    if (selectedUser && selectedUser.id === messageData.from) {
-        console.log('Agregando mensaje a la UI del chat actual');
-        addMessageToUI(messageData);
-
-        socket.emit('mark_as_read', {
-            userId: currentUser.id,
-            otherUserId: selectedUser.id
-        });
-
-        unreadCounts[selectedUser.id] = 0;
-        updateUnreadBadge(selectedUser.id, 0);
-    } else {
-        console.log('Incrementando contador para usuario:', sender.name);
-        unreadCounts[messageData.from] = (unreadCounts[messageData.from] || 0) + 1;
+    const usersSkeleton = document.getElementById('users-skeleton');
+    if (usersSkeleton) {
+        usersSkeleton.innerHTML = '';
+        for (let i = 0; i < 5; i++) {
+            const skeletonItem = document.createElement('div');
+            skeletonItem.className = 'user-item';
+            skeletonItem.innerHTML = `
+                <div class="skeleton skeleton-avatar"></div>
+                <div class="user-info">
+                    <div class="skeleton skeleton-text short"></div>
+                    <div class="skeleton skeleton-text medium"></div>
+                </div>
+            `;
+            usersSkeleton.appendChild(skeletonItem);
+        }
     }
-
-    loadActiveChats();
 }
 
-// MEJORADO: Prevenir duplicación de mensajes grupales
-function handleNewGroupMessage(messageData) {
-    console.log('Manejando nuevo mensaje grupal:', messageData);
+function hideSkeletons() {
+    const chatsSkeleton = document.getElementById('chats-skeleton');
+    const usersSkeleton = document.getElementById('users-skeleton');
     
-    // Verificar si el mensaje ya fue procesado
-    if (sentMessageIds.has(messageData.id)) {
-        console.log('Mensaje grupal duplicado ignorado:', messageData.id);
+    if (chatsSkeleton) chatsSkeleton.style.display = 'none';
+    if (usersSkeleton) usersSkeleton.style.display = 'none';
+}
+
+function loadFollowData() {
+    socket.emit('get_follow_data', currentUser.id);
+}
+
+function updateFollowCounts() {
+    const followersCount = document.getElementById('followers-count');
+    const followingCount = document.getElementById('following-count');
+    
+    if (followersCount) followersCount.textContent = followers.length;
+    if (followingCount) followingCount.textContent = following.length;
+
+    if (currentProfileUser) {
+        const userFollowersCount = document.getElementById('user-followers-count');
+        const userFollowingCount = document.getElementById('user-following-count');
+        
+        if (userFollowersCount) userFollowersCount.textContent = '0';
+        if (userFollowingCount) userFollowingCount.textContent = '0';
+    }
+}
+
+// MEJORADO: Cargar usuarios con cache inteligente
+async function loadUsers() {
+    try {
+        const usersList = document.getElementById('users-list');
+        const emptyState = document.getElementById('users-empty');
+
+        if (!usersList || !emptyState) return;
+
+        const otherUsers = allUsers.filter(user => user.id !== currentUser.id);
+        const publicGroups = allGroups.filter(group => group.isPublic);
+
+        const totalItems = otherUsers.length + publicGroups.length;
+
+        if (totalItems === 0) {
+            usersList.style.display = 'none';
+            emptyState.style.display = 'flex';
+        } else {
+            usersList.style.display = 'block';
+            emptyState.style.display = 'none';
+
+            usersList.innerHTML = '';
+
+            // Mostrar grupos públicos primero
+            publicGroups.forEach(group => {
+                const isMember = group.members.includes(currentUser.id);
+                const groupItem = document.createElement('div');
+                groupItem.className = 'user-item';
+                groupItem.dataset.groupId = group.id;
+
+                groupItem.innerHTML = `
+                    <div class="user-avatar group-avatar">
+                        ${getCachedAvatarHTML(group.avatar, group.name, 'group')}
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">${group.name}</div>
+                        <div class="group-info">
+                            <div class="group-members-count">${group.members.length} miembros</div>
+                            ${!isMember ? '<div class="join-hint">Toca para unirte</div>' : ''}
+                        </div>
+                    </div>
+                `;
+
+                groupItem.addEventListener('click', (e) => {
+                    groupItem.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        groupItem.style.transform = '';
+                    }, 150);
+
+                    if (!isMember) {
+                        showJoinGroupModal(group);
+                    } else {
+                        openGroupChat(group.id);
+                    }
+                });
+
+                usersList.appendChild(groupItem);
+            });
+
+            // Mostrar usuarios
+            otherUsers.forEach(user => {
+                if (!user.bio) user.bio = "¡Yo uso SecureChat!";
+                if (!user.avatar) user.avatar = '/default-avatar.png';
+
+                const userItem = document.createElement('div');
+                userItem.className = 'user-item';
+                userItem.dataset.userId = user.id;
+
+                const isOnline = onlineUsers.find(u => u.id === user.id);
+                const statusText = isOnline ? 'En línea' : getLastSeenText(user.id);
+
+                userItem.innerHTML = `
+                    <div class="user-avatar">
+                        ${getCachedAvatarHTML(user.avatar, user.name, 'user')}
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">${user.name}</div>
+                        <div class="user-status ${isOnline ? 'online' : 'offline'}">${statusText}</div>
+                    </div>
+                `;
+
+                userItem.addEventListener('click', (e) => {
+                    userItem.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        userItem.style.transform = '';
+                    }, 150);
+                    startChat(user.id);
+                });
+
+                const avatarElement = userItem.querySelector('.user-avatar');
+                if (avatarElement) {
+                    avatarElement.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        showOtherUserProfile(user.id);
+                    });
+                }
+
+                usersList.appendChild(userItem);
+            });
+        }
+    } catch (error) {
+        console.error('Error cargando usuarios:', error);
+        hideSkeletons();
+    }
+}
+
+// NUEVA: Función helper para avatares con cache
+function getCachedAvatarHTML(avatarUrl, name, type = 'user') {
+    const isDefault = type === 'user' ? 
+        (!avatarUrl || avatarUrl === '/default-avatar.png') : 
+        (!avatarUrl || avatarUrl === '/default-group-avatar.png');
+    
+    if (isDefault) {
+        return `<div class="avatar-fallback">${name.charAt(0).toUpperCase()}</div>`;
+    }
+    
+    const dailyTimestamp = new Date().toDateString();
+    const cacheSafeUrl = `${avatarUrl}?v=${dailyTimestamp}`;
+    
+    return `
+        <img src="${cacheSafeUrl}" alt="${name}" 
+             onerror="this.style.display='none'; this.nextElementSibling?.style.display='flex' || this.parentElement.querySelector('.avatar-fallback')?.style.display='flex'"
+             loading="lazy">
+        <div class="avatar-fallback" style="display: none;">${name.charAt(0).toUpperCase()}</div>
+    `;
+}
+
+// MEJORADO: Obtener texto de última vez conectado
+function getLastSeenText(userId) {
+    const lastSeen = userLastSeen[userId];
+    if (lastSeen) {
+        const lastSeenTime = new Date(lastSeen);
+        const now = new Date();
+        const diffMinutes = Math.floor((now - lastSeenTime) / (1000 * 60));
+
+        if (diffMinutes < 1) return 'Ahora mismo';
+        if (diffMinutes < 60) return `Hace ${diffMinutes} min`;
+        if (diffMinutes < 1440) return `Hace ${Math.floor(diffMinutes / 60)} h`;
+
+        return `Últ. vez ${lastSeenTime.toLocaleDateString('es-ES')}`;
+    }
+    return 'Desconectado';
+}
+
+// MEJORADO: Actualizar estados de usuarios en tiempo real
+function updateUserStatuses() {
+    const userItems = document.querySelectorAll('.user-item');
+    userItems.forEach(item => {
+        const userId = item.dataset.userId;
+        if (userId) {
+            const user = allUsers.find(u => u.id === userId);
+            if (user) {
+                const isOnline = onlineUsers.find(u => u.id === userId);
+                const statusElement = item.querySelector('.user-status');
+                const statusText = isOnline ? 'En línea' : getLastSeenText(userId);
+
+                if (statusElement) {
+                    statusElement.textContent = statusText;
+                    statusElement.className = `user-status ${isOnline ? 'online' : 'offline'}`;
+                }
+            }
+        }
+    });
+
+    if (selectedUser) {
+        updateUserOnlineStatus(selectedUser);
+    }
+}
+
+// MEJORADO: Cargar chats activos - INCLUYENDO GRUPOS
+async function loadActiveChats() {
+    try {
+        const response = await fetch(`/api/chats?userId=${currentUser.id}`);
+        const chatsData = await response.json();
+        activeChats = chatsData;
+        renderActiveChats();
+    } catch (error) {
+        console.error('Error cargando chats:', error);
+        hideSkeletons();
+    }
+}
+
+// MEJORADO: Renderizar chats activos en la UI
+function renderActiveChats() {
+    const chatsList = document.getElementById('chats-list');
+    const emptyState = document.getElementById('chats-empty');
+
+    if (!chatsList || !emptyState) return;
+
+    if (activeChats.length === 0) {
+        chatsList.style.display = 'none';
+        emptyState.style.display = 'flex';
+    } else {
+        chatsList.style.display = 'block';
+        emptyState.style.display = 'none';
+
+        chatsList.innerHTML = '';
+        activeChats.forEach(chat => {
+            if (chat.type === 'private') {
+                const unreadCount = unreadCounts[chat.user.id] || 0;
+                const isTyping = typingUsers.has(chat.user.id);
+                const lastMessage = isTyping ? 'escribiendo...' : (chat.lastMessage || 'Haz clic para chatear');
+                
+                const chatItem = document.createElement('div');
+                chatItem.className = 'chat-item';
+                chatItem.dataset.userId = chat.user.id;
+                chatItem.innerHTML = `
+                    <div class="chat-avatar">
+                        ${getCachedAvatarHTML(chat.user.avatar, chat.user.name, 'user')}
+                    </div>
+                    <div class="chat-info">
+                        <div class="chat-name">${chat.user.name}</div>
+                        <div class="chat-last-message ${isTyping ? 'typing' : ''}">${lastMessage}</div>
+                    </div>
+                    <div class="chat-time">${isTyping ? '' : (chat.lastTime || '')}</div>
+                    ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
+                `;
+
+                chatItem.addEventListener('click', () => openChat(chat.user.id));
+
+                const avatarElement = chatItem.querySelector('.chat-avatar');
+                if (avatarElement) {
+                    avatarElement.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        showOtherUserProfile(chat.user.id);
+                    });
+                }
+
+                chatsList.appendChild(chatItem);
+            } else if (chat.type === 'group') {
+                const unreadCount = unreadCounts[chat.group.id] || 0;
+                const lastMessage = chat.lastMessage || 'Grupo creado';
+                
+                const chatItem = document.createElement('div');
+                chatItem.className = 'chat-item';
+                chatItem.dataset.groupId = chat.group.id;
+                chatItem.innerHTML = `
+                    <div class="chat-avatar group-avatar">
+                        ${getCachedAvatarHTML(chat.group.avatar, chat.group.name, 'group')}
+                    </div>
+                    <div class="chat-info">
+                        <div class="chat-name">${chat.group.name}</div>
+                        <div class="chat-last-message">${lastMessage}</div>
+                    </div>
+                    <div class="chat-time">${chat.lastTime || ''}</div>
+                    ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.group.id}">${unreadCount}</div>` : ''}
+                `;
+
+                chatItem.addEventListener('click', () => openGroupChat(chat.group.id));
+
+               const avatarElement = chatItem.querySelector('.chat-avatar');
+                if (avatarElement) {
+                    avatarElement.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        showGroupProfile(chat.group.id);
+                    });
+                }
+
+                chatsList.appendChild(chatItem);
+            }
+        });
+    }
+
+    hideSkeletons();
+}
+
+// MEJORADO: Iniciar chat con un usuario
+function startChat(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) {
+        console.error('Usuario no encontrado');
         return;
     }
-    
-    sentMessageIds.add(messageData.id);
-    
-    // Limitar tamaño del cache de IDs
-    if (sentMessageIds.size > 1000) {
-        const firstId = Array.from(sentMessageIds)[0];
-        sentMessageIds.delete(firstId);
+
+    openChat(userId);
+}
+
+// MEJORADO: Abrir chat sin auto-focus
+function openChat(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) {
+        console.error('Usuario no encontrado en openChat');
+        return;
     }
+
+    selectedUser = user;
+    selectedGroup = null;
+
+    // Limpiar estados de escritura grupal
+    groupTypingUsers.clear();
+
+    previousTab = document.getElementById('users-tab').classList.contains('active') ? 'users' : 'chats';
+
+    showTab('chat');
+
+    document.getElementById('current-chat-name').textContent = user.name;
+    updateAvatarDisplay('current-chat-avatar', user.avatar, user.name);
+
+    updateUserOnlineStatus(user);
+
+    loadMessages(user);
+
+    socket.emit('mark_as_read', {
+        userId: currentUser.id,
+        otherUserId: user.id
+    });
+
+    unreadCounts[user.id] = 0;
+    updateUnreadBadge(user.id, 0);
+
+    // Inicializar botones
+    setTimeout(toggleSendVoiceButton, 100);
+}
+
+// MEJORADO: Abrir chat de grupo sin auto-focus
+function openGroupChat(groupId) {
+    const group = allGroups.find(g => g.id === groupId);
+    if (!group) {
+        console.error('Grupo no encontrado en openGroupChat');
+        return;
+    }
+
+    selectedGroup = group;
+    selectedUser = null;
+
+    // Limpiar estados de escritura
+    typingUsers.clear();
+
+    previousTab = document.getElementById('users-tab').classList.contains('active') ? 'users' : 'chats';
+
+    showTab('chat');
+
+    document.getElementById('current-chat-name').textContent = group.name;
+    updateGroupAvatarDisplay('current-chat-avatar', group.avatar, group.name);
+
+    document.getElementById('current-chat-status').textContent = `${group.members.length} miembros`;
+    document.getElementById('current-chat-status').className = 'current-chat-status';
+
+    loadGroupMessages(group);
+
+    socket.emit('mark_group_as_read', {
+        userId: currentUser.id,
+        groupId: group.id
+    });
+
+    unreadCounts[group.id] = 0;
+    updateUnreadBadge(group.id, 0);
+
+    // Inicializar botones
+    setTimeout(toggleSendVoiceButton, 100);
+}
+
+// NUEVO: Abrir perfil del chat actual
+function openCurrentProfile() {
+    if (selectedUser) {
+        showOtherUserProfile(selectedUser.id);
+    } else if (selectedGroup) {
+        showGroupProfile(selectedGroup.id);
+    }
+}
+
+// Manejar el botón de regresar en el chat
+function handleChatBack() {
+    showTab(previousTab);
+    selectedUser = null;
+    selectedGroup = null;
     
-    if (selectedGroup && selectedGroup.id === messageData.groupId) {
-        console.log('Agregando mensaje grupal a la UI del chat actual');
-        addGroupMessageToUI(messageData);
+    // Limpiar estados de escritura
+    typingUsers.clear();
+    groupTypingUsers.clear();
+    
+    // Limpiar respuesta activa
+    cancelReply();
+}
 
-        socket.emit('mark_group_as_read', {
-            userId: currentUser.id,
-            groupId: selectedGroup.id
-        });
+// MEJORADO: Actualizar estado en línea del usuario en el chat
+function updateUserOnlineStatus(user) {
+    const isOnline = onlineUsers.find(u => u.id === user.id);
+    const statusElement = document.getElementById('current-chat-status');
 
-        unreadCounts[selectedGroup.id] = 0;
-        updateUnreadBadge(selectedGroup.id, 0);
+    if (!statusElement) return;
+
+    if (isOnline) {
+        statusElement.textContent = 'En línea';
+        statusElement.className = 'current-chat-status';
     } else {
-        console.log('Incrementando contador para grupo');
-        unreadCounts[messageData.groupId] = (unreadCounts[messageData.groupId] || 0) + 1;
+        const lastSeen = userLastSeen[user.id];
+        if (lastSeen) {
+            const lastSeenTime = new Date(lastSeen).toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            statusElement.textContent = `Últ. vez ${lastSeenTime}`;
+        } else {
+            statusElement.textContent = 'Desconectado';
+        }
+        statusElement.className = 'current-chat-status offline';
+    }
+}
+
+// MEJORADO: Cargar mensajes del chat privado
+async function loadMessages(user) {
+    try {
+        const response = await fetch(`/api/messages/${currentUser.id}/${user.id}`);
+        const messages = await response.json();
+
+        const messagesContainer = document.getElementById('messages-container');
+        if (!messagesContainer) return;
+
+        messagesContainer.innerHTML = '';
+
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = `
+                <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
+                    <div class="empty-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <div class="empty-title">Inicia la conversación</div>
+                    <div class="empty-subtitle">Envía el primer mensaje a ${user.name}</div>
+                </div>
+            `;
+        } else {
+            messages.forEach(message => {
+                addMessageToUI(message);
+            });
+        }
+
+        scrollToBottom();
+    } catch (error) {
+        console.error('Error cargando mensajes:', error);
+        const messagesContainer = document.getElementById('messages-container');
+        if (messagesContainer) {
+            messagesContainer.innerHTML = `
+                <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
+                    <div class="empty-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="empty-title">Error cargando mensajes</div>
+                    <div class="empty-subtitle">Intenta nuevamente</div>
+                </div>
+            `;
+        }
+    }
+}
+
+// MEJORADO: Cargar mensajes del grupo
+async function loadGroupMessages(group) {
+    try {
+        const response = await fetch(`/api/group-messages/${group.id}`);
+        const messages = await response.json();
+
+        const messagesContainer = document.getElementById('messages-container');
+        if (!messagesContainer) return;
+
+        messagesContainer.innerHTML = '';
+
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = `
+                <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
+                    <div class="empty-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="empty-title">Bienvenido al grupo</div>
+                    <div class="empty-subtitle">Sé el primero en enviar un mensaje</div>
+                </div>
+            `;
+        } else {
+            messages.forEach(message => {
+                addGroupMessageToUI(message);
+            });
+        }
+
+        scrollToBottom();
+    } catch (error) {
+        console.error('Error cargando mensajes grupales:', error);
+        const messagesContainer = document.getElementById('messages-container');
+        if (messagesContainer) {
+            messagesContainer.innerHTML = `
+                <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
+                    <div class="empty-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="empty-title">Error cargando mensajes</div>
+                    <div class="empty-subtitle">Intenta nuevamente</div>
+                </div>
+            `;
+        }
+    }
+}
+
+// MEJORADO: Agregar mensaje del sistema (unirse/salir)
+function addSystemMessage(text) {
+    const messagesContainer = document.getElementById('messages-container');
+    if (!messagesContainer) return;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message system-message';
+    messageDiv.style.alignSelf = 'center';
+    messageDiv.style.background = 'rgba(255, 255, 255, 0.1)';
+    messageDiv.style.color = 'var(--text-secondary)';
+    messageDiv.style.fontSize = '0.8em';
+    messageDiv.style.padding = '8px 12px';
+    messageDiv.style.margin = '8px 0';
+
+    messageDiv.innerHTML = text;
+
+    messagesContainer.appendChild(messageDiv);
+
+    scrollToBottom();
+}
+
+// MEJORADO: Mostrar indicador de escribiendo
+function showTypingIndicator(userId) {
+    if (!selectedUser || selectedUser.id !== userId) return;
+
+    const messagesContainer = document.getElementById('messages-container');
+    if (!messagesContainer) return;
+
+    const existingIndicator = document.getElementById('typing-indicator');
+
+    if (!existingIndicator) {
+        const typingDiv = document.createElement('div');
+        typingDiv.id = 'typing-indicator';
+        typingDiv.className = 'typing-indicator';
+        typingDiv.innerHTML = `
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <span style="font-size: 0.8em; margin-left: 8px;">escribiendo...</span>
+        `;
+        messagesContainer.appendChild(typingDiv);
+        scrollToBottom();
     }
 
-    loadActiveChats();
+    const statusElement = document.getElementById('current-chat-status');
+    if (statusElement) {
+        statusElement.textContent = 'escribiendo...';
+        statusElement.className = 'current-chat-status typing';
+    }
+
+    if (typingTimeouts[userId]) {
+        clearTimeout(typingTimeouts[userId]);
+    }
+
+    typingTimeouts[userId] = setTimeout(() => {
+        hideTypingIndicator(userId);
+    }, 3000);
+}
+
+// MEJORADO: Ocultar indicador de escribiendo
+function hideTypingIndicator(userId) {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
+
+    if (selectedUser && selectedUser.id === userId) {
+        updateUserOnlineStatus(selectedUser);
+    }
 }
 
 // NUEVO: Estados de escritura grupal
@@ -540,19 +1809,19 @@ function updateGroupTypingStatus() {
     }
 }
 
-// Actualizar estado "escribiendo" en chats activos
+// MEJORADO: Actualizar estado "escribiendo" en chats activos
 function updateChatsTypingStatus() {
     const chatItems = document.querySelectorAll('.chat-item');
     chatItems.forEach(chatItem => {
         const userId = chatItem.dataset.userId;
         const lastMessageElement = chatItem.querySelector('.chat-last-message');
         
-        if (userId && typingUsers.has(userId)) {
+        if (userId && lastMessageElement && typingUsers.has(userId)) {
             lastMessageElement.textContent = 'escribiendo...';
             lastMessageElement.classList.add('typing');
-        } else {
+        } else if (lastMessageElement) {
             const chat = activeChats.find(c => c.user && c.user.id === userId);
-            if (chat && lastMessageElement) {
+            if (chat) {
                 lastMessageElement.textContent = chat.lastMessage || 'Haz clic para chatear';
                 lastMessageElement.classList.remove('typing');
             }
@@ -560,795 +1829,30 @@ function updateChatsTypingStatus() {
     });
 }
 
-// Mostrar skeletons de carga
-function showSkeletons() {
-    const chatsSkeleton = document.getElementById('chats-skeleton');
-    chatsSkeleton.innerHTML = '';
-    for (let i = 0; i < 3; i++) {
-        const skeletonItem = document.createElement('div');
-        skeletonItem.className = 'chat-item';
-        skeletonItem.innerHTML = `
-            <div class="skeleton skeleton-avatar"></div>
-            <div class="chat-info">
-                <div class="skeleton skeleton-text short"></div>
-                <div class="skeleton skeleton-text medium"></div>
-            </div>
-        `;
-        chatsSkeleton.appendChild(skeletonItem);
-    }
-
-    const usersSkeleton = document.getElementById('users-skeleton');
-    usersSkeleton.innerHTML = '';
-    for (let i = 0; i < 5; i++) {
-        const skeletonItem = document.createElement('div');
-        skeletonItem.className = 'user-item';
-        skeletonItem.innerHTML = `
-            <div class="skeleton skeleton-avatar"></div>
-            <div class="user-info">
-                <div class="skeleton skeleton-text short"></div>
-                <div class="skeleton skeleton-text medium"></div>
-            </div>
-        `;
-        usersSkeleton.appendChild(skeletonItem);
-    }
-}
-
-// Ocultar skeletons
-function hideSkeletons() {
-    const chatsSkeleton = document.getElementById('chats-skeleton');
-    const usersSkeleton = document.getElementById('users-skeleton');
-    
-    if (chatsSkeleton) chatsSkeleton.style.display = 'none';
-    if (usersSkeleton) usersSkeleton.style.display = 'none';
-}
-
-// Cargar datos de seguidores/seguidos
-function loadFollowData() {
-    socket.emit('get_follow_data', currentUser.id);
-}
-
-// Actualizar contadores de seguidores/seguidos
-function updateFollowCounts() {
-    document.getElementById('followers-count').textContent = followers.length;
-    document.getElementById('following-count').textContent = following.length;
-
-    if (currentProfileUser) {
-        document.getElementById('user-followers-count').textContent = '0';
-        document.getElementById('user-following-count').textContent = '0';
-    }
-}
-
-// Cargar datos iniciales
-async function loadInitialData() {
-    try {
-        await loadUsers();
-        await loadActiveChats();
-        socket.emit('get_all_groups');
-    } catch (error) {
-        console.error('Error cargando datos iniciales:', error);
-    } finally {
-        hideSkeletons();
-    }
-}
-
-// Cargar lista de usuarios Y grupos
-async function loadUsers() {
-    try {
-        const usersList = document.getElementById('users-list');
-        const emptyState = document.getElementById('users-empty');
-
-        const otherUsers = allUsers.filter(user => user.id !== currentUser.id);
-        const publicGroups = allGroups.filter(group => group.isPublic);
-
-        const totalItems = otherUsers.length + publicGroups.length;
-
-        if (totalItems === 0) {
-            usersList.style.display = 'none';
-            emptyState.style.display = 'flex';
-        } else {
-            usersList.style.display = 'block';
-            emptyState.style.display = 'none';
-
-            usersList.innerHTML = '';
-
-            // Mostrar grupos públicos primero
-            publicGroups.forEach(group => {
-                const isMember = group.members.includes(currentUser.id);
-                const groupItem = document.createElement('div');
-                groupItem.className = 'user-item';
-                groupItem.dataset.groupId = group.id;
-
-                // MEJORADO: Sin emojis, diseño limpio
-                groupItem.innerHTML = `
-                    <div class="user-avatar group-avatar">
-                        ${group.avatar && group.avatar !== '/default-group-avatar.png' ? 
-                            `<img src="${group.avatar}?v=${Date.now()}" alt="${group.name}" onerror="this.style.display='none'">` : 
-                            `<div class="avatar-fallback">${group.name.charAt(0).toUpperCase()}</div>`
-                        }
-                    </div>
-                    <div class="user-info">
-                        <div class="user-name">${group.name}</div>
-                        <div class="group-info">
-                            <div class="group-members-count">${group.members.length} miembros</div>
-                            ${!isMember ? '<div class="join-hint">Toca para unirte</div>' : ''}
-                        </div>
-                    </div>
-                `;
-
-                groupItem.addEventListener('click', (e) => {
-                    // MEJORADO: Animación táctil
-                    groupItem.style.transform = 'scale(0.98)';
-                    setTimeout(() => {
-                        groupItem.style.transform = '';
-                    }, 150);
-
-                    if (!isMember) {
-                        showJoinGroupModal(group);
-                    } else {
-                        openGroupChat(group.id);
-                    }
-                });
-
-                usersList.appendChild(groupItem);
-            });
-
-            // Mostrar usuarios
-            otherUsers.forEach(user => {
-                if (!user.bio) user.bio = "¡Yo uso SecureChat!";
-                if (!user.avatar) user.avatar = '/default-avatar.png';
-
-                const userItem = document.createElement('div');
-                userItem.className = 'user-item';
-                userItem.dataset.userId = user.id;
-
-                const isOnline = onlineUsers.find(u => u.id === user.id);
-                const statusText = isOnline ? 'En línea' : getLastSeenText(user.id);
-
-                userItem.innerHTML = `
-                    <div class="user-avatar">
-                        ${user.avatar !== '/default-avatar.png' ? 
-                            `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                            `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
-                        }
-                    </div>
-                    <div class="user-info">
-                        <div class="user-name">${user.name}</div>
-                        <div class="user-status ${isOnline ? 'online' : 'offline'}">${statusText}</div>
-                    </div>
-                `;
-
-                userItem.addEventListener('click', (e) => {
-                    // MEJORADO: Animación táctil
-                    userItem.style.transform = 'scale(0.98)';
-                    setTimeout(() => {
-                        userItem.style.transform = '';
-                    }, 150);
-
-                    console.log('Iniciando chat con:', user.name);
-                    startChat(user.id);
-                });
-
-                const avatarElement = userItem.querySelector('.user-avatar');
-                avatarElement.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    console.log('Mostrando perfil de:', user.name);
-                    showOtherUserProfile(user.id);
-                });
-
-                usersList.appendChild(userItem);
-            });
-        }
-    } catch (error) {
-        console.error('Error cargando usuarios:', error);
-        hideSkeletons();
-    }
-}
-
-// Obtener texto de última vez conectado
-function getLastSeenText(userId) {
-    const lastSeen = userLastSeen[userId];
-    if (lastSeen) {
-        const lastSeenTime = new Date(lastSeen);
-        const now = new Date();
-        const diffMinutes = Math.floor((now - lastSeenTime) / (1000 * 60));
-
-        if (diffMinutes < 1) return 'Ahora mismo';
-        if (diffMinutes < 60) return `Hace ${diffMinutes} min`;
-        if (diffMinutes < 1440) return `Hace ${Math.floor(diffMinutes / 60)} h`;
-
-        return `Últ. vez ${lastSeenTime.toLocaleDateString('es-ES')}`;
-    }
-    return 'Desconectado';
-}
-
-// Actualizar estados de usuarios en tiempo real
-function updateUserStatuses() {
-    const userItems = document.querySelectorAll('.user-item');
-    userItems.forEach(item => {
-        const userId = item.dataset.userId;
-        if (userId) {
-            const user = allUsers.find(u => u.id === userId);
-            if (user) {
-                const isOnline = onlineUsers.find(u => u.id === userId);
-                const statusElement = item.querySelector('.user-status');
-                const statusText = isOnline ? 'En línea' : getLastSeenText(userId);
-
-                if (statusElement) {
-                    statusElement.textContent = statusText;
-                    statusElement.className = `user-status ${isOnline ? 'online' : 'offline'}`;
-                }
-            }
-        }
-    });
-
-    if (selectedUser) {
-        updateUserOnlineStatus(selectedUser);
-    }
-}
-
-// Cargar chats activos - INCLUYENDO GRUPOS
-async function loadActiveChats() {
-    try {
-        console.log('Cargando chats activos...');
-        const response = await fetch(`/api/chats?userId=${currentUser.id}`);
-        const chatsData = await response.json();
-
-        console.log('Chats recibidos del servidor:', chatsData);
-        activeChats = chatsData;
-
-        renderActiveChats();
-    } catch (error) {
-        console.error('Error cargando chats:', error);
-        hideSkeletons();
-    }
-}
-
-// Renderizar chats activos en la UI
-function renderActiveChats() {
-    const chatsList = document.getElementById('chats-list');
-    const emptyState = document.getElementById('chats-empty');
-
-    console.log('Renderizando chats activos:', activeChats.length);
-
-    if (activeChats.length === 0) {
-        chatsList.style.display = 'none';
-        emptyState.style.display = 'flex';
-    } else {
-        chatsList.style.display = 'block';
-        emptyState.style.display = 'none';
-
-        chatsList.innerHTML = '';
-        activeChats.forEach(chat => {
-            if (chat.type === 'private') {
-                const unreadCount = unreadCounts[chat.user.id] || 0;
-                const isTyping = typingUsers.has(chat.user.id);
-                const lastMessage = isTyping ? 'escribiendo...' : (chat.lastMessage || 'Haz clic para chatear');
-                
-                const chatItem = document.createElement('div');
-                chatItem.className = 'chat-item';
-                chatItem.dataset.userId = chat.user.id;
-                chatItem.innerHTML = `
-                    <div class="chat-avatar">
-                        ${chat.user.avatar !== '/default-avatar.png' ? 
-                            `<img src="${chat.user.avatar}?v=${Date.now()}" alt="${chat.user.name}" onerror="this.style.display='none'">` : 
-                            `<div class="avatar-fallback">${chat.user.name.charAt(0).toUpperCase()}</div>`
-                        }
-                    </div>
-                    <div class="chat-info">
-                        <div class="chat-name">${chat.user.name}</div>
-                        <div class="chat-last-message ${isTyping ? 'typing' : ''}">${lastMessage}</div>
-                    </div>
-                    <div class="chat-time">${isTyping ? '' : (chat.lastTime || '')}</div>
-                    ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
-                `;
-
-                chatItem.addEventListener('click', () => openChat(chat.user.id));
-
-                const avatarElement = chatItem.querySelector('.chat-avatar');
-                avatarElement.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    console.log('Mostrando perfil desde chats:', chat.user.name);
-                    showOtherUserProfile(chat.user.id);
-                });
-
-                chatsList.appendChild(chatItem);
-            } else if (chat.type === 'group') {
-                const unreadCount = unreadCounts[chat.group.id] || 0;
-                const lastMessage = chat.lastMessage || 'Grupo creado';
-                
-                const chatItem = document.createElement('div');
-                chatItem.className = 'chat-item';
-                chatItem.dataset.groupId = chat.group.id;
-                chatItem.innerHTML = `
-                    <div class="chat-avatar group-avatar">
-                        ${chat.group.avatar && chat.group.avatar !== '/default-group-avatar.png' ? 
-                            `<img src="${chat.group.avatar}?v=${Date.now()}" alt="${chat.group.name}" onerror="this.style.display='none'">` : 
-                            `<div class="avatar-fallback">${chat.group.name.charAt(0).toUpperCase()}</div>`
-                        }
-                    </div>
-                    <div class="chat-info">
-                        <div class="chat-name">${chat.group.name}</div>
-                        <div class="chat-last-message">${lastMessage}</div>
-                    </div>
-                    <div class="chat-time">${chat.lastTime || ''}</div>
-                    ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.group.id}">${unreadCount}</div>` : ''}
-                `;
-
-                chatItem.addEventListener('click', () => openGroupChat(chat.group.id));
-
-                const avatarElement = chatItem.querySelector('.chat-avatar');
-                avatarElement.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    console.log('Mostrando perfil de grupo desde chats:', chat.group.name);
-                    showGroupProfile(chat.group.id);
-                });
-
-                chatsList.appendChild(chatItem);
-            }
-        });
-    }
-
-    hideSkeletons();
-}
-
-// Iniciar chat con un usuario
-function startChat(userId) {
-    console.log('Iniciando chat con usuario ID:', userId);
-    const user = allUsers.find(u => u.id === userId);
-    if (!user) {
-        console.error('Usuario no encontrado');
-        return;
-    }
-
-    openChat(userId);
-}
-
-// MEJORADO: Abrir chat sin auto-focus
-function openChat(userId) {
-    console.log('Abriendo chat con usuario ID:', userId);
-    const user = allUsers.find(u => u.id === userId);
-    if (!user) {
-        console.error('Usuario no encontrado en openChat');
-        return;
-    }
-
-    selectedUser = user;
-    selectedGroup = null;
-
-    // Limpiar estados de escritura grupal
-    groupTypingUsers.clear();
-
-    previousTab = document.getElementById('users-tab').classList.contains('active') ? 'users' : 'chats';
-
-    showTab('chat');
-
-    document.getElementById('current-chat-name').textContent = user.name;
-    updateAvatarDisplay('current-chat-avatar', user.avatar, user.name);
-
-    updateUserOnlineStatus(user);
-
-    loadMessages(user);
-
-    socket.emit('mark_as_read', {
-        userId: currentUser.id,
-        otherUserId: user.id
-    });
-
-    unreadCounts[user.id] = 0;
-    updateUnreadBadge(user.id, 0);
-
-    // MEJORADO: No enfocar automáticamente
-    // El input se enfocará cuando el usuario toque el área del chat
-}
-
-// MEJORADO: Abrir chat de grupo sin auto-focus
-function openGroupChat(groupId) {
-    console.log('Abriendo chat de grupo ID:', groupId);
-    const group = allGroups.find(g => g.id === groupId);
-    if (!group) {
-        console.error('Grupo no encontrado en openGroupChat');
-        return;
-    }
-
-    selectedGroup = group;
-    selectedUser = null;
-
-    // Limpiar estados de escritura
-    typingUsers.clear();
-
-    previousTab = document.getElementById('users-tab').classList.contains('active') ? 'users' : 'chats';
-
-    showTab('chat');
-
-    document.getElementById('current-chat-name').textContent = group.name;
-    updateGroupAvatarDisplay('current-chat-avatar', group.avatar, group.name);
-
-    document.getElementById('current-chat-status').textContent = `${group.members.length} miembros`;
-    document.getElementById('current-chat-status').className = 'current-chat-status';
-
-    loadGroupMessages(group);
-
-    socket.emit('mark_group_as_read', {
-        userId: currentUser.id,
-        groupId: group.id
-    });
-
-    unreadCounts[group.id] = 0;
-    updateUnreadBadge(group.id, 0);
-
-    // MEJORADO: No enfocar automáticamente
-    // El input se enfocará cuando el usuario toque el área del chat
-}
-
-// NUEVO: Abrir perfil del chat actual
-function openCurrentProfile() {
-    if (selectedUser) {
-        showOtherUserProfile(selectedUser.id);
-    } else if (selectedGroup) {
-        showGroupProfile(selectedGroup.id);
-    }
-}
-
-// Manejar el botón de regresar en el chat
-function handleChatBack() {
-    showTab(previousTab);
-    selectedUser = null;
-    selectedGroup = null;
-    
-    // Limpiar estados de escritura
-    typingUsers.clear();
-    groupTypingUsers.clear();
-}
-
-// Actualizar estado en línea del usuario en el chat
-function updateUserOnlineStatus(user) {
-    const isOnline = onlineUsers.find(u => u.id === user.id);
-    const statusElement = document.getElementById('current-chat-status');
-
-    if (isOnline) {
-        statusElement.textContent = 'En línea';
-        statusElement.className = 'current-chat-status';
-    } else {
-        const lastSeen = userLastSeen[user.id];
-        if (lastSeen) {
-            const lastSeenTime = new Date(lastSeen).toLocaleTimeString('es-ES', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            statusElement.textContent = `Últ. vez ${lastSeenTime}`;
-        } else {
-            statusElement.textContent = 'Desconectado';
-        }
-        statusElement.className = 'current-chat-status offline';
-    }
-}
-
-// Cargar mensajes del chat privado
-async function loadMessages(user) {
-    try {
-        console.log('Cargando mensajes para usuario:', user.name);
-        const response = await fetch(`/api/messages/${currentUser.id}/${user.id}`);
-        const messages = await response.json();
-
-        console.log('Mensajes recibidos:', messages);
-
-        const messagesContainer = document.getElementById('messages-container');
-        messagesContainer.innerHTML = '';
-
-        if (messages.length === 0) {
-            messagesContainer.innerHTML = `
-                <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
-                    <div class="empty-icon">
-                        <i class="fas fa-comments"></i>
-                    </div>
-                    <div class="empty-title">Inicia la conversación</div>
-                    <div class="empty-subtitle">Envía el primer mensaje a ${user.name}</div>
-                </div>
-            `;
-        } else {
-            messages.forEach(message => {
-                addMessageToUI(message);
-            });
-        }
-
-        setTimeout(() => {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }, 100);
-    } catch (error) {
-        console.error('Error cargando mensajes:', error);
-        const messagesContainer = document.getElementById('messages-container');
-        messagesContainer.innerHTML = `
-            <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
-                <div class="empty-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <div class="empty-title">Error cargando mensajes</div>
-                <div class="empty-subtitle">Intenta nuevamente</div>
-            </div>
-        `;
-    }
-}
-
-// Cargar mensajes del grupo
-async function loadGroupMessages(group) {
-    try {
-        console.log('Cargando mensajes para grupo:', group.name);
-        const response = await fetch(`/api/group-messages/${group.id}`);
-        const messages = await response.json();
-
-        console.log('Mensajes grupales recibidos:', messages);
-
-        const messagesContainer = document.getElementById('messages-container');
-        messagesContainer.innerHTML = '';
-
-        if (messages.length === 0) {
-            messagesContainer.innerHTML = `
-                <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
-                    <div class="empty-icon">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <div class="empty-title">Bienvenido al grupo</div>
-                    <div class="empty-subtitle">Sé el primero en enviar un mensaje</div>
-                </div>
-            `;
-        } else {
-            messages.forEach(message => {
-                addGroupMessageToUI(message);
-            });
-        }
-
-        setTimeout(() => {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }, 100);
-    } catch (error) {
-        console.error('Error cargando mensajes grupales:', error);
-        const messagesContainer = document.getElementById('messages-container');
-        messagesContainer.innerHTML = `
-            <div class="empty-state" style="justify-content: center; height: 100%; display: flex; flex-direction: column;">
-                <div class="empty-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <div class="empty-title">Error cargando mensajes</div>
-                <div class="empty-subtitle">Intenta nuevamente</div>
-            </div>
-        `;
-    }
-}
-
-// MEJORADO: Enviar mensaje con mejor control de duplicados
-async function sendMessage() {
-    const messageInput = document.getElementById('message-input');
-    const message = messageInput.value.trim();
-
-    if (!message) {
-        console.log('No hay mensaje para enviar');
-        return;
-    }
-
-    // Generar ID temporal único
-    const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-
-    if (selectedUser) {
-        // Mensaje privado
-        console.log('Enviando mensaje a:', selectedUser.name, 'Mensaje:', message);
-
-        const tempMessageData = {
-            id: tempId,
-            from: currentUser.id,
-            to: selectedUser.id,
-            message: message,
-            timestamp: new Date().toISOString(),
-            read: false
-        };
-
-        addMessageToUI(tempMessageData);
-
-        messageInput.value = '';
-        messageInput.style.height = 'auto';
-
-        socket.emit('private_message', {
-            to: selectedUser,
-            message: message,
-            from: currentUser
-        });
-
-    } else if (selectedGroup) {
-        // Mensaje grupal
-        console.log('Enviando mensaje grupal a:', selectedGroup.name, 'Mensaje:', message);
-
-        const tempMessageData = {
-            id: tempId,
-            type: 'group',
-            from: currentUser.id,
-            groupId: selectedGroup.id,
-            message: message,
-            timestamp: new Date().toISOString(),
-            readBy: [currentUser.id]
-        };
-
-        addGroupMessageToUI(tempMessageData);
-
-        messageInput.value = '';
-        messageInput.style.height = 'auto';
-
-        socket.emit('group_message', {
-            groupId: selectedGroup.id,
-            message: message,
-            from: currentUser
-        });
-    }
-}
-
-// Agregar mensaje privado a la UI
-function addMessageToUI(messageData) {
-    const messagesContainer = document.getElementById('messages-container');
-
-    const emptyState = messagesContainer.querySelector('.empty-state');
-    if (emptyState) {
-        emptyState.remove();
-    }
-
-    // Verificar si el mensaje ya existe
-    const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
-    if (existingMessage) {
-        console.log('Mensaje ya existe en UI:', messageData.id);
-        return;
-    }
-
-    const messageDiv = document.createElement('div');
-
-    const isSent = messageData.from === currentUser.id;
-    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
-    messageDiv.dataset.messageId = messageData.id;
-
-    const time = new Date(messageData.timestamp).toLocaleTimeString('es-ES', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-
-    messageDiv.innerHTML = `
-        <div class="message-content">${messageData.message}</div>
-        <div class="message-time">${time}</div>
-    `;
-
-    messagesContainer.appendChild(messageDiv);
-
-    setTimeout(() => {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }, 50);
-}
-
-// Agregar mensaje grupal a la UI
-function addGroupMessageToUI(messageData) {
-    const messagesContainer = document.getElementById('messages-container');
-
-    const emptyState = messagesContainer.querySelector('.empty-state');
-    if (emptyState) {
-        emptyState.remove();
-    }
-
-    // Verificar si el mensaje ya existe
-    const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
-    if (existingMessage) {
-        console.log('Mensaje grupal ya existe en UI:', messageData.id);
-        return;
-    }
-
-    const messageDiv = document.createElement('div');
-
-    const isSent = messageData.from === currentUser.id;
-    const sender = allUsers.find(u => u.id === messageData.from);
-    const senderName = sender ? sender.name : 'Usuario';
-
-    messageDiv.className = `message group-message ${isSent ? 'sent' : 'received'}`;
-    messageDiv.dataset.messageId = messageData.id;
-
-    const time = new Date(messageData.timestamp).toLocaleTimeString('es-ES', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-
-    messageDiv.innerHTML = `
-        ${!isSent ? `<div class="message-sender">${senderName}</div>` : ''}
-        <div class="message-content">${messageData.message}</div>
-        <div class="message-time">${time}</div>
-    `;
-
-    messagesContainer.appendChild(messageDiv);
-
-    setTimeout(() => {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }, 50);
-}
-
-// Agregar mensaje del sistema (unirse/salir)
-function addSystemMessage(text) {
-    const messagesContainer = document.getElementById('messages-container');
-
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message system-message';
-    messageDiv.style.alignSelf = 'center';
-    messageDiv.style.background = 'rgba(255, 255, 255, 0.1)';
-    messageDiv.style.color = 'var(--text-secondary)';
-    messageDiv.style.fontSize = '0.8em';
-    messageDiv.style.padding = '8px 12px';
-    messageDiv.style.margin = '8px 0';
-
-    messageDiv.innerHTML = text;
-
-    messagesContainer.appendChild(messageDiv);
-
-    setTimeout(() => {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }, 50);
-}
-
-// Mostrar indicador de escribiendo
-function showTypingIndicator(userId) {
-    if (!selectedUser || selectedUser.id !== userId) return;
-
-    const messagesContainer = document.getElementById('messages-container');
-    const existingIndicator = document.getElementById('typing-indicator');
-
-    if (!existingIndicator) {
-        const typingDiv = document.createElement('div');
-        typingDiv.id = 'typing-indicator';
-        typingDiv.className = 'typing-indicator';
-        typingDiv.innerHTML = `
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <span style="font-size: 0.8em; margin-left: 8px;">escribiendo...</span>
-        `;
-        messagesContainer.appendChild(typingDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    const statusElement = document.getElementById('current-chat-status');
-    statusElement.textContent = 'escribiendo...';
-    statusElement.className = 'current-chat-status typing';
-
-    if (typingTimeouts[userId]) {
-        clearTimeout(typingTimeouts[userId]);
-    }
-
-    typingTimeouts[userId] = setTimeout(() => {
-        hideTypingIndicator(userId);
-    }, 3000);
-}
-
-// Ocultar indicador de escribiendo
-function hideTypingIndicator(userId) {
-    const indicator = document.getElementById('typing-indicator');
-    if (indicator) {
-        indicator.remove();
-    }
-
-    if (selectedUser && selectedUser.id === userId) {
-        updateUserOnlineStatus(selectedUser);
-    }
-}
-
-// Función para cambiar pestañas
+// MEJORADO: Función para cambiar pestañas
 function showTab(tabName) {
-    console.log('Cambiando a pestaña:', tabName);
-
+    // Ocultar todas las pestañas
     document.querySelectorAll('.tab-content, .users-tab-content, .profile-screen, .follow-screen, .edit-profile-screen, .edit-group-screen, .create-group-screen, .select-members-screen').forEach(element => {
         element.classList.remove('active');
     });
 
+    // Mostrar la pestaña seleccionada
     if (tabName === 'users') {
-        document.getElementById('users-tab').classList.add('active');
+        const usersTab = document.getElementById('users-tab');
+        if (usersTab) usersTab.classList.add('active');
         previousTab = 'users';
     } else if (tabName === 'chat') {
-        document.getElementById('chat-tab').classList.add('active');
+        const chatTab = document.getElementById('chat-tab');
+        if (chatTab) chatTab.classList.add('active');
     } else {
-        document.getElementById('chats-tab').classList.add('active');
+        const chatsTab = document.getElementById('chats-tab');
+        if (chatsTab) chatsTab.classList.add('active');
         previousTab = 'chats';
     }
 
     togglePanel(false);
 
+    // Controlar visibilidad del botón flotante
     const fabButton = document.getElementById('fab-button');
     if (fabButton) {
         if (tabName === 'chats') {
@@ -1361,81 +1865,119 @@ function showTab(tabName) {
 
 // NUEVO: Validación de formularios en tiempo real
 function validateGroupForm() {
-    const name = document.getElementById('create-group-name').value.trim();
+    const name = document.getElementById('create-group-name')?.value.trim() || '';
     const submitBtn = document.getElementById('create-group-submit-btn');
     
-    if (name.length < 2) {
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.6';
-    } else {
-        submitBtn.disabled = false;
-        submitBtn.style.opacity = '1';
+    if (submitBtn) {
+        if (name.length < 2) {
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.6';
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+        }
     }
 }
 
 function validateEditGroupForm() {
-    const name = document.getElementById('edit-group-name').value.trim();
+    const name = document.getElementById('edit-group-name')?.value.trim() || '';
     const submitBtn = document.getElementById('save-group-btn');
     
-    if (name.length < 2) {
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.6';
-    } else {
-        submitBtn.disabled = false;
-        submitBtn.style.opacity = '1';
+    if (submitBtn) {
+        if (name.length < 2) {
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.6';
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+        }
     }
 }
 
 // GRUPOS - Funcionalidades de pantalla
 function showCreateGroupScreen() {
-    document.getElementById('create-group-screen').classList.add('active');
+    const screen = document.getElementById('create-group-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
     selectedMembers.clear();
     updateSelectedMembersList();
     validateGroupForm(); // Validación inicial
 }
 
 function hideCreateGroupScreen() {
-    document.getElementById('create-group-screen').classList.remove('active');
+    const screen = document.getElementById('create-group-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
 }
 
 function showSelectMembersScreen() {
-    document.getElementById('select-members-screen').classList.add('active');
+    const screen = document.getElementById('select-members-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
     loadMembersForSelection();
 }
 
 function hideSelectMembersScreen() {
-    document.getElementById('select-members-screen').classList.remove('active');
+    const screen = document.getElementById('select-members-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
 }
 
 function showEditGroupScreen() {
     if (!currentProfileGroup) return;
     
-    document.getElementById('edit-group-screen').classList.add('active');
-    document.getElementById('edit-group-name').value = currentProfileGroup.name;
-    document.getElementById('edit-group-description').value = currentProfileGroup.description;
-    document.getElementById('group-avatar-preview').style.display = 'none';
+    const screen = document.getElementById('edit-group-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
+    
+    const nameInput = document.getElementById('edit-group-name');
+    const descInput = document.getElementById('edit-group-description');
+    const preview = document.getElementById('group-avatar-preview');
+    
+    if (nameInput) nameInput.value = currentProfileGroup.name;
+    if (descInput) descInput.value = currentProfileGroup.description;
+    if (preview) preview.style.display = 'none';
+    
     newGroupAvatarFile = null;
     validateEditGroupForm(); // Validación inicial
 }
 
 function hideEditGroupScreen() {
-    document.getElementById('edit-group-screen').classList.remove('active');
+    const screen = document.getElementById('edit-group-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
 }
 
 function showJoinGroupModal(group) {
     currentProfileGroup = group;
     
-    document.getElementById('join-group-name').textContent = group.name;
-    document.getElementById('join-group-description').textContent = group.description;
-    document.getElementById('join-group-members-count').textContent = group.members.length;
+    const nameElement = document.getElementById('join-group-name');
+    const descElement = document.getElementById('join-group-description');
+    const countElement = document.getElementById('join-group-members-count');
+    
+    if (nameElement) nameElement.textContent = group.name;
+    if (descElement) descElement.textContent = group.description;
+    if (countElement) countElement.textContent = group.members.length;
     
     updateGroupAvatarDisplay('join-group-avatar', group.avatar, group.name);
     
-    document.getElementById('join-group-modal').classList.add('active');
+    const modal = document.getElementById('join-group-modal');
+    if (modal) {
+        modal.classList.add('active');
+    }
 }
 
 function hideJoinGroupModal() {
-    document.getElementById('join-group-modal').classList.remove('active');
+    const modal = document.getElementById('join-group-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
     currentProfileGroup = null;
 }
 
@@ -1448,8 +1990,11 @@ function switchMembersTab(tabName) {
         content.classList.remove('active');
     });
     
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-    document.getElementById(`${tabName}-members-tab`).classList.add('active');
+    const activeBtn = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeContent = document.getElementById(`${tabName}-members-tab`);
+    
+    if (activeBtn) activeBtn.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
 }
 
 function loadMembersForSelection() {
@@ -1459,6 +2004,8 @@ function loadMembersForSelection() {
 
 function loadChatsMembers() {
     const container = document.getElementById('chats-members-list');
+    if (!container) return;
+    
     container.innerHTML = '';
     
     const usersWithChats = activeChats
@@ -1478,6 +2025,8 @@ function loadChatsMembers() {
 
 function loadAllMembers() {
     const container = document.getElementById('all-members-list');
+    if (!container) return;
+    
     container.innerHTML = '';
     
     const otherUsers = allUsers.filter(user => user.id !== currentUser.id);
@@ -1503,14 +2052,11 @@ function createMemberSelectItem(user) {
     memberItem.innerHTML = `
         <div class="member-select-checkbox"></div>
         <div class="user-avatar" style="width: 40px; height: 40px; margin-right: 12px;">
-            ${user.avatar !== '/default-avatar.png' ? 
-                `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
-            }
+            ${getCachedAvatarHTML(user.avatar, user.name, 'user')}
         </div>
         <div class="user-info">
             <div class="user-name">${user.name}</div>
-            <div class="user-status">${user.bio}</div>
+            <div class="user-status">${user.bio || "¡Yo uso SecureChat!"}</div>
         </div>
     `;
     
@@ -1540,10 +2086,10 @@ function toggleMemberSelection(userId) {
 }
 
 function filterMembers() {
-    const searchTerm = document.getElementById('members-search-input').value.toLowerCase();
+    const searchTerm = document.getElementById('members-search-input')?.value.toLowerCase() || '';
     
     document.querySelectorAll('.member-select-item').forEach(item => {
-        const userName = item.querySelector('.user-name').textContent.toLowerCase();
+        const userName = item.querySelector('.user-name')?.textContent.toLowerCase() || '';
         if (userName.includes(searchTerm)) {
             item.style.display = 'flex';
         } else {
@@ -1554,11 +2100,16 @@ function filterMembers() {
 
 function updateSelectedMembersCount() {
     const count = selectedMembers.size;
-    document.getElementById('selected-members-count').textContent = `${count} miembros seleccionados`;
+    const countElement = document.getElementById('selected-members-count');
+    if (countElement) {
+        countElement.textContent = `${count} miembros seleccionados`;
+    }
 }
 
 function updateSelectedMembersList() {
     const container = document.getElementById('selected-members-list');
+    if (!container) return;
+    
     container.innerHTML = '';
     
     selectedMembers.forEach(userId => {
@@ -1599,75 +2150,17 @@ function confirmMembersSelection() {
     hideSelectMembersScreen();
 }
 
-// GRUPOS - Acciones
-async function createGroup() {
-    const name = document.getElementById('create-group-name').value.trim();
-    const description = document.getElementById('create-group-description').value.trim();
-    
-    if (!name) {
-        alert('El nombre del grupo es obligatorio');
-        return;
-    }
-    
-    // Mostrar loading
-    const submitBtn = document.getElementById('create-group-submit-btn');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creando...';
-    submitBtn.disabled = true;
-    
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('description', description);
-    formData.append('creatorId', currentUser.id);
-    formData.append('creatorName', currentUser.name);
-    formData.append('members', JSON.stringify(Array.from(selectedMembers)));
-    
-    if (newGroupAvatarFile) {
-        formData.append('avatar', newGroupAvatarFile);
-    }
-    
-    try {
-        const response = await fetch('/api/groups', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            console.log('Grupo creado:', data.group);
-            
-            // Feedback de éxito
-            submitBtn.innerHTML = '<i class="fas fa-check"></i> ¡Creado!';
-            setTimeout(() => {
-                hideCreateGroupScreen();
-                selectedMembers.clear();
-                
-                // Abrir el grupo recién creado
-                openGroupChat(data.group.id);
-            }, 1000);
-            
-        } else {
-            const error = await response.json();
-            alert('Error: ' + error.error);
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-        }
-    } catch (error) {
-        console.error('Error creando grupo:', error);
-        alert('Error al crear el grupo');
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-    }
-}
-
+// MEJORADO: Acciones de grupos
 async function joinGroup() {
     if (!currentProfileGroup) return;
     
-    // Mostrar loading
     const joinBtn = document.getElementById('confirm-join-group-btn');
-    const originalText = joinBtn.innerHTML;
-    joinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uniendo...';
-    joinBtn.disabled = true;
+    const originalText = joinBtn?.innerHTML || '';
+    
+    if (joinBtn) {
+        joinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uniendo...';
+        joinBtn.disabled = true;
+    }
     
     try {
         const response = await fetch(`/api/groups/${currentProfileGroup.id}/join`, {
@@ -1682,28 +2175,31 @@ async function joinGroup() {
         
         if (response.ok) {
             const data = await response.json();
-            console.log('Unido al grupo:', data.group);
             
-            // Feedback de éxito
-            joinBtn.innerHTML = '<i class="fas fa-check"></i> ¡Unido!';
+            if (joinBtn) {
+                joinBtn.innerHTML = '<i class="fas fa-check"></i> ¡Unido!';
+            }
+            
             setTimeout(() => {
                 hideJoinGroupModal();
-                
-                // Abrir el grupo
                 openGroupChat(currentProfileGroup.id);
             }, 1000);
             
         } else {
             const error = await response.json();
-            alert('Error: ' + error.error);
-            joinBtn.innerHTML = originalText;
-            joinBtn.disabled = false;
+            showNotification('Error: ' + error.error, 'error');
+            if (joinBtn) {
+                joinBtn.innerHTML = originalText;
+                joinBtn.disabled = false;
+            }
         }
     } catch (error) {
         console.error('Error uniéndose al grupo:', error);
-        alert('Error al unirse al grupo');
-        joinBtn.innerHTML = originalText;
-        joinBtn.disabled = false;
+        showNotification('Error al unirse al grupo', 'error');
+        if (joinBtn) {
+            joinBtn.innerHTML = originalText;
+            joinBtn.disabled = false;
+        }
     }
 }
 
@@ -1714,11 +2210,13 @@ async function leaveGroup() {
         return;
     }
     
-    // Mostrar loading
     const leaveBtn = document.getElementById('leave-group-btn');
-    const originalText = leaveBtn.innerHTML;
-    leaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saliendo...';
-    leaveBtn.disabled = true;
+    const originalText = leaveBtn?.innerHTML || '';
+    
+    if (leaveBtn) {
+        leaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saliendo...';
+        leaveBtn.disabled = true;
+    }
     
     try {
         const response = await fetch(`/api/groups/${currentProfileGroup.id}/leave`, {
@@ -1732,54 +2230,58 @@ async function leaveGroup() {
         });
         
         if (response.ok) {
-            console.log('Salido del grupo');
+            if (leaveBtn) {
+                leaveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Salido!';
+            }
             
-            // Feedback de éxito
-            leaveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Salido!';
             setTimeout(() => {
                 hideGroupProfile();
                 
-                // Si estábamos en el chat del grupo, regresar a chats
                 if (selectedGroup && selectedGroup.id === currentProfileGroup.id) {
                     showTab('chats');
                     selectedGroup = null;
                 }
                 
-                // Recargar datos
                 socket.emit('get_all_groups');
                 loadActiveChats();
             }, 1000);
             
         } else {
             const error = await response.json();
-            alert('Error: ' + error.error);
-            leaveBtn.innerHTML = originalText;
-            leaveBtn.disabled = false;
+            showNotification('Error: ' + error.error, 'error');
+            if (leaveBtn) {
+                leaveBtn.innerHTML = originalText;
+                leaveBtn.disabled = false;
+            }
         }
     } catch (error) {
         console.error('Error saliendo del grupo:', error);
-        alert('Error al salir del grupo');
-        leaveBtn.innerHTML = originalText;
-        leaveBtn.disabled = false;
+        showNotification('Error al salir del grupo', 'error');
+        if (leaveBtn) {
+            leaveBtn.innerHTML = originalText;
+            leaveBtn.disabled = false;
+        }
     }
 }
 
 async function saveGroupChanges() {
     if (!currentProfileGroup) return;
     
-    const name = document.getElementById('edit-group-name').value.trim();
-    const description = document.getElementById('edit-group-description').value.trim();
+    const name = document.getElementById('edit-group-name')?.value.trim() || '';
+    const description = document.getElementById('edit-group-description')?.value.trim() || '';
     
     if (!name) {
-        alert('El nombre del grupo es obligatorio');
+        showNotification('El nombre del grupo es obligatorio', 'error');
         return;
     }
     
-    // Mostrar loading
     const saveBtn = document.getElementById('save-group-btn');
-    const originalText = saveBtn.innerHTML;
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-    saveBtn.disabled = true;
+    const originalText = saveBtn?.innerHTML || '';
+    
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        saveBtn.disabled = true;
+    }
     
     const formData = new FormData();
     formData.append('name', name);
@@ -1798,29 +2300,34 @@ async function saveGroupChanges() {
         
         if (response.ok) {
             const data = await response.json();
-            console.log('Grupo actualizado:', data.group);
             
-            // Feedback de éxito
-            saveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Guardado!';
+            if (saveBtn) {
+                saveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Guardado!';
+            }
+            
             setTimeout(() => {
                 hideEditGroupScreen();
             }, 1000);
             
         } else {
             const error = await response.json();
-            alert('Error: ' + error.error);
-            saveBtn.innerHTML = originalText;
-            saveBtn.disabled = false;
+            showNotification('Error: ' + error.error, 'error');
+            if (saveBtn) {
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
         }
     } catch (error) {
         console.error('Error actualizando grupo:', error);
-        alert('Error al actualizar el grupo');
-        saveBtn.innerHTML = originalText;
-        saveBtn.disabled = false;
+        showNotification('Error al actualizar el grupo', 'error');
+        if (saveBtn) {
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        }
     }
 }
 
-// GRUPOS - Perfiles
+// MEJORADO: GRUPOS - Perfiles
 function showGroupProfile(groupId) {
     const group = allGroups.find(g => g.id === groupId);
     if (!group) {
@@ -1831,21 +2338,31 @@ function showGroupProfile(groupId) {
     currentProfileGroup = group;
     updateGroupProfileDisplay();
 
-    document.getElementById('group-profile-screen').classList.add('active');
+    const screen = document.getElementById('group-profile-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
 }
 
 function updateGroupProfileDisplay() {
     if (!currentProfileGroup) return;
 
-    document.getElementById('group-profile-name').textContent = currentProfileGroup.name;
-    document.getElementById('group-profile-description').textContent = currentProfileGroup.description;
-    document.getElementById('group-members-count').textContent = currentProfileGroup.members.length;
+    const nameElement = document.getElementById('group-profile-name');
+    const descElement = document.getElementById('group-profile-description');
+    const countElement = document.getElementById('group-members-count');
+    const adminActions = document.getElementById('group-admin-actions');
+    
+    if (nameElement) nameElement.textContent = currentProfileGroup.name;
+    if (descElement) descElement.textContent = currentProfileGroup.description;
+    if (countElement) countElement.textContent = currentProfileGroup.members.length;
     
     updateGroupAvatarDisplay('group-profile-avatar', currentProfileGroup.avatar, currentProfileGroup.name);
 
     // Mostrar/ocultar botón de edición (solo para admin)
-    const isAdmin = currentProfileGroup.creatorId === currentUser.id;
-    document.getElementById('group-admin-actions').style.display = isAdmin ? 'flex' : 'none';
+    if (adminActions) {
+        const isAdmin = currentProfileGroup.creatorId === currentUser.id;
+        adminActions.style.display = isAdmin ? 'flex' : 'none';
+    }
 
     // Actualizar lista de miembros
     updateGroupMembersList();
@@ -1853,6 +2370,8 @@ function updateGroupProfileDisplay() {
 
 function updateGroupMembersList() {
     const container = document.getElementById('group-members-list');
+    if (!container) return;
+
     container.innerHTML = '';
 
     currentProfileGroup.members.forEach(memberId => {
@@ -1866,10 +2385,7 @@ function updateGroupMembersList() {
             
             memberItem.innerHTML = `
                 <div class="member-avatar">
-                    ${user.avatar !== '/default-avatar.png' ? 
-                        `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                        `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
-                    }
+                    ${getCachedAvatarHTML(user.avatar, user.name, 'user')}
                 </div>
                 <div class="member-info">
                     <div class="member-name">${user.name}${isAdmin ? ' (Admin)' : ''}</div>
@@ -1899,7 +2415,6 @@ function updateGroupMembersList() {
 async function removeMemberFromGroup(memberId) {
     if (!currentProfileGroup) return;
 
-    // Mostrar loading
     const memberItem = document.querySelector(`.member-item[data-user-id="${memberId}"]`);
     if (memberItem) {
         memberItem.style.opacity = '0.5';
@@ -1917,18 +2432,17 @@ async function removeMemberFromGroup(memberId) {
         });
 
         if (response.ok) {
-            console.log('Miembro eliminado del grupo');
-            // La actualización se manejará via socket
+            showNotification('Miembro eliminado del grupo', 'success');
         } else {
             const error = await response.json();
-            alert('Error: ' + error.error);
+            showNotification('Error: ' + error.error, 'error');
             if (memberItem) {
                 memberItem.style.opacity = '1';
             }
         }
     } catch (error) {
         console.error('Error eliminando miembro:', error);
-        alert('Error al eliminar miembro');
+        showNotification('Error al eliminar miembro', 'error');
         if (memberItem) {
             memberItem.style.opacity = '1';
         }
@@ -1936,11 +2450,14 @@ async function removeMemberFromGroup(memberId) {
 }
 
 function hideGroupProfile() {
-    document.getElementById('group-profile-screen').classList.remove('active');
+    const screen = document.getElementById('group-profile-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
     currentProfileGroup = null;
 }
 
-// GRUPOS - Preview de avatares
+// MEJORADO: GRUPOS - Preview de avatares
 function previewGroupAvatar(event) {
     const file = event.target.files[0];
     if (file) {
@@ -1948,8 +2465,10 @@ function previewGroupAvatar(event) {
         const reader = new FileReader();
         reader.onload = function(e) {
             const preview = document.getElementById('group-avatar-preview');
-            preview.src = e.target.result;
-            preview.style.display = 'block';
+            if (preview) {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            }
         };
         reader.readAsDataURL(file);
     }
@@ -1962,110 +2481,92 @@ function previewCreateGroupAvatar(event) {
         const reader = new FileReader();
         reader.onload = function(e) {
             const preview = document.getElementById('create-group-avatar-preview');
-            preview.src = e.target.result;
-            preview.style.display = 'block';
+            if (preview) {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            }
         };
         reader.readAsDataURL(file);
     }
 }
 
-// MEJORADO: Display de avatares con cache busting
-function updateGroupAvatarDisplay(elementId, avatarUrl, groupName) {
-    const element = document.getElementById(elementId);
-    const timestamp = Date.now();
-    
-    if (avatarUrl && avatarUrl !== '/default-group-avatar.png') {
-        element.innerHTML = `
-            <img src="${avatarUrl}?v=${timestamp}" alt="${groupName}" onerror="this.style.display='none'">
-        `;
-        const img = element.querySelector('img');
-        img.onerror = function() {
-            this.style.display = 'none';
-            const fallback = document.createElement('div');
-            fallback.className = 'avatar-fallback';
-            fallback.textContent = groupName.charAt(0).toUpperCase();
-            fallback.style.display = 'flex';
-            fallback.style.alignItems = 'center';
-            fallback.style.justifyContent = 'center';
-            fallback.style.width = '100%';
-            fallback.style.height = '100%';
-            element.appendChild(fallback);
-        };
-    } else {
-        element.innerHTML = `
-            <div class="avatar-fallback">${groupName.charAt(0).toUpperCase()}</div>
-        `;
-    }
-}
-
-function updateAvatarDisplay(elementId, avatarUrl, userName) {
-    const element = document.getElementById(elementId);
-    const timestamp = Date.now();
-    
-    if (avatarUrl && avatarUrl !== '/default-avatar.png') {
-        element.innerHTML = `<img src="${avatarUrl}?v=${timestamp}" alt="${userName}" onerror="this.style.display='none'">`;
-        const img = element.querySelector('img');
-        img.onerror = function() {
-            this.style.display = 'none';
-            const fallback = document.createElement('div');
-            fallback.className = 'avatar-fallback';
-            fallback.textContent = userName.charAt(0).toUpperCase();
-            fallback.style.display = 'flex';
-            fallback.style.alignItems = 'center';
-            fallback.style.justifyContent = 'center';
-            fallback.style.width = '100%';
-            fallback.style.height = '100%';
-            element.appendChild(fallback);
-        };
-    } else {
-        element.innerHTML = `<div class="avatar-fallback">${userName.charAt(0).toUpperCase()}</div>`;
-    }
-}
-
-// Funciones existentes (se mantienen igual)
+// FUNCIONES EXISTENTES MANTENIDAS (optimizadas)
 function showMyProfile() {
-    document.getElementById('my-profile-screen').classList.add('active');
+    const screen = document.getElementById('my-profile-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
     updateMyProfileDisplay();
     togglePanel(false);
 }
 
 function hideMyProfile() {
-    document.getElementById('my-profile-screen').classList.remove('active');
+    const screen = document.getElementById('my-profile-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
 }
 
 function showEditProfile() {
-    document.getElementById('edit-profile-screen').classList.add('active');
-    document.getElementById('edit-profile-name').value = currentUser.name;
-    document.getElementById('edit-profile-bio').value = currentUser.bio;
-    document.getElementById('edit-profile-password').value = '';
-    document.getElementById('avatar-preview').style.display = 'none';
+    const screen = document.getElementById('edit-profile-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
+    
+    const nameInput = document.getElementById('edit-profile-name');
+    const bioInput = document.getElementById('edit-profile-bio');
+    const passInput = document.getElementById('edit-profile-password');
+    const preview = document.getElementById('avatar-preview');
+    
+    if (nameInput) nameInput.value = currentUser.name;
+    if (bioInput) bioInput.value = currentUser.bio;
+    if (passInput) passInput.value = '';
+    if (preview) preview.style.display = 'none';
+    
     newAvatarFile = null;
 }
 
 function hideEditProfile() {
-    document.getElementById('edit-profile-screen').classList.remove('active');
+    const screen = document.getElementById('edit-profile-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
 }
 
 function showFollowers() {
-    document.getElementById('followers-screen').classList.add('active');
+    const screen = document.getElementById('followers-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
     loadFollowersList();
 }
 
 function hideFollowers() {
-    document.getElementById('followers-screen').classList.remove('active');
+    const screen = document.getElementById('followers-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
 }
 
 function showFollowing() {
-    document.getElementById('following-screen').classList.add('active');
+    const screen = document.getElementById('following-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
     loadFollowingList();
 }
 
 function hideFollowing() {
-    document.getElementById('following-screen').classList.remove('active');
+    const screen = document.getElementById('following-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
 }
 
 function loadFollowersList() {
     const followersList = document.getElementById('followers-list');
+    if (!followersList) return;
+
     followersList.innerHTML = '';
 
     if (followers.length === 0) {
@@ -2084,10 +2585,7 @@ function loadFollowersList() {
             userItem.className = 'user-item';
             userItem.innerHTML = `
                 <div class="user-avatar">
-                    ${user.avatar !== '/default-avatar.png' ? 
-                        `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                        `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
-                    }
+                    ${getCachedAvatarHTML(user.avatar, user.name, 'user')}
                 </div>
                 <div class="user-info">
                     <div class="user-name">${user.name}</div>
@@ -2103,6 +2601,8 @@ function loadFollowersList() {
 
 function loadFollowingList() {
     const followingList = document.getElementById('following-list');
+    if (!followingList) return;
+
     followingList.innerHTML = '';
 
     if (following.length === 0) {
@@ -2121,10 +2621,7 @@ function loadFollowingList() {
             userItem.className = 'user-item';
             userItem.innerHTML = `
                 <div class="user-avatar">
-                    ${user.avatar !== '/default-avatar.png' ? 
-                        `<img src="${user.avatar}?v=${Date.now()}" alt="${user.name}" onerror="this.style.display='none'">` : 
-                        `<div class="avatar-fallback">${user.name.charAt(0).toUpperCase()}</div>`
-                    }
+                    ${getCachedAvatarHTML(user.avatar, user.name, 'user')}
                 </div>
                 <div class="user-info">
                     <div class="user-name">${user.name}</div>
@@ -2139,11 +2636,15 @@ function loadFollowingList() {
 }
 
 function showUserFollowers() {
-    alert('Mostrar seguidores de ' + currentProfileUser.name);
+    if (currentProfileUser) {
+        showNotification('Mostrar seguidores de ' + currentProfileUser.name, 'info');
+    }
 }
 
 function showUserFollowing() {
-    alert('Mostrar seguidos de ' + currentProfileUser.name);
+    if (currentProfileUser) {
+        showNotification('Mostrar seguidos de ' + currentProfileUser.name, 'info');
+    }
 }
 
 function previewAvatar(event) {
@@ -2153,28 +2654,32 @@ function previewAvatar(event) {
         const reader = new FileReader();
         reader.onload = function(e) {
             const preview = document.getElementById('avatar-preview');
-            preview.src = e.target.result;
-            preview.style.display = 'block';
+            if (preview) {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            }
         };
         reader.readAsDataURL(file);
     }
 }
 
 async function saveMyProfile() {
-    const newName = document.getElementById('edit-profile-name').value.trim();
-    const newBio = document.getElementById('edit-profile-bio').value.trim();
-    const newPassword = document.getElementById('edit-profile-password').value;
+    const newName = document.getElementById('edit-profile-name')?.value.trim() || '';
+    const newBio = document.getElementById('edit-profile-bio')?.value.trim() || '';
+    const newPassword = document.getElementById('edit-profile-password')?.value || '';
 
     if (!newName) {
-        alert('El nombre no puede estar vacío');
+        showNotification('El nombre no puede estar vacío', 'error');
         return;
     }
 
-    // Mostrar loading
     const saveBtn = document.getElementById('save-profile-btn');
-    const originalText = saveBtn.innerHTML;
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-    saveBtn.disabled = true;
+    const originalText = saveBtn?.innerHTML || '';
+    
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        saveBtn.disabled = true;
+    }
 
     const formData = new FormData();
     formData.append('name', newName);
@@ -2199,8 +2704,10 @@ async function saveMyProfile() {
             currentUser = data.user;
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
             
-            // Feedback de éxito
-            saveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Guardado!';
+            if (saveBtn) {
+                saveBtn.innerHTML = '<i class="fas fa-check"></i> ¡Guardado!';
+            }
+            
             setTimeout(() => {
                 updateCurrentUserDisplay();
                 updateMyProfileDisplay();
@@ -2209,26 +2716,29 @@ async function saveMyProfile() {
             
         } else {
             const error = await response.json();
-            alert('Error: ' + error.error);
-            saveBtn.innerHTML = originalText;
-            saveBtn.disabled = false;
+            showNotification('Error: ' + error.error, 'error');
+            if (saveBtn) {
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
         }
     } catch (error) {
         console.error('Error guardando perfil:', error);
-        alert('Error al guardar el perfil');
-        saveBtn.innerHTML = originalText;
-        saveBtn.disabled = false;
+        showNotification('Error al guardar el perfil', 'error');
+        if (saveBtn) {
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        }
     }
 }
 
 function deleteAccount() {
     if (confirm('¿Estás seguro de que quieres eliminar tu cuenta? Esta acción no se puede deshacer.')) {
-        alert('Funcionalidad de eliminar cuenta - Pendiente de implementar');
+        showNotification('Funcionalidad de eliminar cuenta - Pendiente de implementar', 'info');
     }
 }
 
 function showOtherUserProfile(userId) {
-    console.log('Mostrando perfil de usuario ID:', userId);
     const user = allUsers.find(u => u.id === userId);
     if (!user) {
         console.error('Usuario no encontrado para perfil');
@@ -2237,22 +2747,35 @@ function showOtherUserProfile(userId) {
 
     currentProfileUser = user;
 
-    document.getElementById('user-profile-name').textContent = user.name;
-    document.getElementById('user-profile-bio').textContent = user.bio;
+    const nameElement = document.getElementById('user-profile-name');
+    const bioElement = document.getElementById('user-profile-bio');
+    const followersCount = document.getElementById('user-followers-count');
+    const followingCount = document.getElementById('user-following-count');
+    const followBtn = document.getElementById('follow-btn');
+    
+    if (nameElement) nameElement.textContent = user.name;
+    if (bioElement) bioElement.textContent = user.bio;
     updateAvatarDisplay('user-profile-avatar', user.avatar, user.name);
 
     const isOnline = onlineUsers.find(u => u.id === user.id);
-    document.getElementById('user-profile-online-status').className = `online-status ${isOnline ? 'online' : ''}`;
+    const statusElement = document.getElementById('user-profile-online-status');
+    if (statusElement) {
+        statusElement.className = `online-status ${isOnline ? 'online' : ''}`;
+    }
 
-    document.getElementById('user-followers-count').textContent = '0';
-    document.getElementById('user-following-count').textContent = '0';
+    if (followersCount) followersCount.textContent = '0';
+    if (followingCount) followingCount.textContent = '0';
 
-    const isFollowing = following.some(u => u.id === user.id);
-    const followBtn = document.getElementById('follow-btn');
-    followBtn.textContent = isFollowing ? 'Dejar de seguir' : 'Seguir';
-    followBtn.className = isFollowing ? 'follow-btn following' : 'follow-btn';
+    if (followBtn) {
+        const isFollowing = following.some(u => u.id === user.id);
+        followBtn.textContent = isFollowing ? 'Dejar de seguir' : 'Seguir';
+        followBtn.className = isFollowing ? 'follow-btn following' : 'follow-btn';
+    }
 
-    document.getElementById('user-profile-screen').classList.add('active');
+    const screen = document.getElementById('user-profile-screen');
+    if (screen) {
+        screen.classList.add('active');
+    }
 }
 
 function toggleFollow() {
@@ -2266,34 +2789,45 @@ function toggleFollow() {
     });
 
     const followBtn = document.getElementById('follow-btn');
-    if (isFollowing) {
-        following = following.filter(u => u.id !== currentProfileUser.id);
-        followBtn.textContent = 'Seguir';
-        followBtn.className = 'follow-btn';
-    } else {
-        const user = allUsers.find(u => u.id === currentProfileUser.id);
-        if (user) following.push(user);
-        followBtn.textContent = 'Dejar de seguir';
-        followBtn.className = 'follow-btn following';
+    if (followBtn) {
+        if (isFollowing) {
+            following = following.filter(u => u.id !== currentProfileUser.id);
+            followBtn.textContent = 'Seguir';
+            followBtn.className = 'follow-btn';
+        } else {
+            const user = allUsers.find(u => u.id === currentProfileUser.id);
+            if (user) following.push(user);
+            followBtn.textContent = 'Dejar de seguir';
+            followBtn.className = 'follow-btn following';
+        }
     }
 
     updateFollowCounts();
 }
 
 function hideUserProfile() {
-    document.getElementById('user-profile-screen').classList.remove('active');
+    const screen = document.getElementById('user-profile-screen');
+    if (screen) {
+        screen.classList.remove('active');
+    }
     currentProfileUser = null;
 }
 
 function updateCurrentUserDisplay() {
-    document.getElementById('panel-user-name').textContent = currentUser.name;
-    document.getElementById('panel-user-bio').textContent = currentUser.bio;
+    const nameElement = document.getElementById('panel-user-name');
+    const bioElement = document.getElementById('panel-user-bio');
+    
+    if (nameElement) nameElement.textContent = currentUser.name;
+    if (bioElement) bioElement.textContent = currentUser.bio;
     updateAvatarDisplay('panel-user-avatar', currentUser.avatar, currentUser.name);
 }
 
 function updateMyProfileDisplay() {
-    document.getElementById('my-profile-name').textContent = currentUser.name;
-    document.getElementById('my-profile-bio').textContent = currentUser.bio;
+    const nameElement = document.getElementById('my-profile-name');
+    const bioElement = document.getElementById('my-profile-bio');
+    
+    if (nameElement) nameElement.textContent = currentUser.name;
+    if (bioElement) bioElement.textContent = currentUser.bio;
     updateAvatarDisplay('my-profile-avatar', currentUser.avatar, currentUser.name);
     updateFollowCounts();
 }
@@ -2320,3 +2854,54 @@ function logout() {
     localStorage.removeItem('currentUser');
     window.location.href = '/';
 }
+
+// MEJORADO: Función para forzar actualización de avatar específico
+function refreshAvatar(elementId, newAvatarUrl, name) {
+    // Eliminar del cache para forzar recarga
+    const cacheKeys = Array.from(avatarCache.keys()).filter(key => key.startsWith(elementId));
+    cacheKeys.forEach(key => avatarCache.delete(key));
+    
+    // Actualizar display
+    if (elementId.includes('group')) {
+        updateGroupAvatarDisplay(elementId, newAvatarUrl, name);
+    } else {
+        updateAvatarDisplay(elementId, newAvatarUrl, name);
+    }
+}
+
+// Inicializar validación de formularios
+document.addEventListener('DOMContentLoaded', function() {
+    const groupNameInput = document.getElementById('create-group-name');
+    const editGroupNameInput = document.getElementById('edit-group-name');
+    const membersSearchInput = document.getElementById('members-search-input');
+    
+    if (groupNameInput) {
+        groupNameInput.addEventListener('input', validateGroupForm);
+    }
+    
+    if (editGroupNameInput) {
+        editGroupNameInput.addEventListener('input', validateEditGroupForm);
+    }
+    
+    if (membersSearchInput) {
+        membersSearchInput.addEventListener('input', filterMembers);
+    }
+    
+    // Inicializar tabs de selección de miembros
+    document.querySelectorAll('.members-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabName = this.dataset.tab;
+            switchMembersTab(tabName);
+        });
+    });
+});
+
+// Limpiar cache cada hora
+setInterval(() => {
+    const now = Date.now();
+    for (let [key, value] of avatarCache.entries()) {
+        if (now - value.timestamp > CACHE_DURATION) {
+            avatarCache.delete(key);
+        }
+    }
+}, 60 * 60 * 1000);
