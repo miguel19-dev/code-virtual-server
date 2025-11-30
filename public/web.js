@@ -365,7 +365,22 @@ function setupSocketListeners() {
 
     socket.on('user_left_group', (data) => {
         if (selectedGroup && selectedGroup.id === data.groupId) {
-            addSystemMessage(`${data.userName} salió del grupo`);
+            addSystemMessage(`${data.userName} abandonó el grupo`);
+        }
+    });
+
+    socket.on('member_removed_from_group', (data) => {
+        if (selectedGroup && selectedGroup.id === data.groupId && data.memberId === currentUser.id) {
+            addSystemMessage('Has sido eliminado del grupo');
+            setTimeout(() => {
+                showTab('chats');
+                selectedGroup = null;
+            }, 2000);
+        } else if (selectedGroup && selectedGroup.id === data.groupId) {
+            const removedUser = allUsers.find(u => u.id === data.memberId);
+            if (removedUser) {
+                addSystemMessage(`${removedUser.name} fue eliminado del grupo`);
+            }
         }
     });
 
@@ -622,7 +637,8 @@ function showReplyUI(messageElement) {
     const messageContent = messageElement.querySelector('.message-content')?.textContent || 
                           messageElement.querySelector('.media-message')?.dataset.fileName || '';
     const isOwnMessage = messageElement.classList.contains('sent');
-    const senderName = messageElement.querySelector('.message-sender')?.textContent || (isOwnMessage ? 'Tú' : 'Usuario');
+    const senderName = messageElement.querySelector('.message-sender')?.textContent || 
+                      (isOwnMessage ? 'Tú' : (selectedUser ? selectedUser.name : 'Usuario'));
     
     replyingTo = {
         id: messageId,
@@ -660,7 +676,6 @@ function cancelReply() {
 }
 
 // NUEVO: Grabación de voz MEJORADA
-// NUEVO: Sistema de grabación mejorado
 async function startRecording() {
     if (isRecording) return;
     
@@ -691,8 +706,8 @@ async function startRecording() {
         isRecording = true;
         recordingStartTime = Date.now();
         
-        // Mostrar UI de grabación mejorada
-        showRecordingUI();
+        // Cambiar a modo grabación
+        showRecordingMode();
         
         // Iniciar timer
         recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
@@ -708,6 +723,67 @@ async function startRecording() {
     }
 }
 
+// NUEVO: Mostrar modo grabación
+function showRecordingMode() {
+    const messageInputContainer = document.querySelector('.message-input-container');
+    const voiceButton = document.getElementById('voice-button');
+    const attachButton = document.getElementById('attach-button');
+    const messageInput = document.getElementById('message-input');
+    
+    // Activar modo grabación
+    messageInputContainer.classList.add('recording-mode');
+    
+    // Cambiar icono a flecha de enviar
+    if (voiceButton) {
+        voiceButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
+        voiceButton.classList.add('recording');
+    }
+    
+    // Ocultar botón adjuntar
+    if (attachButton) {
+        attachButton.style.display = 'none';
+    }
+    
+    // Ocultar input de texto
+    if (messageInput) {
+        messageInput.style.display = 'none';
+    }
+    
+    // Mostrar UI de grabación
+    showRecordingUI();
+}
+
+// NUEVO: Ocultar modo grabación
+function hideRecordingMode() {
+    const messageInputContainer = document.querySelector('.message-input-container');
+    const voiceButton = document.getElementById('voice-button');
+    const attachButton = document.getElementById('attach-button');
+    const messageInput = document.getElementById('message-input');
+    
+    // Desactivar modo grabación
+    messageInputContainer.classList.remove('recording-mode');
+    
+    // Restaurar icono de micrófono
+    if (voiceButton) {
+        voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+        voiceButton.classList.remove('recording');
+    }
+    
+    // Mostrar botón adjuntar
+    if (attachButton) {
+        attachButton.style.display = 'flex';
+    }
+    
+    // Mostrar input de texto
+    if (messageInput) {
+        messageInput.style.display = '';
+    }
+    
+    // Ocultar UI de grabación
+    hideRecordingUI();
+}
+
+// NUEVO: Detener grabación y enviar
 function stopRecordingAndSend() {
     if (!isRecording || !mediaRecorder) return;
     
@@ -724,7 +800,7 @@ function stopRecordingAndSend() {
     }
     
     isRecording = false;
-    hideRecordingUI();
+    hideRecordingMode();
 }
 
 // NUEVA: Función para cancelar grabación
@@ -758,8 +834,8 @@ function cancelRecording() {
     audioChunks = [];
     recordingStartTime = null;
     
-    // Ocultar UI con estado de cancelación
-    hideRecordingUI();
+    // Ocultar modo grabación
+    hideRecordingMode();
     
     // Mostrar notificación
     showNotification('Grabación cancelada', 'info');
@@ -767,95 +843,23 @@ function cancelRecording() {
     console.log('✅ Grabación cancelada correctamente');
 }
 
-function cancelRecording() {
-    if (!isRecording || !mediaRecorder) return;
-    
-    clearTimeout(recordingTimeout);
-    clearInterval(recordingTimerInterval);
-    
-    if (mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-    }
-    
-    // Detener stream
-    if (mediaRecorder.stream) {
-        mediaRecorder.stream.getTracks().forEach(track => track.stop());
-    }
-    
-    isRecording = false;
-    audioChunks = [];
-    hideRecordingUI();
-    showNotification('Grabación cancelada', 'info');
-}
-
 function showRecordingUI() {
-    const messageInput = document.getElementById('message-input');
-    const voiceButton = document.getElementById('voice-button');
     const recordingUI = document.getElementById('recording-ui');
     
-    // Mantener elementos visibles, solo cambiar el botón
-    if (voiceButton) {
-        voiceButton.innerHTML = '<i class="fas fa-stop"></i>';
-        voiceButton.classList.add('recording');
-        voiceButton.style.background = 'var(--error)';
-    }
-    
-    // Mostrar UI de grabación como widget flotante
+    // Mostrar UI de grabación
     if (recordingUI) {
         recordingUI.classList.add('active');
         document.getElementById('recording-timer').textContent = '0:00';
-        
-        // Posicionar cerca del input
-        const inputContainer = document.querySelector('.message-input-container');
-        if (inputContainer) {
-            const rect = inputContainer.getBoundingClientRect();
-            recordingUI.style.bottom = `${window.innerHeight - rect.top + 10}px`;
-            recordingUI.style.right = '20px';
-        }
     }
 }
 
 function hideRecordingUI() {
-    const voiceButton = document.getElementById('voice-button');
     const recordingUI = document.getElementById('recording-ui');
-    
-    // Restaurar botón de voz
-    if (voiceButton) {
-        voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
-        voiceButton.classList.remove('recording');
-        voiceButton.style.background = '';
-    }
     
     // Ocultar UI de grabación
     if (recordingUI) {
         recordingUI.classList.remove('active');
-        recordingUI.classList.remove('cancelling');
     }
-    
-    toggleSendVoiceButton();
-}
-
-function hideRecordingUI() {
-    const messageInput = document.getElementById('message-input');
-    const attachButton = document.getElementById('attach-button');
-    const voiceButton = document.getElementById('voice-button');
-    
-    // Restaurar elementos normales
-    if (messageInput) messageInput.style.display = '';
-    if (attachButton) attachButton.style.display = 'flex';
-    if (voiceButton) {
-        voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
-        voiceButton.style.background = '';
-        voiceButton.title = 'Grabar audio';
-    }
-    
-    // Ocultar UI de grabación
-    const recordingUI = document.getElementById('recording-ui');
-    if (recordingUI) {
-        recordingUI.classList.remove('active');
-    }
-    
-    toggleSendVoiceButton();
 }
 
 function updateRecordingTimer() {
@@ -904,14 +908,14 @@ async function sendAudioMessage() {
             if (selectedUser) {
                 socket.emit('private_message', {
                     to: selectedUser,
-                    message: '🎤 Mensaje de voz',
+                    message: 'Mensaje de voz',
                     from: currentUser,
                     file: messageData.file
                 });
             } else if (selectedGroup) {
                 socket.emit('group_message', {
                     groupId: selectedGroup.id,
-                    message: '🎤 Mensaje de voz',
+                    message: 'Mensaje de voz',
                     from: currentUser,
                     file: messageData.file
                 });
@@ -999,13 +1003,13 @@ async function uploadAndSendFile(file) {
             
             let messageText = '';
             if (file.type.startsWith('image/')) {
-                messageText = '📷 Imagen';
+                messageText = 'Imagen';
             } else if (file.type.startsWith('video/')) {
-                messageText = '🎥 Video';
+                messageText = 'Video';
             } else if (file.type.startsWith('audio/')) {
-                messageText = '🎵 Audio';
+                messageText = 'Audio';
             } else {
-                messageText = '📄 Archivo';
+                messageText = 'Archivo';
             }
             
             if (selectedUser) {
@@ -1181,18 +1185,34 @@ function addMessageToUI(messageData) {
         if (messageData.file.type.startsWith('image/')) {
             contentHTML = `
                 <div class="media-message image-message" data-file-name="${messageData.file.name}">
-                    <img src="${messageData.file.url}" alt="Imagen" onclick="openMediaViewer('${messageData.file.url}', 'image')">
-                    <div class="media-caption">${messageData.message}</div>
+                    <img src="${messageData.file.url}" alt="Imagen" 
+                         onclick="openMediaViewer('${messageData.file.url}', 'image')"
+                         onload="this.classList.add('loaded')">
+                    <div class="media-overlay" id="overlay-${messageData.id}">
+                        <button class="download-media-btn" onclick="downloadMedia('${messageData.file.url}', '${messageData.file.name}')">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                        <div class="media-size">${formatFileSize(messageData.file.size)}</div>
+                    </div>
+                    <div class="media-caption">${messageData.message.replace('Imagen', '')}</div>
                 </div>
             `;
         } else if (messageData.file.type.startsWith('video/')) {
             contentHTML = `
                 <div class="media-message video-message" data-file-name="${messageData.file.name}">
-                    <video controls onclick="openMediaViewer('${messageData.file.url}', 'video')">
+                    <video controls 
+                           onclick="openMediaViewer('${messageData.file.url}', 'video')"
+                           onload="this.classList.add('loaded')">
                         <source src="${messageData.file.url}" type="${messageData.file.type}">
                         Tu navegador no soporta el elemento video.
                     </video>
-                    <div class="media-caption">${messageData.message}</div>
+                    <div class="media-overlay" id="overlay-${messageData.id}">
+                        <button class="download-media-btn" onclick="downloadMedia('${messageData.file.url}', '${messageData.file.name}')">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                        <div class="media-size">${formatFileSize(messageData.file.size)}</div>
+                    </div>
+                    <div class="media-caption">${messageData.message.replace('Video', '')}</div>
                 </div>
             `;
         } else if (messageData.file.type.startsWith('audio/')) {
@@ -1227,28 +1247,33 @@ function addMessageToUI(messageData) {
             `;
         }
     } else {
-        contentHTML = `<div class="message-content">${messageData.message}</div>`;
+        // Eliminar emojis del texto del mensaje
+        const cleanMessage = messageData.message.replace(/[📷🎥🎤🎵📄]/g, '').trim();
+        contentHTML = `<div class="message-content">${cleanMessage}</div>`;
     }
 
-    messageDiv.innerHTML = `
-        ${replyHTML}
-        ${contentHTML}
-        <div class="message-time">${time}</div>
-    `;
+    // Solo mostrar mensajes de medios si no son enviados por el usuario actual
+    if (!messageData.file || !isSent) {
+        messageDiv.innerHTML = `
+            ${replyHTML}
+            ${contentHTML}
+            <div class="message-time">${time}</div>
+        `;
 
-    messagesContainer.appendChild(messageDiv);
+        messagesContainer.appendChild(messageDiv);
 
-    // Animación de entrada
-    messageDiv.style.opacity = '0';
-    messageDiv.style.transform = 'translateY(20px)';
-    
-    setTimeout(() => {
-        messageDiv.style.transition = 'all 0.3s ease';
-        messageDiv.style.opacity = '1';
-        messageDiv.style.transform = 'translateY(0)';
-    }, 10);
+        // Animación de entrada
+        messageDiv.style.opacity = '0';
+        messageDiv.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            messageDiv.style.transition = 'all 0.3s ease';
+            messageDiv.style.opacity = '1';
+            messageDiv.style.transform = 'translateY(0)';
+        }, 10);
 
-    scrollToBottom();
+        scrollToBottom();
+    }
 }
 
 // MEJORADO: Agregar mensaje grupal a UI
@@ -1296,18 +1321,34 @@ function addGroupMessageToUI(messageData) {
         if (messageData.file.type.startsWith('image/')) {
             contentHTML = `
                 <div class="media-message image-message" data-file-name="${messageData.file.name}">
-                    <img src="${messageData.file.url}" alt="Imagen" onclick="openMediaViewer('${messageData.file.url}', 'image')">
-                    <div class="media-caption">${messageData.message}</div>
+                    <img src="${messageData.file.url}" alt="Imagen" 
+                         onclick="openMediaViewer('${messageData.file.url}', 'image')"
+                         onload="this.classList.add('loaded')">
+                    <div class="media-overlay" id="overlay-${messageData.id}">
+                        <button class="download-media-btn" onclick="downloadMedia('${messageData.file.url}', '${messageData.file.name}')">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                        <div class="media-size">${formatFileSize(messageData.file.size)}</div>
+                    </div>
+                    <div class="media-caption">${messageData.message.replace('Imagen', '')}</div>
                 </div>
             `;
         } else if (messageData.file.type.startsWith('video/')) {
             contentHTML = `
                 <div class="media-message video-message" data-file-name="${messageData.file.name}">
-                    <video controls onclick="openMediaViewer('${messageData.file.url}', 'video')">
+                    <video controls 
+                           onclick="openMediaViewer('${messageData.file.url}', 'video')"
+                           onload="this.classList.add('loaded')">
                         <source src="${messageData.file.url}" type="${messageData.file.type}">
                         Tu navegador no soporta el elemento video.
                     </video>
-                    <div class="media-caption">${messageData.message}</div>
+                    <div class="media-overlay" id="overlay-${messageData.id}">
+                        <button class="download-media-btn" onclick="downloadMedia('${messageData.file.url}', '${messageData.file.name}')">
+                            <i class="fas fa-download"></i> Descargar
+                        </button>
+                        <div class="media-size">${formatFileSize(messageData.file.size)}</div>
+                    </div>
+                    <div class="media-caption">${messageData.message.replace('Video', '')}</div>
                 </div>
             `;
         } else if (messageData.file.type.startsWith('audio/')) {
@@ -1342,29 +1383,44 @@ function addGroupMessageToUI(messageData) {
             `;
         }
     } else {
-        contentHTML = `<div class="message-content">${messageData.message}</div>`;
+        // Eliminar emojis del texto del mensaje
+        const cleanMessage = messageData.message.replace(/[📷🎥🎤🎵📄]/g, '').trim();
+        contentHTML = `<div class="message-content">${cleanMessage}</div>`;
     }
 
-    messageDiv.innerHTML = `
-        ${!isSent ? `<div class="message-sender">${senderName}</div>` : ''}
-        ${replyHTML}
-        ${contentHTML}
-        <div class="message-time">${time}</div>
-    `;
+    // Solo mostrar mensajes de medios si no son enviados por el usuario actual
+    if (!messageData.file || !isSent) {
+        messageDiv.innerHTML = `
+            ${!isSent ? `<div class="message-sender">${senderName}</div>` : ''}
+            ${replyHTML}
+            ${contentHTML}
+            <div class="message-time">${time}</div>
+        `;
 
-    messagesContainer.appendChild(messageDiv);
+        messagesContainer.appendChild(messageDiv);
 
-    // Animación de entrada
-    messageDiv.style.opacity = '0';
-    messageDiv.style.transform = 'translateY(20px)';
-    
-    setTimeout(() => {
-        messageDiv.style.transition = 'all 0.3s ease';
-        messageDiv.style.opacity = '1';
-        messageDiv.style.transform = 'translateY(0)';
-    }, 10);
+        // Animación de entrada
+        messageDiv.style.opacity = '0';
+        messageDiv.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            messageDiv.style.transition = 'all 0.3s ease';
+            messageDiv.style.opacity = '1';
+            messageDiv.style.transform = 'translateY(0)';
+        }, 10);
 
-    scrollToBottom();
+        scrollToBottom();
+    }
+}
+
+// NUEVA: Función para descargar medios
+function downloadMedia(url, filename) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 // NUEVO: Funciones para manejar archivos multimedia
@@ -1935,27 +1991,31 @@ function openGroupChat(groupId) {
     setTimeout(toggleSendVoiceButton, 100);
 }
 
-// NUEVO: Abrir perfil del chat actual
+// CORREGIDO: Función para manejar botones de retroceso
+function handleChatBack() {
+    if (selectedUser || selectedGroup) {
+        showTab(previousTab);
+        selectedUser = null;
+        selectedGroup = null;
+        
+        // Limpiar estados de escritura
+        typingUsers.clear();
+        groupTypingUsers.clear();
+        
+        // Limpiar respuesta activa
+        cancelReply();
+    } else {
+        showTab('chats');
+    }
+}
+
+// NUEVA: Función para abrir perfil desde avatar del chat
 function openCurrentProfile() {
     if (selectedUser) {
         showOtherUserProfile(selectedUser.id);
     } else if (selectedGroup) {
         showGroupProfile(selectedGroup.id);
     }
-}
-
-// Manejar el botón de regresar en el chat
-function handleChatBack() {
-    showTab(previousTab);
-    selectedUser = null;
-    selectedGroup = null;
-    
-    // Limpiar estados de escritura
-    typingUsers.clear();
-    groupTypingUsers.clear();
-    
-    // Limpiar respuesta activa
-    cancelReply();
 }
 
 // MEJORADO: Actualizar estado en línea del usuario en el chat
