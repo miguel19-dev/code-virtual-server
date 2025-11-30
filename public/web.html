@@ -97,6 +97,16 @@
                         </div>
 
                         <div class="message-input-container">
+                            <!-- UI de grabación MEJORADA -->
+                            <div id="recording-ui" class="recording-ui">
+                                <button class="cancel-recording-btn" onclick="cancelRecording()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <div class="recording-timer" id="recording-timer">0:00</div>
+                                <div class="recording-waveform"></div>
+                                <div class="recording-hint">Grabando audio...</div>
+                            </div>
+
                             <div class="message-input-wrapper">
                                 <button class="attach-button" id="attach-button" aria-label="Adjuntar archivo">
                                     <i class="fas fa-paperclip"></i>
@@ -463,13 +473,6 @@
                     </button>
                 </div>
             </div>
-        </div>
-
-        <!-- UI de grabación -->
-        <div class="recording-ui" id="recording-ui">
-            <div class="recording-waveform"></div>
-            <div class="recording-timer" id="recording-timer">0:00</div>
-            <div class="recording-hint">Desliza hacia la izquierda para cancelar</div>
         </div>
     </div>
 
