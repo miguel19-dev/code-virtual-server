@@ -225,35 +225,12 @@ function setupVoiceRecording() {
     const voiceButton = document.getElementById('voice-button');
     if (!voiceButton) return;
 
-    let startX = 0;
-    let isSwiping = false;
-
-    voiceButton.addEventListener('touchstart', function(e) {
+    voiceButton.addEventListener('click', function(e) {
         e.preventDefault();
-        startRecording(e);
-    });
-    
-    voiceButton.addEventListener('mousedown', function(e) {
-        e.preventDefault();
-        startRecording(e);
-    });
-
-    voiceButton.addEventListener('touchend', stopRecording);
-    voiceButton.addEventListener('mouseup', stopRecording);
-    voiceButton.addEventListener('mouseleave', stopRecording);
-
-    // Swipe para cancelar
-    document.addEventListener('touchmove', function(e) {
-        if (!isRecording) return;
-        
-        const touch = e.touches[0];
-        const deltaX = touch.clientX - startX;
-        
-        if (deltaX < -50) { // Swipe izquierda
-            isSwiping = true;
-            showCancelRecordingUI();
+        if (!isRecording) {
+            startRecording();
         } else {
-            hideCancelRecordingUI();
+            stopRecordingAndSend();
         }
     });
 }
@@ -641,9 +618,8 @@ function cancelReply() {
 }
 
 // NUEVO: Grabación de voz MEJORADA
-async function startRecording(e) {
-    e.preventDefault();
-    
+// NUEVO: Sistema de grabación mejorado
+async function startRecording() {
     if (isRecording) return;
     
     try {
@@ -669,11 +645,11 @@ async function startRecording(e) {
         
         mediaRecorder.onstop = sendAudioMessage;
         
-        mediaRecorder.start(100); // Capturar cada 100ms
+        mediaRecorder.start(100);
         isRecording = true;
         recordingStartTime = Date.now();
         
-        // UI de grabación MEJORADA
+        // Mostrar UI de grabación mejorada
         showRecordingUI();
         
         // Iniciar timer
@@ -681,7 +657,7 @@ async function startRecording(e) {
         
         // Timeout automático (60 segundos)
         recordingTimeout = setTimeout(() => {
-            stopRecording();
+            stopRecordingAndSend();
         }, 60000);
         
     } catch (error) {
@@ -690,7 +666,7 @@ async function startRecording(e) {
     }
 }
 
-function stopRecording() {
+function stopRecordingAndSend() {
     if (!isRecording || !mediaRecorder) return;
     
     clearTimeout(recordingTimeout);
@@ -707,6 +683,27 @@ function stopRecording() {
     
     isRecording = false;
     hideRecordingUI();
+}
+
+function cancelRecording() {
+    if (!isRecording || !mediaRecorder) return;
+    
+    clearTimeout(recordingTimeout);
+    clearInterval(recordingTimerInterval);
+    
+    if (mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    
+    // Detener stream
+    if (mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+    
+    isRecording = false;
+    audioChunks = [];
+    hideRecordingUI();
+    showNotification('Grabación cancelada', 'info');
 }
 
 function showRecordingUI() {
@@ -758,45 +755,25 @@ function hideRecordingUI() {
 
 function hideRecordingUI() {
     const messageInput = document.getElementById('message-input');
-    const sendButton = document.getElementById('send-button');
-    const voiceButton = document.getElementById('voice-button');
     const attachButton = document.getElementById('attach-button');
-    const recordingUI = document.getElementById('recording-ui');
+    const voiceButton = document.getElementById('voice-button');
     
-    // Restaurar elementos de mensaje normal
-    if (messageInput) {
-        messageInput.style.display = '';
-        messageInput.value = '';
-    }
+    // Restaurar elementos normales
+    if (messageInput) messageInput.style.display = '';
     if (attachButton) attachButton.style.display = 'flex';
-    
-    // Restaurar botón de voz
     if (voiceButton) {
         voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
-        voiceButton.classList.remove('recording');
+        voiceButton.style.background = '';
+        voiceButton.title = 'Grabar audio';
     }
     
     // Ocultar UI de grabación
+    const recordingUI = document.getElementById('recording-ui');
     if (recordingUI) {
         recordingUI.classList.remove('active');
-        recordingUI.classList.remove('cancelling');
     }
     
     toggleSendVoiceButton();
-}
-
-function showCancelRecordingUI() {
-    const recordingUI = document.getElementById('recording-ui');
-    if (recordingUI) {
-        recordingUI.classList.add('cancelling');
-    }
-}
-
-function hideCancelRecordingUI() {
-    const recordingUI = document.getElementById('recording-ui');
-    if (recordingUI) {
-        recordingUI.classList.remove('cancelling');
-    }
 }
 
 function updateRecordingTimer() {
@@ -968,12 +945,12 @@ async function uploadAndSendFile(file) {
     }
 }
 
-// MEJORADO: Enviar mensaje con sistema de respuesta
+// CORREGIDO: Enviar mensaje con sistema de respuesta
 async function sendMessage() {
     const messageInput = document.getElementById('message-input');
     const message = messageInput.value.trim();
 
-    if (!message && !replyingTo) {
+    if (!message) {
         return;
     }
 
