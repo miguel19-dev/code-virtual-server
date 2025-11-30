@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecureChat</title>
+    <link rel="icon" href="/logo.webp" type="image/webp">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="web.css">
 </head>
+
 <body>
     <div class="app-container">
         <!-- Overlay para móvil -->
@@ -50,7 +53,10 @@
                         <button class="menu-btn" id="menu-btn" aria-label="Abrir menú">
                             <i class="fas fa-bars" aria-hidden="true"></i>
                         </button>
-                        <div class="app-title">SecureChat</div>
+                        <div class="app-title">
+    <img src="/logo.webp" alt="SecureChat" class="app-logo">
+    <span>SecureChat</span>
+</div>
                     </div>
 
                     <div class="chats-list" id="chats-list">
@@ -111,13 +117,7 @@
                                 <button class="attach-button" id="attach-button" aria-label="Adjuntar archivo">
                                     <i class="fas fa-paperclip"></i>
                                 </button>
-                                <textarea 
-                                    class="message-input" 
-                                    id="message-input" 
-                                    placeholder="Escribe un mensaje..." 
-                                    rows="1"
-                                    aria-label="Escribe un mensaje"
-                                ></textarea>
+                                <textarea class="message-input" id="message-input" placeholder="Escribe un mensaje..." rows="1" aria-label="Escribe un mensaje"></textarea>
                                 <button class="voice-button" id="voice-button" aria-label="Grabar mensaje de voz">
                                     <i class="fas fa-microphone"></i>
                                 </button>
@@ -244,7 +244,7 @@
                     <div class="stat-item">
                         <div class="stat-number">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z"/>
+                                <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
                             </svg>
                         </div>
                         <div class="stat-label">Administrador</div>
