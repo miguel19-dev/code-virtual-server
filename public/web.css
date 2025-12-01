@@ -294,6 +294,10 @@ body {
     background: rgba(37, 99, 235, 0.1);
 }
 
+.chat-item.clicked {
+    pointer-events: none;
+}
+
 .chat-avatar {
     width: 50px;
     height: 50px;
@@ -521,6 +525,10 @@ body {
     background: rgba(255, 255, 255, 0.08);
     transform: scale(0.98);
     transition: transform 0.1s ease;
+}
+
+.user-item.clicked {
+    pointer-events: none;
 }
 
 .user-avatar {
@@ -882,21 +890,20 @@ body {
     left: 0;
     right: 0;
     background: var(--surface);
-    padding: 10px 15px;
+    padding: 12px 15px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    transform: translateY(100%);
-    opacity: 0;
-    transition: all 0.3s ease;
+    transform: translateY(0);
+    opacity: 1;
     display: flex;
     align-items: center;
     gap: 10px;
     z-index: 35;
     font-size: 0.9em;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 }
 
-.reply-preview.active {
-    transform: translateY(0);
-    opacity: 1;
+.reply-preview:not(.active) {
+    display: none;
 }
 
 .reply-preview-content {
@@ -975,23 +982,6 @@ body {
     color: var(--text-secondary);
 }
 
-/* NUEVO: Estados de grabación MEJORADOS */
-.recording-mode .message-input {
-    display: none;
-}
-
-.recording-mode .attach-button {
-    display: none;
-}
-
-.recording-mode .voice-button {
-    background: var(--primary);
-}
-
-.recording-mode .voice-button i {
-    transform: rotate(-45deg);
-}
-
 /* Botones de mensaje mejorados */
 .message-input-buttons {
     display: flex;
@@ -999,7 +989,7 @@ body {
     align-items: center;
 }
 
-.attach-button, .voice-button, .send-button {
+.attach-button, .send-button {
     width: 44px;
     height: 44px;
     border: none;
@@ -1022,133 +1012,25 @@ body {
     transform: scale(1.05);
 }
 
-.voice-button {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: white;
-    display: none;
-}
-
-.voice-button.recording {
-    background: var(--primary);
-}
-
-.voice-button.recording i {
-    transform: rotate(-45deg);
-    transition: transform 0.3s ease;
-}
-
-.voice-button:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-}
-
 .send-button {
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     color: white;
     display: flex;
 }
 
-.send-button:hover {
+.send-button:hover:not(:disabled) {
     transform: scale(1.05);
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
 }
 
-.send-button:active {
+.send-button:active:not(:disabled) {
     transform: scale(1);
 }
 
 .send-button:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
-}
-
-/* NUEVO: UI de grabación MEJORADA */
-.recording-ui {
-    position: absolute;
-    bottom: 80px;
-    left: 15px;
-    right: 15px;
-    background: var(--surface);
-    border: 2px solid var(--primary);
-    border-radius: 16px;
-    padding: 15px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    z-index: 1000;
-    opacity: 0;
-    pointer-events: none;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.recording-ui.active {
-    opacity: 1;
-    pointer-events: all;
-    transform: translateY(-10px);
-}
-
-.cancel-recording-btn {
-    background: var(--error);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    flex-shrink: 0;
-}
-
-.cancel-recording-btn:hover {
-    transform: scale(1.1);
-    background: #dc2626;
-}
-
-.recording-timer {
-    font-size: 1.2em;
-    color: var(--text);
-    font-weight: 600;
-    flex: 1;
-    text-align: center;
-}
-
-.recording-waveform {
-    flex: 2;
-    height: 30px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 15px;
-    position: relative;
-    overflow: hidden;
-}
-
-.recording-waveform::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    animation: waveform 1.5s infinite linear;
-}
-
-@keyframes waveform {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-
-.recording-hint {
-    color: var(--text-secondary);
-    font-size: 0.8em;
-    text-align: center;
-    margin-top: 8px;
-    width: 100%;
 }
 
 /* NUEVO: Estados de mensaje con confirmación visual */
@@ -1181,7 +1063,7 @@ body {
     flex-shrink: 0;
 }
 
-/* NUEVO: Mensajes multimedia MEJORADOS - CONTENIDO DESENFOCADO */
+/* MEJORADO: Mensajes multimedia - SIN SISTEMA DE DESCARGA */
 .media-message {
     margin: 6px 0;
     border-radius: 12px;
@@ -1199,57 +1081,10 @@ body {
     border-radius: 8px;
     cursor: pointer;
     transition: transform 0.3s ease;
-    filter: blur(5px);
 }
 
 .image-message img.loaded {
     filter: none;
-}
-
-.image-message .media-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    opacity: 1;
-    transition: opacity 0.3s ease;
-}
-
-.image-message .media-overlay.hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
-.download-media-btn {
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 20px;
-    padding: 8px 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.8em;
-    transition: all 0.3s ease;
-}
-
-.download-media-btn:hover {
-    background: var(--primary-dark);
-    transform: scale(1.05);
-}
-
-.media-size {
-    font-size: 0.7em;
-    margin-top: 5px;
-    opacity: 0.8;
 }
 
 .video-message video {
@@ -1257,7 +1092,6 @@ body {
     max-height: 250px;
     border-radius: 8px;
     cursor: pointer;
-    filter: blur(5px);
 }
 
 .video-message video.loaded {
@@ -1341,17 +1175,6 @@ body {
 .file-size {
     font-size: 0.75em;
     color: var(--text-secondary);
-}
-
-.download-btn {
-    color: var(--primary);
-    padding: 6px;
-    border-radius: 6px;
-    transition: all 0.3s ease;
-}
-
-.download-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
 }
 
 .media-caption {
@@ -2435,7 +2258,7 @@ textarea:focus-visible {
         gap: 6px;
     }
 
-    .attach-button, .voice-button, .send-button {
+    .attach-button, .send-button {
         width: 40px;
         height: 40px;
     }
@@ -2569,19 +2392,4 @@ textarea:focus-visible {
         opacity: 0;
         transform: translateX(100%);
     }
-    
-/* Logo de la app */
-.app-logo {
-    width: 24px;
-    height: 24px;
-    margin-right: 8px;
-    border-radius: 4px;
-    object-fit: cover;
-}
-
-.app-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
 }
