@@ -1153,7 +1153,7 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
     console.log(`🚀 Servidor de mensajería ejecutándose en http://localhost:${PORT}`);
-    console.log(`✅ Sistema de mensajes de voz y archivos implementado`);
+    console.log(`✅ Sistema de mensajes de texto y archivos implementado`);
     console.log(`✅ Gestión mejorada de grupos`);
     console.log(`✅ Sistema de respuesta a mensajes`);
     console.log(`📁 Datos guardados en: data/`);
