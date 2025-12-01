@@ -1,27 +1,24 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SecureChat</title>
-    <link rel="icon" href="/logo.webp" type="image/webp">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="web.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💬</text></svg>">
 </head>
-
 <body>
+    <!-- Contenedor Principal -->
     <div class="app-container">
-        <!-- Overlay para móvil -->
-        <div class="panel-overlay" id="panel-overlay"></div>
-
+        
         <!-- Panel Lateral -->
         <div class="side-panel" id="side-panel">
             <div class="panel-header">
                 <div class="panel-user">
                     <div class="panel-user-avatar" id="panel-user-avatar">
-                        <!-- Avatar se cargará dinámicamente -->
+                        <div class="avatar-fallback">U</div>
                     </div>
                     <div class="panel-user-info">
                         <div class="panel-user-name" id="panel-user-name">Usuario</div>
@@ -29,99 +26,117 @@
                     </div>
                 </div>
             </div>
-
+            
             <div class="panel-actions">
                 <button class="panel-action-btn" id="my-profile-btn">
-                    <i class="fas fa-user" aria-hidden="true"></i>
+                    <i class="fas fa-user"></i>
                     <span>Mi Perfil</span>
                 </button>
                 <button class="panel-action-btn logout" id="logout-btn">
-                    <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+                    <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </button>
             </div>
         </div>
-
+        
+        <!-- Overlay para cerrar panel -->
+        <div class="panel-overlay" id="panel-overlay"></div>
+        
         <!-- Área Principal -->
         <div class="main-area">
-            <!-- Contenedor de Pestañas -->
-            <div class="tabs-container">
-                <!-- Pestaña de Chats -->
-                <div class="tab-content active" id="chats-tab">
-                    <!-- Header integrado en la pestaña de chats -->
-                    <div class="chats-header">
-                        <button class="menu-btn" id="menu-btn" aria-label="Abrir menú">
-                            <i class="fas fa-bars" aria-hidden="true"></i>
-                        </button>
-                        <div class="app-title">
-    <img src="/logo.webp" alt="SecureChat" class="app-logo">
-    <span>SecureChat</span>
-</div>
-                    </div>
-
-                    <div class="chats-list" id="chats-list">
-                        <!-- Skeleton loading mientras carga -->
-                        <div id="chats-skeleton"></div>
-                    </div>
-
-                    <!-- Estado vacío para chats -->
-                    <div class="empty-state" id="chats-empty" style="display: none;">
-                        <div class="empty-icon">
-                            <i class="fas fa-comments" aria-hidden="true"></i>
-                        </div>
-                        <div class="empty-title">No hay conversaciones</div>
-                        <div class="empty-subtitle">Inicia una conversación tocando el botón +</div>
-                    </div>
+            
+            <!-- Pestaña de Chats -->
+            <div class="tab-content active" id="chats-tab">
+                <div class="chats-header">
+                    <button class="menu-btn" id="menu-btn">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 class="app-title">SecureChat</h1>
                 </div>
-
-                <!-- Pestaña de Chat Individual -->
-                <div class="tab-content" id="chat-tab">
-                    <div class="chat-area">
-                        <div class="chat-header">
-                            <button class="back-button" id="chat-back-btn" aria-label="Volver atrás">
-                                <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                            </button>
-                            <div class="current-chat-avatar" id="current-chat-avatar" role="button" aria-label="Ver perfil">
-                                <!-- Avatar se cargará dinámicamente -->
-                            </div>
-                            <div class="current-chat-info">
-                                <div class="current-chat-name" id="current-chat-name" role="button" aria-label="Ver perfil">Usuario</div>
-                                <div class="current-chat-status" id="current-chat-status">Desconectado</div>
-                            </div>
+                
+                <div class="chats-list" id="chats-list">
+                    <!-- Chats se cargarán aquí -->
+                    <div id="chats-skeleton"></div>
+                </div>
+                
+                <div class="empty-state" id="chats-empty" style="display: none;">
+                    <div class="empty-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <div class="empty-title">No hay chats</div>
+                    <div class="empty-subtitle">Empieza una conversación tocando el botón +</div>
+                </div>
+            </div>
+            
+            <!-- Pestaña de Usuarios -->
+            <div class="users-tab-content" id="users-tab">
+                <div class="users-header">
+                    <button class="back-button" id="users-back-btn">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div class="users-header-title">Usuarios & Grupos</div>
+                    <button class="new-group-btn" id="new-group-btn">
+                        <i class="fas fa-users"></i>
+                    </button>
+                </div>
+                
+                <div class="users-search">
+                    <input type="text" class="search-input" placeholder="Buscar usuarios o grupos..." id="users-search-input">
+                </div>
+                
+                <div class="users-list" id="users-list">
+                    <!-- Usuarios y grupos se cargarán aquí -->
+                    <div id="users-skeleton"></div>
+                </div>
+                
+                <div class="empty-state" id="users-empty" style="display: none;">
+                    <div class="empty-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="empty-title">No hay usuarios</div>
+                    <div class="empty-subtitle">Parece que eres el único usuario registrado</div>
+                </div>
+            </div>
+            
+            <!-- Pestaña de Chat Individual -->
+            <div class="tab-content" id="chat-tab">
+                <div class="chat-area">
+                    <div class="chat-header">
+                        <button class="back-button" id="chat-back-btn">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <div class="current-chat-avatar" id="current-chat-avatar">
+                            <div class="avatar-fallback">U</div>
                         </div>
-
-                        <div class="messages-container" id="messages-container" role="log" aria-live="polite">
-                            <!-- Mensajes se cargarán dinámicamente -->
+                        <div class="current-chat-info">
+                            <div class="current-chat-name" id="current-chat-name">Usuario</div>
+                            <div class="current-chat-status" id="current-chat-status">En línea</div>
                         </div>
-
-                        <!-- Preview de respuesta -->
-                        <div class="reply-preview" id="reply-preview">
-                            <div class="reply-preview-content" id="reply-content"></div>
-                            <button class="cancel-reply" id="cancel-reply" aria-label="Cancelar respuesta">
-                                <i class="fas fa-times"></i>
-                            </button>
+                    </div>
+                    
+                    <div class="messages-container" id="messages-container">
+                        <!-- Mensajes se cargarán aquí -->
+                    </div>
+                    
+                    <!-- Preview de respuesta -->
+                    <div class="reply-preview" id="reply-preview">
+                        <div class="reply-indicator"></div>
+                        <div class="reply-preview-content">
+                            <div id="reply-content"></div>
                         </div>
-
-                        <div class="message-input-container">
-                            <!-- UI de grabación MEJORADA -->
-                            <div id="recording-ui" class="recording-ui">
-                                <button class="cancel-recording-btn" onclick="cancelRecording()">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                                <div class="recording-timer" id="recording-timer">0:00</div>
-                                <div class="recording-waveform"></div>
-                                <div class="recording-hint">Grabando audio...</div>
-                            </div>
-
-                            <div class="message-input-wrapper">
-                                <button class="attach-button" id="attach-button" aria-label="Adjuntar archivo">
+                        <button class="cancel-reply" id="cancel-reply">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="message-input-container">
+                        <div class="message-input-wrapper">
+                            <textarea class="message-input" id="message-input" placeholder="Escribe un mensaje..." rows="1"></textarea>
+                            <div class="message-input-buttons">
+                                <button class="attach-button" id="attach-button">
                                     <i class="fas fa-paperclip"></i>
                                 </button>
-                                <textarea class="message-input" id="message-input" placeholder="Escribe un mensaje..." rows="1" aria-label="Escribe un mensaje"></textarea>
-                                <button class="voice-button" id="voice-button" aria-label="Grabar mensaje de voz">
-                                    <i class="fas fa-microphone"></i>
-                                </button>
-                                <button class="send-button" id="send-button" aria-label="Enviar mensaje">
+                                <button class="send-button" id="send-button">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
                             </div>
@@ -129,354 +144,362 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Pestaña de Usuarios -->
-            <div class="users-tab-content" id="users-tab">
-                <div class="users-header">
-                    <button class="back-button" id="users-back-btn" aria-label="Volver a chats">
-                        <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                    </button>
-                    <div class="users-header-title">Usuarios y Grupos</div>
-                    <button class="new-group-btn" id="new-group-btn" aria-label="Crear nuevo grupo">
-                        <i class="fas fa-users" aria-hidden="true"></i>
-                    </button>
-                </div>
-
-                <!-- MEJORADO: Barra de búsqueda -->
-                <div class="users-search">
-                    <input type="text" id="users-search-input" class="search-input" placeholder="Buscar usuarios o grupos..." aria-label="Buscar usuarios o grupos">
-                </div>
-
-                <div class="users-list" id="users-list">
-                    <div id="users-skeleton"></div>
-                </div>
-
-                <div class="empty-state" id="users-empty" style="display: none;">
-                    <div class="empty-icon">
-                        <i class="fas fa-users" aria-hidden="true"></i>
-                    </div>
-                    <div class="empty-title">No hay otros usuarios</div>
-                    <div class="empty-subtitle">Parece que eres el único usuario registrado por ahora</div>
-                </div>
-            </div>
-
-            <!-- MEJORADO: Botón Flotante FIJO -->
-            <button class="fab-button" id="fab-button" aria-label="Todos los usuarios">
-                <i class="fas fa-plus" aria-hidden="true"></i>
-                <div class="fab-tooltip">Todos los usuarios</div>
+        </div>
+        
+        <!-- Botón Flotante -->
+        <button class="fab-button" id="fab-button">
+            <i class="fas fa-plus"></i>
+            <span class="fab-tooltip">Nuevo chat</span>
+        </button>
+    </div>
+    
+    <!-- Pantalla de Mi Perfil -->
+    <div class="profile-screen" id="my-profile-screen">
+        <div class="profile-header">
+            <button class="back-button" id="my-profile-back-btn">
+                <i class="fas fa-arrow-left"></i>
             </button>
-        </div>
-
-        <!-- Pantalla de Mi Perfil -->
-        <div class="profile-screen" id="my-profile-screen">
-            <div class="profile-header">
-                <button class="back-button" id="my-profile-back-btn" aria-label="Volver atrás">
-                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            <h2>Mi Perfil</h2>
+            <div class="profile-header-actions">
+                <button class="edit-profile-btn" id="edit-profile-btn">
+                    <i class="fas fa-edit"></i>
                 </button>
-                <h2>Mi Perfil</h2>
-                <div class="profile-header-actions">
-                    <button class="edit-profile-btn" id="edit-profile-btn" aria-label="Editar perfil">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            <div class="profile-content">
-                <div class="profile-avatar" id="my-profile-avatar">
-                    <!-- Avatar se cargará dinámicamente -->
-                </div>
-                <div class="profile-name" id="my-profile-name">Usuario</div>
-                <div class="profile-bio" id="my-profile-bio">¡Yo uso SecureChat!</div>
-
-                <!-- ELIMINADO: Sección de estadísticas de seguidores -->
             </div>
         </div>
-
-        <!-- Pantalla de Perfil de Usuario -->
-        <div class="profile-screen" id="user-profile-screen">
-            <div class="profile-header">
-                <button class="back-button" id="user-profile-back-btn" aria-label="Volver atrás">
-                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+        
+        <div class="profile-content">
+            <div class="profile-avatar" id="my-profile-avatar">
+                <div class="avatar-fallback">U</div>
+            </div>
+            
+            <h1 class="profile-name" id="my-profile-name">Usuario</h1>
+            <p class="profile-bio" id="my-profile-bio">¡Yo uso SecureChat!</p>
+            
+            <div class="profile-actions">
+                <button class="btn btn-secondary" onclick="showTab('chats')">
+                    <i class="fas fa-arrow-left"></i>
+                    Volver a Chats
                 </button>
-                <h2>Perfil</h2>
-            </div>
-            <div class="profile-content">
-                <div class="profile-avatar" id="user-profile-avatar">
-                    <!-- Avatar se cargará dinámicamente -->
-                </div>
-                <div class="profile-name" id="user-profile-name">Usuario</div>
-                <div class="profile-bio" id="user-profile-bio">¡Yo uso SecureChat!</div>
-
-                <!-- ELIMINADO: Sección de estadísticas y botón de seguir -->
-            </div>
-        </div>
-
-        <!-- Pantalla de Perfil de Grupo -->
-        <div class="profile-screen" id="group-profile-screen">
-            <div class="profile-header">
-                <button class="back-button" id="group-profile-back-btn" aria-label="Volver atrás">
-                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                <button class="btn btn-danger" id="delete-account-btn">
+                    <i class="fas fa-trash"></i>
+                    Eliminar Cuenta
                 </button>
-                <h2>Información del Grupo</h2>
-                <div class="profile-header-actions" id="group-admin-actions" style="display: none;">
-                    <button class="edit-profile-btn" id="edit-group-btn" aria-label="Editar grupo">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            <div class="profile-content">
-                <div class="profile-avatar group-avatar" id="group-profile-avatar">
-                    <!-- Avatar del grupo se cargará dinámicamente -->
-                </div>
-                <div class="profile-name" id="group-profile-name">Nombre del Grupo</div>
-                <div class="profile-bio" id="group-profile-description">Descripción del grupo</div>
-
-                <div class="profile-stats">
-                    <div class="stat-item" id="group-members-stat">
-                        <div class="stat-number" id="group-members-count">0</div>
-                        <div class="stat-label">Miembros</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-number">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
-                            </svg>
-                        </div>
-                        <div class="stat-label">Administrador</div>
-                    </div>
-                </div>
-
-                <div class="members-section">
-                    <h3 class="members-title">Miembros del Grupo</h3>
-                    <div class="members-list" id="group-members-list">
-                        <!-- Miembros se cargarán dinámicamente -->
-                    </div>
-                </div>
-
-                <div class="group-actions">
-                    <button class="btn btn-danger" id="leave-group-btn">
-                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Salir del Grupo
-                    </button>
-                </div>
             </div>
         </div>
-
-        <!-- Pantalla de Editar Perfil -->
-        <div class="edit-profile-screen" id="edit-profile-screen">
-            <div class="profile-header">
-                <button class="back-button" id="edit-profile-back-btn" aria-label="Volver atrás">
-                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                </button>
-                <h2>Editar Perfil</h2>
-            </div>
-            <div class="profile-content">
-                <div class="edit-form">
-                    <div class="form-group">
-                        <label for="avatar-input" class="form-label">Foto de perfil</label>
-                        <input type="file" id="avatar-input" class="file-input" accept="image/*" aria-describedby="avatar-help">
-                        <label for="avatar-input" class="file-label">
-                            <i class="fas fa-upload" aria-hidden="true"></i> Seleccionar imagen
-                        </label>
-                        <small id="avatar-help" class="form-help">Formatos: JPG, PNG, GIF (máx. 5MB)</small>
-                        <img id="avatar-preview" class="avatar-preview" style="display: none;" alt="Vista previa del avatar">
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-profile-name" class="form-label">Nombre</label>
-                        <input type="text" class="form-input" id="edit-profile-name" placeholder="Tu nombre" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-profile-bio" class="form-label">Información</label>
-                        <textarea class="form-input form-textarea" id="edit-profile-bio" placeholder="Cuéntanos sobre ti" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-profile-password" class="form-label">Cambiar Contraseña</label>
-                        <input type="password" class="form-input" id="edit-profile-password" placeholder="Nueva contraseña" aria-describedby="password-help">
-                        <small id="password-help" class="form-help">Mínimo 6 caracteres</small>
-                    </div>
-                    <div class="profile-actions">
-                        <button class="btn btn-primary" id="save-profile-btn">
-                            <i class="fas fa-save" aria-hidden="true"></i> Guardar Cambios
-                        </button>
-                        <button class="btn btn-danger" id="delete-account-btn">
-                            <i class="fas fa-trash" aria-hidden="true"></i> Eliminar Cuenta
-                        </button>
-                        <button class="btn btn-secondary" id="cancel-edit-btn">
-                            Cancelar
-                        </button>
-                    </div>
-                </div>
-            </div>
+    </div>
+    
+    <!-- Pantalla de Perfil de Otro Usuario -->
+    <div class="profile-screen" id="user-profile-screen">
+        <div class="profile-header">
+            <button class="back-button" id="user-profile-back-btn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Perfil</h2>
         </div>
-
-        <!-- Pantalla de Editar Grupo -->
-        <div class="edit-profile-screen" id="edit-group-screen">
-            <div class="profile-header">
-                <button class="back-button" id="edit-group-back-btn" aria-label="Volver atrás">
-                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                </button>
-                <h2>Editar Grupo</h2>
+        
+        <div class="profile-content">
+            <div class="profile-avatar" id="user-profile-avatar">
+                <div class="avatar-fallback">U</div>
             </div>
-            <div class="profile-content">
-                <div class="edit-form">
-                    <div class="form-group">
-                        <label for="group-avatar-input" class="form-label">Foto del grupo</label>
-                        <input type="file" id="group-avatar-input" class="file-input" accept="image/*" aria-describedby="group-avatar-help">
-                        <label for="group-avatar-input" class="file-label">
-                            <i class="fas fa-upload" aria-hidden="true"></i> Seleccionar imagen
-                        </label>
-                        <small id="group-avatar-help" class="form-help">Formatos: JPG, PNG, GIF (máx. 5MB)</small>
-                        <img id="group-avatar-preview" class="avatar-preview" style="display: none;" alt="Vista previa del avatar del grupo">
+            
+            <h1 class="profile-name" id="user-profile-name">Usuario</h1>
+            <p class="profile-bio" id="user-profile-bio">¡Yo uso SecureChat!</p>
+            
+            <div class="profile-stats">
+                <div class="stat-item">
+                    <div class="stat-number">
+                        <i class="fas fa-circle"></i>
                     </div>
-                    <div class="form-group">
-                        <label for="edit-group-name" class="form-label">Nombre del grupo</label>
-                        <input type="text" class="form-input" id="edit-group-name" placeholder="Nombre del grupo" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-group-description" class="form-label">Descripción</label>
-                        <textarea class="form-input form-textarea" id="edit-group-description" placeholder="Describe el grupo" rows="3"></textarea>
-                    </div>
-                    <div class="profile-actions">
-                        <button class="btn btn-primary" id="save-group-btn">
-                            <i class="fas fa-save" aria-hidden="true"></i> Guardar Cambios
-                        </button>
-                        <button class="btn btn-secondary" id="cancel-edit-group-btn">
-                            Cancelar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Pantalla de Crear Grupo -->
-        <div class="edit-profile-screen" id="create-group-screen">
-            <div class="profile-header">
-                <button class="back-button" id="create-group-back-btn" aria-label="Volver atrás">
-                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                </button>
-                <h2>Crear Grupo</h2>
-            </div>
-            <div class="profile-content">
-                <div class="edit-form">
-                    <div class="form-group">
-                        <label for="create-group-avatar" class="form-label">Foto del grupo (opcional)</label>
-                        <input type="file" id="create-group-avatar" class="file-input" accept="image/*" aria-describedby="create-avatar-help">
-                        <label for="create-group-avatar" class="file-label">
-                            <i class="fas fa-upload" aria-hidden="true"></i> Seleccionar imagen
-                        </label>
-                        <small id="create-avatar-help" class="form-help">Formatos: JPG, PNG, GIF (máx. 5MB)</small>
-                        <img id="create-group-avatar-preview" class="avatar-preview" style="display: none;" alt="Vista previa del avatar del grupo">
-                    </div>
-                    <div class="form-group">
-                        <label for="create-group-name" class="form-label">Nombre del grupo *</label>
-                        <input type="text" class="form-input" id="create-group-name" placeholder="Nombre del grupo" required aria-describedby="name-help">
-                        <small id="name-help" class="form-help">Mínimo 2 caracteres</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="create-group-description" class="form-label">Descripción (opcional)</label>
-                        <textarea class="form-input form-textarea" id="create-group-description" placeholder="Describe el grupo" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Añadir miembros (opcional)</label>
-                        <button class="btn btn-secondary" id="add-members-btn" style="width: 100%;">
-                            <i class="fas fa-user-plus" aria-hidden="true"></i> Seleccionar miembros
-                        </button>
-                        <div class="selected-members" id="selected-members-list" aria-live="polite">
-                            <!-- Miembros seleccionados aparecerán aquí -->
-                        </div>
-                    </div>
-                    <div class="profile-actions">
-                        <button class="btn btn-primary" id="create-group-submit-btn" disabled>
-                            <i class="fas fa-plus" aria-hidden="true"></i> Crear Grupo
-                        </button>
-                        <button class="btn btn-secondary" id="cancel-create-group-btn">
-                            Cancelar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Pantalla de Seleccionar Miembros -->
-        <div class="select-members-screen" id="select-members-screen">
-            <div class="profile-header">
-                <button class="back-button" id="select-members-back-btn" aria-label="Volver atrás">
-                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                </button>
-                <h2>Seleccionar Miembros</h2>
-            </div>
-            <div class="select-members-content">
-                <div class="members-tabs" role="tablist">
-                    <button class="members-tab-btn active" data-tab="chats" role="tab" aria-selected="true" aria-controls="chats-members-tab">
-                        Chats Activos
-                    </button>
-                    <button class="members-tab-btn" data-tab="users" role="tab" aria-selected="false" aria-controls="users-members-tab">
-                        Todos los Usuarios
-                    </button>
-                </div>
-
-                <!-- MEJORADO: Búsqueda de miembros -->
-                <div class="members-search">
-                    <input type="text" id="members-search-input" class="form-input" placeholder="Buscar usuarios..." aria-label="Buscar usuarios">
-                </div>
-
-                <div class="members-tab-content active" id="chats-members-tab" role="tabpanel" aria-labelledby="chats-tab">
-                    <div class="members-list" id="chats-members-list">
-                        <!-- Usuarios con chats activos -->
-                    </div>
-                </div>
-
-                <div class="members-tab-content" id="users-members-tab" role="tabpanel" aria-labelledby="users-tab" hidden>
-                    <div class="members-list" id="all-members-list">
-                        <!-- Todos los usuarios -->
-                    </div>
-                </div>
-
-                <div class="selected-members-bar">
-                    <div class="selected-count" id="selected-members-count" aria-live="polite">0 miembros seleccionados</div>
-                    <button class="btn btn-primary" id="confirm-members-btn">
-                        Confirmar Selección
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal de Unirse a Grupo -->
-        <div class="modal-overlay" id="join-group-modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Unirse al Grupo</h3>
-                    <button class="modal-close" id="join-group-close-btn" aria-label="Cerrar modal">
-                        <i class="fas fa-times" aria-hidden="true"></i>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div class="group-modal-avatar" id="join-group-avatar">
-                        <!-- Avatar del grupo -->
-                    </div>
-                    <div class="group-modal-name" id="join-group-name">Nombre del Grupo</div>
-                    <div class="group-modal-description" id="join-group-description">Descripción del grupo</div>
-                    <div class="group-modal-members">
-                        <span id="join-group-members-count">0</span> miembros
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button class="btn btn-primary" id="confirm-join-group-btn">
-                        <i class="fas fa-user-plus" aria-hidden="true"></i> Unirse al Grupo
-                    </button>
-                    <button class="btn btn-secondary" id="cancel-join-group-btn">
-                        Cancelar
-                    </button>
+                    <div class="stat-label" id="user-profile-online-status">En línea</div>
                 </div>
             </div>
         </div>
     </div>
-
-    <script src="/socket.io/socket.io.js"></script>
+    
+    <!-- Pantalla de Perfil de Grupo -->
+    <div class="profile-screen" id="group-profile-screen">
+        <div class="profile-header">
+            <button class="back-button" id="group-profile-back-btn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Información del Grupo</h2>
+            <div class="profile-header-actions" id="group-admin-actions" style="display: none;">
+                <button class="edit-profile-btn" id="edit-group-btn">
+                    <i class="fas fa-edit"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="profile-content">
+            <div class="profile-avatar group-avatar" id="group-profile-avatar">
+                <div class="avatar-fallback">G</div>
+            </div>
+            
+            <h1 class="profile-name" id="group-profile-name">Grupo</h1>
+            <p class="profile-bio" id="group-profile-description">Descripción del grupo</p>
+            
+            <div class="profile-stats">
+                <div class="stat-item">
+                    <div class="stat-number">
+                        <i class="fas fa-users"></i>
+                        <span id="group-members-count">0</span>
+                    </div>
+                    <div class="stat-label">Miembros</div>
+                </div>
+            </div>
+            
+            <div class="members-section" id="group-members-section">
+                <h3 class="members-title">Miembros</h3>
+                <div class="members-list" id="group-members-list">
+                    <!-- Miembros se cargarán aquí -->
+                </div>
+            </div>
+            
+            <div class="group-actions">
+                <button class="btn btn-danger" id="leave-group-btn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Salir del Grupo
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pantalla de Editar Perfil -->
+    <div class="edit-profile-screen" id="edit-profile-screen">
+        <div class="profile-header">
+            <button class="back-button" id="edit-profile-back-btn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Editar Perfil</h2>
+            <button class="edit-profile-btn" id="cancel-edit-btn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="profile-content">
+            <form class="edit-form" id="edit-profile-form">
+                <div class="form-group">
+                    <label class="form-label">Avatar</label>
+                    <div class="profile-avatar" id="edit-avatar-preview" style="margin: 0 auto 20px; cursor: pointer;" onclick="document.getElementById('avatar-input').click();">
+                        <div class="avatar-fallback">U</div>
+                        <img src="" alt="" class="avatar-preview" id="avatar-preview" style="display: none;">
+                    </div>
+                    <input type="file" class="file-input" id="avatar-input" accept="image/*">
+                    <label for="avatar-input" class="file-label">Cambiar avatar</label>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-profile-name" class="form-label">Nombre *</label>
+                    <input type="text" class="form-input" id="edit-profile-name" required minlength="2" maxlength="30">
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-profile-bio" class="form-label">Biografía</label>
+                    <textarea class="form-input form-textarea" id="edit-profile-bio" rows="3" maxlength="200"></textarea>
+                    <span class="form-help">Máximo 200 caracteres</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-profile-password" class="form-label">Nueva Contraseña</label>
+                    <input type="password" class="form-input" id="edit-profile-password" minlength="6">
+                    <span class="form-help">Deja en blanco para no cambiar</span>
+                </div>
+                
+                <div class="profile-actions">
+                    <button type="button" class="btn btn-primary" id="save-profile-btn">
+                        <i class="fas fa-save"></i>
+                        Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Pantalla de Editar Grupo -->
+    <div class="edit-profile-screen" id="edit-group-screen">
+        <div class="profile-header">
+            <button class="back-button" id="edit-group-back-btn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Editar Grupo</h2>
+            <button class="edit-profile-btn" id="cancel-edit-group-btn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="profile-content">
+            <form class="edit-form" id="edit-group-form">
+                <div class="form-group">
+                    <label class="form-label">Avatar del Grupo</label>
+                    <div class="profile-avatar group-avatar" id="edit-group-avatar-preview" style="margin: 0 auto 20px; cursor: pointer;" onclick="document.getElementById('group-avatar-input').click();">
+                        <div class="avatar-fallback">G</div>
+                        <img src="" alt="" class="avatar-preview" id="group-avatar-preview" style="display: none;">
+                    </div>
+                    <input type="file" class="file-input" id="group-avatar-input" accept="image/*">
+                    <label for="group-avatar-input" class="file-label">Cambiar avatar</label>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-group-name" class="form-label">Nombre del Grupo *</label>
+                    <input type="text" class="form-input" id="edit-group-name" required minlength="2" maxlength="50">
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-group-description" class="form-label">Descripción</label>
+                    <textarea class="form-input form-textarea" id="edit-group-description" rows="3" maxlength="500"></textarea>
+                    <span class="form-help">Máximo 500 caracteres</span>
+                </div>
+                
+                <div class="profile-actions">
+                    <button type="button" class="btn btn-primary" id="save-group-btn">
+                        <i class="fas fa-save"></i>
+                        Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Pantalla de Crear Grupo -->
+    <div class="edit-profile-screen" id="create-group-screen">
+        <div class="profile-header">
+            <button class="back-button" id="create-group-back-btn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Crear Nuevo Grupo</h2>
+            <button class="edit-profile-btn" id="cancel-create-group-btn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="profile-content">
+            <form class="edit-form" id="create-group-form">
+                <div class="form-group">
+                    <label class="form-label">Avatar del Grupo</label>
+                    <div class="profile-avatar group-avatar" id="create-group-avatar-preview" style="margin: 0 auto 20px; cursor: pointer;" onclick="document.getElementById('create-group-avatar').click();">
+                        <div class="avatar-fallback">G</div>
+                        <img src="" alt="" class="avatar-preview" id="create-group-avatar-img" style="display: none;">
+                    </div>
+                    <input type="file" class="file-input" id="create-group-avatar" accept="image/*">
+                    <label for="create-group-avatar" class="file-label">Seleccionar avatar</label>
+                </div>
+                
+                <div class="form-group">
+                    <label for="create-group-name" class="form-label">Nombre del Grupo *</label>
+                    <input type="text" class="form-input" id="create-group-name" required minlength="2" maxlength="50" placeholder="Ej: Amigos del trabajo">
+                </div>
+                
+                <div class="form-group">
+                    <label for="create-group-description" class="form-label">Descripción</label>
+                    <textarea class="form-input form-textarea" id="create-group-description" rows="3" maxlength="500" placeholder="Describe el propósito del grupo..."></textarea>
+                    <span class="form-help">Máximo 500 caracteres</span>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Agregar Miembros</label>
+                    <div class="selected-members" id="selected-members-list">
+                        <!-- Miembros seleccionados aparecerán aquí -->
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="add-members-btn" style="width: 100%;">
+                        <i class="fas fa-user-plus"></i>
+                        Seleccionar Miembros
+                    </button>
+                </div>
+                
+                <div class="profile-actions">
+                    <button type="button" class="btn btn-primary" id="create-group-submit-btn">
+                        <i class="fas fa-plus"></i>
+                        Crear Grupo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Pantalla de Seleccionar Miembros -->
+    <div class="select-members-screen" id="select-members-screen">
+        <div class="profile-header">
+            <button class="back-button" id="select-members-back-btn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Seleccionar Miembros</h2>
+        </div>
+        
+        <div class="select-members-content">
+            <div class="members-tabs">
+                <button class="members-tab-btn active" data-tab="chats" aria-selected="true">
+                    <i class="fas fa-comments"></i> Chats
+                </button>
+                <button class="members-tab-btn" data-tab="users" aria-selected="false">
+                    <i class="fas fa-users"></i> Todos
+                </button>
+            </div>
+            
+            <div class="members-search">
+                <input type="text" class="form-input" id="members-search-input" placeholder="Buscar miembros...">
+            </div>
+            
+            <div class="members-tab-content active" id="chats-members-tab">
+                <div class="members-list" id="chats-members-list">
+                    <!-- Miembros de chats activos -->
+                </div>
+            </div>
+            
+            <div class="members-tab-content" id="users-members-tab" hidden>
+                <div class="members-list" id="all-members-list">
+                    <!-- Todos los usuarios -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="selected-members-bar">
+            <div class="selected-count" id="selected-members-count">0 miembros seleccionados</div>
+            <button type="button" class="btn btn-primary" id="confirm-members-btn">
+                <i class="fas fa-check"></i>
+                Confirmar
+            </button>
+        </div>
+    </div>
+    
+    <!-- Modal de Unirse a Grupo -->
+    <div class="modal-overlay" id="join-group-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Unirse al Grupo</h3>
+                <button class="modal-close" id="join-group-close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="group-modal-avatar group-avatar" id="join-group-avatar">
+                    <div class="avatar-fallback">G</div>
+                </div>
+                
+                <h3 class="group-modal-name" id="join-group-name">Nombre del Grupo</h3>
+                <p class="group-modal-description" id="join-group-description">Descripción del grupo</p>
+                
+                <div class="group-modal-members">
+                    <i class="fas fa-users"></i>
+                    <span id="join-group-members-count">0</span> miembros
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancel-join-group-btn">
+                    <i class="fas fa-times"></i>
+                    Cancelar
+                </button>
+                <button class="btn btn-primary" id="confirm-join-group-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Unirse
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <script src="web.js"></script>
 </body>
 </html>
