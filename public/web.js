@@ -25,12 +25,7 @@ let currentProfileGroup = null;
 const avatarCache = new Map();
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 let replyingTo = null;
-let isRecording = false;
-let mediaRecorder = null;
-let audioChunks = [];
-let recordingStartTime = null;
-let recordingTimeout = null;
-let recordingTimerInterval = null;
+let pendingMessages = new Map(); // Para evitar duplicación
 
 // Inicializar la aplicación MEJORADA
 document.addEventListener('DOMContentLoaded', async function() {
@@ -56,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     showTab('chats');
     
     // Inicializar botones dinámicos
-    toggleSendVoiceButton();
+    toggleSendButton();
 });
 
 // MEJORADA: Configurar event listeners MEJORADO
@@ -74,7 +69,6 @@ function setupEventListeners() {
 
     // NUEVOS EVENT LISTENERS PARA MEJORAS
     setupMessageInputListeners();
-    setupVoiceRecording();
     
     // GRUPOS - Botones principales
     document.getElementById('new-group-btn').addEventListener('click', showCreateGroupScreen);
@@ -196,7 +190,6 @@ function setupMessageInputListeners() {
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
     const attachButton = document.getElementById('attach-button');
-    const voiceButton = document.getElementById('voice-button');
     const cancelReplyButton = document.getElementById('cancel-reply');
 
     if (!messageInput) {
@@ -211,8 +204,8 @@ function setupMessageInputListeners() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         
-        // Alternar entre micrófono y enviar
-        toggleSendVoiceButton();
+        // Mostrar siempre botón enviar cuando hay texto
+        toggleSendButton();
         
         // Manejar estados de escritura
         handleTyping();
@@ -260,21 +253,6 @@ function setupMessageInputListeners() {
     setupSwipeGestures();
     
     console.log('✅ Listeners de input de mensajes configurados correctamente');
-}
-
-// NUEVO: Configurar grabación de voz MEJORADA
-function setupVoiceRecording() {
-    const voiceButton = document.getElementById('voice-button');
-    if (!voiceButton) return;
-
-    voiceButton.addEventListener('click', function(e) {
-        e.preventDefault();
-        if (!isRecording) {
-            startRecording();
-        } else {
-            stopRecordingAndSend();
-        }
-    });
 }
 
 // NUEVO: Configurar listeners de socket
@@ -384,18 +362,19 @@ function setupSocketListeners() {
         }
     });
 
-    // MEJORADO: Prevenir mensajes duplicados
+    // MEJORADO: Sistema para evitar mensajes duplicados en grupos
     socket.on('new_message', (messageData) => {
         if ((selectedUser && selectedUser.id === messageData.from) || 
             (!selectedUser && !selectedGroup)) {
             // Verificar si el mensaje ya existe para evitar duplicados
-            if (!sentMessageIds.has(messageData.id)) {
+            const messageKey = `msg_${messageData.id}`;
+            if (!sentMessageIds.has(messageKey)) {
                 handleNewMessage(messageData);
-                sentMessageIds.add(messageData.id);
+                sentMessageIds.add(messageKey);
                 
                 // Limpiar IDs antiguos después de un tiempo
                 setTimeout(() => {
-                    sentMessageIds.delete(messageData.id);
+                    sentMessageIds.delete(messageKey);
                 }, 5000);
             }
         } else {
@@ -405,17 +384,34 @@ function setupSocketListeners() {
         }
     });
 
+    // MEJORADO: Sistema para evitar duplicación en grupos
     socket.on('new_group_message', (messageData) => {
+        console.log('📨 Nuevo mensaje grupal recibido:', messageData.id);
+        
         if (selectedGroup && selectedGroup.id === messageData.groupId) {
-            // Verificar si el mensaje ya existe para evitar duplicados
-            if (!sentMessageIds.has(messageData.id)) {
-                handleNewGroupMessage(messageData);
-                sentMessageIds.add(messageData.id);
-                
-                // Limpiar IDs antiguos después de un tiempo
-                setTimeout(() => {
-                    sentMessageIds.delete(messageData.id);
-                }, 5000);
+            // Verificar si es un mensaje pendiente que ya mostramos
+            const isPendingMessage = pendingMessages.has(messageData.id);
+            
+            if (!isPendingMessage) {
+                // Verificar si el mensaje ya existe para evitar duplicados
+                const messageKey = `group_msg_${messageData.id}`;
+                if (!sentMessageIds.has(messageKey)) {
+                    console.log('✅ Mostrando mensaje grupal no duplicado');
+                    handleNewGroupMessage(messageData);
+                    sentMessageIds.add(messageKey);
+                    
+                    // Limpiar IDs antiguos después de un tiempo
+                    setTimeout(() => {
+                        sentMessageIds.delete(messageKey);
+                    }, 5000);
+                } else {
+                    console.log('⚠️ Mensaje grupal duplicado, ignorando');
+                }
+            } else {
+                console.log('✅ Mensaje grupal pendiente confirmado por servidor');
+                // Remover de pendientes y actualizar UI
+                pendingMessages.delete(messageData.id);
+                updatePendingMessageStatus(messageData.id, 'sent');
             }
         } else {
             // Solo incrementar contador, no mostrar mensaje
@@ -471,23 +467,15 @@ function setupSocketListeners() {
     });
 
     socket.on('message_sent', (messageData) => {
-        // Eliminar mensaje temporal si existe
-        if (messageData.id && messageData.id.startsWith('temp-')) {
-            const tempMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
-            if (tempMessage) {
-                tempMessage.remove();
-            }
-        }
+        console.log('✅ Mensaje privado confirmado por servidor:', messageData.id);
+        // Remover mensaje temporal si existe
+        updatePendingMessageStatus(messageData.id, 'sent');
     });
 
     socket.on('group_message_sent', (messageData) => {
-        // Eliminar mensaje temporal si existe
-        if (messageData.id && messageData.id.startsWith('temp-group-')) {
-            const tempMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
-            if (tempMessage) {
-                tempMessage.remove();
-            }
-        }
+        console.log('✅ Mensaje grupal confirmado por servidor:', messageData.id);
+        // Remover mensaje temporal si existe
+        updatePendingMessageStatus(messageData.id, 'sent');
     });
 }
 
@@ -638,7 +626,7 @@ function showReplyUI(messageElement) {
                           messageElement.querySelector('.media-message')?.dataset.fileName || '';
     const isOwnMessage = messageElement.classList.contains('sent');
     const senderName = messageElement.querySelector('.message-sender')?.textContent || 
-                      (isOwnMessage ? 'Tú' : (selectedUser ? selectedUser.name : 'Usuario'));
+                      (isOwnMessage ? 'Tú' : (selectedUser ? selectedUser.name : (selectedGroup ? 'Usuario' : 'Usuario')));
     
     replyingTo = {
         id: messageId,
@@ -647,7 +635,7 @@ function showReplyUI(messageElement) {
         senderName: senderName
     };
     
-    // Mostrar UI de respuesta
+    // Mostrar UI de respuesta de forma más visible
     const replyUI = document.getElementById('reply-preview');
     const replyContent = document.getElementById('reply-content');
     
@@ -656,11 +644,17 @@ function showReplyUI(messageElement) {
             messageContent.substring(0, 50) + '...' : messageContent;
         
         replyContent.innerHTML = `
-            <strong>${senderName}</strong><br>
-            ${displayContent}
+            <strong>Respondiendo a ${senderName}</strong><br>
+            <span style="color: var(--text-secondary);">${displayContent}</span>
         `;
         
         replyUI.classList.add('active');
+        
+        // Asegurar que el input esté enfocado
+        const messageInput = document.getElementById('message-input');
+        if (messageInput) {
+            messageInput.focus();
+        }
         
         // Scroll to bottom
         scrollToBottom();
@@ -675,290 +669,26 @@ function cancelReply() {
     }
 }
 
-// NUEVO: Grabación de voz MEJORADA
-async function startRecording() {
-    if (isRecording) return;
-    
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                sampleRate: 44100
-            } 
-        });
-        
-        mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus'
-        });
-        
-        audioChunks = [];
-        
-        mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                audioChunks.push(event.data);
-            }
-        };
-        
-        mediaRecorder.onstop = sendAudioMessage;
-        
-        mediaRecorder.start(100);
-        isRecording = true;
-        recordingStartTime = Date.now();
-        
-        // Cambiar a modo grabación
-        showRecordingMode();
-        
-        // Iniciar timer
-        recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
-        
-        // Timeout automático (60 segundos)
-        recordingTimeout = setTimeout(() => {
-            stopRecordingAndSend();
-        }, 60000);
-        
-    } catch (error) {
-        console.error('Error al acceder al micrófono:', error);
-        showNotification('No se pudo acceder al micrófono. Permite el acceso e intenta nuevamente.', 'error');
-    }
-}
-
-// NUEVO: Mostrar modo grabación
-function showRecordingMode() {
-    const messageInputContainer = document.querySelector('.message-input-container');
-    const voiceButton = document.getElementById('voice-button');
-    const attachButton = document.getElementById('attach-button');
-    const messageInput = document.getElementById('message-input');
-    
-    // Activar modo grabación
-    messageInputContainer.classList.add('recording-mode');
-    
-    // Cambiar icono a flecha de enviar
-    if (voiceButton) {
-        voiceButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
-        voiceButton.classList.add('recording');
-    }
-    
-    // Ocultar botón adjuntar
-    if (attachButton) {
-        attachButton.style.display = 'none';
-    }
-    
-    // Ocultar input de texto
-    if (messageInput) {
-        messageInput.style.display = 'none';
-    }
-    
-    // Mostrar UI de grabación
-    showRecordingUI();
-}
-
-// NUEVO: Ocultar modo grabación
-function hideRecordingMode() {
-    const messageInputContainer = document.querySelector('.message-input-container');
-    const voiceButton = document.getElementById('voice-button');
-    const attachButton = document.getElementById('attach-button');
-    const messageInput = document.getElementById('message-input');
-    
-    // Desactivar modo grabación
-    messageInputContainer.classList.remove('recording-mode');
-    
-    // Restaurar icono de micrófono
-    if (voiceButton) {
-        voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
-        voiceButton.classList.remove('recording');
-    }
-    
-    // Mostrar botón adjuntar
-    if (attachButton) {
-        attachButton.style.display = 'flex';
-    }
-    
-    // Mostrar input de texto
-    if (messageInput) {
-        messageInput.style.display = '';
-    }
-    
-    // Ocultar UI de grabación
-    hideRecordingUI();
-}
-
-// NUEVO: Detener grabación y enviar
-function stopRecordingAndSend() {
-    if (!isRecording || !mediaRecorder) return;
-    
-    clearTimeout(recordingTimeout);
-    clearInterval(recordingTimerInterval);
-    
-    if (mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-    }
-    
-    // Detener stream
-    if (mediaRecorder.stream) {
-        mediaRecorder.stream.getTracks().forEach(track => track.stop());
-    }
-    
-    isRecording = false;
-    hideRecordingMode();
-}
-
-// NUEVA: Función para cancelar grabación
-function cancelRecording() {
-    if (!isRecording || !mediaRecorder) return;
-    
-    console.log('🔄 Cancelando grabación...');
-    
-    // Limpiar timeouts e intervals
-    clearTimeout(recordingTimeout);
-    clearInterval(recordingTimerInterval);
-    
-    // Detener la grabación si está activa
-    if (mediaRecorder.state !== 'inactive') {
-        try {
-            mediaRecorder.stop();
-        } catch (e) {
-            console.log('Grabación ya detenida');
-        }
-    }
-    
-    // Detener todos los tracks del stream
-    if (mediaRecorder.stream) {
-        mediaRecorder.stream.getTracks().forEach(track => {
-            track.stop();
-        });
-    }
-    
-    // Resetear estados
-    isRecording = false;
-    audioChunks = [];
-    recordingStartTime = null;
-    
-    // Ocultar modo grabación
-    hideRecordingMode();
-    
-    // Mostrar notificación
-    showNotification('Grabación cancelada', 'info');
-    
-    console.log('✅ Grabación cancelada correctamente');
-}
-
-function showRecordingUI() {
-    const recordingUI = document.getElementById('recording-ui');
-    
-    // Mostrar UI de grabación
-    if (recordingUI) {
-        recordingUI.classList.add('active');
-        document.getElementById('recording-timer').textContent = '0:00';
-    }
-}
-
-function hideRecordingUI() {
-    const recordingUI = document.getElementById('recording-ui');
-    
-    // Ocultar UI de grabación
-    if (recordingUI) {
-        recordingUI.classList.remove('active');
-    }
-}
-
-function updateRecordingTimer() {
-    if (!isRecording) return;
-    
-    const timerElement = document.getElementById('recording-timer');
-    if (timerElement) {
-        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-        const minutes = Math.floor(elapsed / 60);
-        const seconds = elapsed % 60;
-        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
-}
-
-async function sendAudioMessage() {
-    if (audioChunks.length === 0) return;
-    
-    try {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const duration = Math.round((Date.now() - recordingStartTime) / 1000);
-        
-        // Subir archivo al servidor
-        const formData = new FormData();
-        formData.append('file', audioBlob, `audio_${Date.now()}.webm`);
-        
-        const response = await fetch('/api/media', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            
-            // Enviar mensaje de audio
-            const messageData = {
-                file: {
-                    url: result.fileUrl,
-                    type: 'audio/webm',
-                    name: `audio_${Date.now()}.webm`,
-                    size: result.fileSize,
-                    duration: duration
-                },
-                type: 'audio'
-            };
-            
-            if (selectedUser) {
-                socket.emit('private_message', {
-                    to: selectedUser,
-                    message: 'Mensaje de voz',
-                    from: currentUser,
-                    file: messageData.file
-                });
-            } else if (selectedGroup) {
-                socket.emit('group_message', {
-                    groupId: selectedGroup.id,
-                    message: 'Mensaje de voz',
-                    from: currentUser,
-                    file: messageData.file
-                });
-            }
-            
-            showNotification('Mensaje de voz enviado (' + duration + 's)', 'success');
-        } else {
-            throw new Error('Error subiendo audio');
-        }
-    } catch (error) {
-        console.error('Error enviando mensaje de voz:', error);
-        showNotification('Error al enviar mensaje de voz', 'error');
-    } finally {
-        // Limpiar
-        audioChunks = [];
-        recordingStartTime = null;
-    }
-}
-
-// CORREGIDA: Alternar entre micrófono y enviar
-function toggleSendVoiceButton() {
+// CORREGIDA: Mostrar siempre botón enviar
+function toggleSendButton() {
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
-    const voiceButton = document.getElementById('voice-button');
     
-    if (!messageInput || !sendButton || !voiceButton) {
-        console.error('❌ Elementos no encontrados en toggleSendVoiceButton');
+    if (!messageInput || !sendButton) {
+        console.error('❌ Elementos no encontrados en toggleSendButton');
         return;
     }
     
     const hasText = messageInput.value.trim().length > 0;
     
-    console.log(`🔄 toggleSendVoiceButton: hasText = ${hasText}`);
+    console.log(`🔄 toggleSendButton: hasText = ${hasText}`);
     
-    if (hasText) {
-        sendButton.style.display = 'flex';
-        voiceButton.style.display = 'none';
-        console.log('✅ Mostrando botón enviar');
-    } else {
-        sendButton.style.display = 'none';
-        voiceButton.style.display = 'flex';
-        console.log('✅ Mostrando botón micrófono');
-    }
+    // Siempre mostrar botón enviar, pero deshabilitarlo si no hay texto
+    sendButton.style.display = 'flex';
+    sendButton.disabled = !hasText;
+    sendButton.style.opacity = hasText ? '1' : '0.5';
+    
+    console.log('✅ Botón enviar siempre visible');
 }
 
 // NUEVO: Selector de medios MEJORADO
@@ -1017,18 +747,21 @@ async function uploadAndSendFile(file) {
                     to: selectedUser,
                     message: messageText,
                     from: currentUser,
-                    file: fileData
+                    file: fileData,
+                    replyTo: replyingTo
                 });
             } else if (selectedGroup) {
                 socket.emit('group_message', {
                     groupId: selectedGroup.id,
                     message: messageText,
                     from: currentUser,
-                    file: fileData
+                    file: fileData,
+                    replyTo: replyingTo
                 });
             }
             
             showNotification('Archivo enviado', 'success');
+            cancelReply();
         } else {
             throw new Error('Error subiendo archivo');
         }
@@ -1038,7 +771,7 @@ async function uploadAndSendFile(file) {
     }
 }
 
-// CORREGIDA: Función sendMessage completamente funcional
+// CORREGIDA: Función sendMessage completamente funcional SIN DUPLICACIÓN
 async function sendMessage() {
     console.log('🔄 sendMessage ejecutándose...');
     
@@ -1056,7 +789,7 @@ async function sendMessage() {
         
         // 2. RESETEAR LA ALTURA Y ESTADOS DEL INPUT
         messageInput.style.height = 'auto';
-        toggleSendVoiceButton();
+        toggleSendButton();
         
         console.log('✅ Input limpiado y estados reseteados');
 
@@ -1067,7 +800,8 @@ async function sendMessage() {
             id: tempId,
             message: message,
             timestamp: new Date().toISOString(),
-            from: currentUser.id
+            from: currentUser.id,
+            isPending: true // Marcar como pendiente
         };
 
         // Agregar datos de respuesta si existe
@@ -1087,6 +821,9 @@ async function sendMessage() {
             // Agregar a UI inmediatamente (mensaje temporal)
             addMessageToUI(messageData);
             
+            // Guardar en pendientes
+            pendingMessages.set(tempId, messageData);
+            
             // Enviar al servidor
             socket.emit('private_message', {
                 to: selectedUser,
@@ -1095,7 +832,7 @@ async function sendMessage() {
                 replyTo: messageData.replyTo
             });
 
-            console.log('✅ Mensaje enviado a:', selectedUser.name);
+            console.log('✅ Mensaje privado enviado a:', selectedUser.name);
 
         } else if (selectedGroup) {
             // Mensaje grupal
@@ -1105,6 +842,9 @@ async function sendMessage() {
             // Agregar a UI inmediatamente (mensaje temporal)
             addGroupMessageToUI(messageData);
             
+            // Guardar en pendientes
+            pendingMessages.set(tempId, messageData);
+            
             // Enviar al servidor
             socket.emit('group_message', {
                 groupId: selectedGroup.id,
@@ -1113,7 +853,7 @@ async function sendMessage() {
                 replyTo: messageData.replyTo
             });
 
-            console.log('✅ Mensaje enviado al grupo:', selectedGroup.name);
+            console.log('✅ Mensaje grupal enviado al grupo:', selectedGroup.name);
         } else {
             console.log('❌ No hay usuario o grupo seleccionado');
             showNotification('No hay chat seleccionado', 'error');
@@ -1131,15 +871,22 @@ async function sendMessage() {
         
         // Restaurar el mensaje en caso de error
         messageInput.value = message;
-        toggleSendVoiceButton();
+        toggleSendButton();
     }
 }
 
-function resetMessageInput() {
-    const messageInput = document.getElementById('message-input');
-    if (messageInput) {
-        messageInput.style.height = 'auto';
-        toggleSendVoiceButton();
+// NUEVA: Función para actualizar estado de mensajes pendientes
+function updatePendingMessageStatus(messageId, status) {
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageElement) {
+        if (status === 'sent') {
+            // Remover indicador de pendiente si existe
+            const pendingIndicator = messageElement.querySelector('.message-status');
+            if (pendingIndicator) {
+                pendingIndicator.remove();
+            }
+            pendingMessages.delete(messageId);
+        }
     }
 }
 
@@ -1155,7 +902,10 @@ function addMessageToUI(messageData) {
     }
 
     const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
-    if (existingMessage) return;
+    if (existingMessage) {
+        console.log('⚠️ Mensaje ya existe en UI, ignorando');
+        return;
+    }
 
     const messageDiv = document.createElement('div');
     const isSent = messageData.from === currentUser.id;
@@ -1188,12 +938,6 @@ function addMessageToUI(messageData) {
                     <img src="${messageData.file.url}" alt="Imagen" 
                          onclick="openMediaViewer('${messageData.file.url}', 'image')"
                          onload="this.classList.add('loaded')">
-                    <div class="media-overlay" id="overlay-${messageData.id}">
-                        <button class="download-media-btn" onclick="downloadMedia('${messageData.file.url}', '${messageData.file.name}')">
-                            <i class="fas fa-download"></i> Descargar
-                        </button>
-                        <div class="media-size">${formatFileSize(messageData.file.size)}</div>
-                    </div>
                     <div class="media-caption">${messageData.message.replace('Imagen', '')}</div>
                 </div>
             `;
@@ -1206,12 +950,6 @@ function addMessageToUI(messageData) {
                         <source src="${messageData.file.url}" type="${messageData.file.type}">
                         Tu navegador no soporta el elemento video.
                     </video>
-                    <div class="media-overlay" id="overlay-${messageData.id}">
-                        <button class="download-media-btn" onclick="downloadMedia('${messageData.file.url}', '${messageData.file.name}')">
-                            <i class="fas fa-download"></i> Descargar
-                        </button>
-                        <div class="media-size">${formatFileSize(messageData.file.size)}</div>
-                    </div>
                     <div class="media-caption">${messageData.message.replace('Video', '')}</div>
                 </div>
             `;
@@ -1239,9 +977,6 @@ function addMessageToUI(messageData) {
                             <div class="file-name">${messageData.file.name}</div>
                             <div class="file-size">${formatFileSize(messageData.file.size)}</div>
                         </div>
-                        <a href="${messageData.file.url}" download="${messageData.file.name}" class="download-btn">
-                            <i class="fas fa-download"></i>
-                        </a>
                     </div>
                 </div>
             `;
@@ -1252,31 +987,30 @@ function addMessageToUI(messageData) {
         contentHTML = `<div class="message-content">${cleanMessage}</div>`;
     }
 
-    // Solo mostrar mensajes de medios si no son enviados por el usuario actual
-    if (!messageData.file || !isSent) {
-        messageDiv.innerHTML = `
-            ${replyHTML}
-            ${contentHTML}
-            <div class="message-time">${time}</div>
-        `;
+    // MOSTRAR TODOS los mensajes, incluyendo medios enviados por el usuario
+    messageDiv.innerHTML = `
+        ${replyHTML}
+        ${contentHTML}
+        <div class="message-time">${time}</div>
+        ${messageData.isPending ? '<div class="message-status sending"><i class="fas fa-circle-notch fa-spin"></i></div>' : ''}
+    `;
 
-        messagesContainer.appendChild(messageDiv);
+    messagesContainer.appendChild(messageDiv);
 
-        // Animación de entrada
-        messageDiv.style.opacity = '0';
-        messageDiv.style.transform = 'translateY(20px)';
-        
-        setTimeout(() => {
-            messageDiv.style.transition = 'all 0.3s ease';
-            messageDiv.style.opacity = '1';
-            messageDiv.style.transform = 'translateY(0)';
-        }, 10);
+    // Animación de entrada
+    messageDiv.style.opacity = '0';
+    messageDiv.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+        messageDiv.style.transition = 'all 0.3s ease';
+        messageDiv.style.opacity = '1';
+        messageDiv.style.transform = 'translateY(0)';
+    }, 10);
 
-        scrollToBottom();
-    }
+    scrollToBottom();
 }
 
-// MEJORADO: Agregar mensaje grupal a UI
+// MEJORADO: Agregar mensaje grupal a UI SIN DUPLICACIÓN
 function addGroupMessageToUI(messageData) {
     const messagesContainer = document.getElementById('messages-container');
     if (!messagesContainer) return;
@@ -1286,8 +1020,12 @@ function addGroupMessageToUI(messageData) {
         emptyState.remove();
     }
 
+    // Verificar si el mensaje ya existe
     const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
-    if (existingMessage) return;
+    if (existingMessage) {
+        console.log('⚠️ Mensaje grupal ya existe en UI, ignorando');
+        return;
+    }
 
     const messageDiv = document.createElement('div');
 
@@ -1324,12 +1062,6 @@ function addGroupMessageToUI(messageData) {
                     <img src="${messageData.file.url}" alt="Imagen" 
                          onclick="openMediaViewer('${messageData.file.url}', 'image')"
                          onload="this.classList.add('loaded')">
-                    <div class="media-overlay" id="overlay-${messageData.id}">
-                        <button class="download-media-btn" onclick="downloadMedia('${messageData.file.url}', '${messageData.file.name}')">
-                            <i class="fas fa-download"></i> Descargar
-                        </button>
-                        <div class="media-size">${formatFileSize(messageData.file.size)}</div>
-                    </div>
                     <div class="media-caption">${messageData.message.replace('Imagen', '')}</div>
                 </div>
             `;
@@ -1342,12 +1074,6 @@ function addGroupMessageToUI(messageData) {
                         <source src="${messageData.file.url}" type="${messageData.file.type}">
                         Tu navegador no soporta el elemento video.
                     </video>
-                    <div class="media-overlay" id="overlay-${messageData.id}">
-                        <button class="download-media-btn" onclick="downloadMedia('${messageData.file.url}', '${messageData.file.name}')">
-                            <i class="fas fa-download"></i> Descargar
-                        </button>
-                        <div class="media-size">${formatFileSize(messageData.file.size)}</div>
-                    </div>
                     <div class="media-caption">${messageData.message.replace('Video', '')}</div>
                 </div>
             `;
@@ -1375,9 +1101,6 @@ function addGroupMessageToUI(messageData) {
                             <div class="file-name">${messageData.file.name}</div>
                             <div class="file-size">${formatFileSize(messageData.file.size)}</div>
                         </div>
-                        <a href="${messageData.file.url}" download="${messageData.file.name}" class="download-btn">
-                            <i class="fas fa-download"></i>
-                        </a>
                     </div>
                 </div>
             `;
@@ -1388,39 +1111,28 @@ function addGroupMessageToUI(messageData) {
         contentHTML = `<div class="message-content">${cleanMessage}</div>`;
     }
 
-    // Solo mostrar mensajes de medios si no son enviados por el usuario actual
-    if (!messageData.file || !isSent) {
-        messageDiv.innerHTML = `
-            ${!isSent ? `<div class="message-sender">${senderName}</div>` : ''}
-            ${replyHTML}
-            ${contentHTML}
-            <div class="message-time">${time}</div>
-        `;
+    // MOSTRAR TODOS los mensajes grupales, incluyendo medios enviados por el usuario
+    messageDiv.innerHTML = `
+        ${!isSent ? `<div class="message-sender">${senderName}</div>` : ''}
+        ${replyHTML}
+        ${contentHTML}
+        <div class="message-time">${time}</div>
+        ${messageData.isPending ? '<div class="message-status sending"><i class="fas fa-circle-notch fa-spin"></i></div>' : ''}
+    `;
 
-        messagesContainer.appendChild(messageDiv);
+    messagesContainer.appendChild(messageDiv);
 
-        // Animación de entrada
-        messageDiv.style.opacity = '0';
-        messageDiv.style.transform = 'translateY(20px)';
-        
-        setTimeout(() => {
-            messageDiv.style.transition = 'all 0.3s ease';
-            messageDiv.style.opacity = '1';
-            messageDiv.style.transform = 'translateY(0)';
-        }, 10);
+    // Animación de entrada
+    messageDiv.style.opacity = '0';
+    messageDiv.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+        messageDiv.style.transition = 'all 0.3s ease';
+        messageDiv.style.opacity = '1';
+        messageDiv.style.transform = 'translateY(0)';
+    }, 10);
 
-        scrollToBottom();
-    }
-}
-
-// NUEVA: Función para descargar medios
-function downloadMedia(url, filename) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    scrollToBottom();
 }
 
 // NUEVO: Funciones para manejar archivos multimedia
@@ -1684,10 +1396,13 @@ async function loadUsers() {
                 `;
 
                 groupItem.addEventListener('click', (e) => {
-                    groupItem.style.transform = 'scale(0.98)';
+                    // Prevenir múltiples clics rápidos
+                    if (groupItem.classList.contains('clicked')) return;
+                    groupItem.classList.add('clicked');
+                    
                     setTimeout(() => {
-                        groupItem.style.transform = '';
-                    }, 150);
+                        groupItem.classList.remove('clicked');
+                    }, 500);
 
                     if (!isMember) {
                         showJoinGroupModal(group);
@@ -1723,10 +1438,14 @@ async function loadUsers() {
                 `;
 
                 userItem.addEventListener('click', (e) => {
-                    userItem.style.transform = 'scale(0.98)';
+                    // Prevenir múltiples clics rápidos
+                    if (userItem.classList.contains('clicked')) return;
+                    userItem.classList.add('clicked');
+                    
                     setTimeout(() => {
-                        userItem.style.transform = '';
-                    }, 150);
+                        userItem.classList.remove('clicked');
+                    }, 500);
+                    
                     startChat(user.id);
                 });
 
@@ -1857,7 +1576,17 @@ function renderActiveChats() {
                     ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.user.id}">${unreadCount}</div>` : ''}
                 `;
 
-                chatItem.addEventListener('click', () => openChat(chat.user.id));
+                chatItem.addEventListener('click', () => {
+                    // Prevenir múltiples clics rápidos
+                    if (chatItem.classList.contains('clicked')) return;
+                    chatItem.classList.add('clicked');
+                    
+                    setTimeout(() => {
+                        chatItem.classList.remove('clicked');
+                    }, 500);
+                    
+                    openChat(chat.user.id);
+                });
 
                 const avatarElement = chatItem.querySelector('.chat-avatar');
                 if (avatarElement) {
@@ -1887,7 +1616,17 @@ function renderActiveChats() {
                     ${unreadCount > 0 ? `<div class="unread-badge" id="chat-unread-${chat.group.id}">${unreadCount}</div>` : ''}
                 `;
 
-                chatItem.addEventListener('click', () => openGroupChat(chat.group.id));
+                chatItem.addEventListener('click', () => {
+                    // Prevenir múltiples clics rápidos
+                    if (chatItem.classList.contains('clicked')) return;
+                    chatItem.classList.add('clicked');
+                    
+                    setTimeout(() => {
+                        chatItem.classList.remove('clicked');
+                    }, 500);
+                    
+                    openGroupChat(chat.group.id);
+                });
 
                 const avatarElement = chatItem.querySelector('.chat-avatar');
                 if (avatarElement) {
@@ -1950,7 +1689,7 @@ function openChat(userId) {
     updateUnreadBadge(user.id, 0);
 
     // Inicializar botones
-    setTimeout(toggleSendVoiceButton, 100);
+    setTimeout(toggleSendButton, 100);
 }
 
 // MEJORADO: Abrir chat de grupo sin auto-focus
@@ -1988,7 +1727,7 @@ function openGroupChat(groupId) {
     updateUnreadBadge(group.id, 0);
 
     // Inicializar botones
-    setTimeout(toggleSendVoiceButton, 100);
+    setTimeout(toggleSendButton, 100);
 }
 
 // CORREGIDO: Función para manejar botones de retroceso
@@ -2275,13 +2014,36 @@ function updateChatsTypingStatus() {
     const chatItems = document.querySelectorAll('.chat-item');
     chatItems.forEach(chatItem => {
         const userId = chatItem.dataset.userId;
+        const groupId = chatItem.dataset.groupId;
         const lastMessageElement = chatItem.querySelector('.chat-last-message');
         
         if (userId && lastMessageElement && typingUsers.has(userId)) {
             lastMessageElement.textContent = 'escribiendo...';
             lastMessageElement.classList.add('typing');
+        } else if (groupId && lastMessageElement) {
+            // Para grupos, verificar si hay alguien escribiendo
+            const isAnyoneTyping = Array.from(groupTypingUsers.keys()).some(typingUserId => {
+                return typingUserId !== currentUser.id;
+            });
+            
+            if (isAnyoneTyping) {
+                lastMessageElement.textContent = 'escribiendo...';
+                lastMessageElement.classList.add('typing');
+            } else {
+                const chat = activeChats.find(c => 
+                    (c.group && c.group.id === groupId) || 
+                    (c.user && c.user.id === userId)
+                );
+                if (chat) {
+                    lastMessageElement.textContent = chat.lastMessage || 'Haz clic para chatear';
+                    lastMessageElement.classList.remove('typing');
+                }
+            }
         } else if (lastMessageElement) {
-            const chat = activeChats.find(c => c.user && c.user.id === userId);
+            const chat = activeChats.find(c => 
+                (c.user && c.user.id === userId) || 
+                (c.group && c.group.id === groupId)
+            );
             if (chat) {
                 lastMessageElement.textContent = chat.lastMessage || 'Haz clic para chatear';
                 lastMessageElement.classList.remove('typing');
@@ -3332,25 +3094,42 @@ function handleTyping() {
     }
 }
 
-// MEJORADO: Manejar nuevos mensajes
+// MEJORADO: Manejar nuevos mensajes SIN DUPLICACIÓN
 function handleNewMessage(messageData) {
-    addMessageToUI(messageData);
+    console.log('📨 Procesando nuevo mensaje privado:', messageData.id);
     
-    // Marcar como leído
-    socket.emit('mark_as_read', {
-        userId: currentUser.id,
-        otherUserId: messageData.from
-    });
+    // Verificar si ya existe
+    const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
+    if (!existingMessage) {
+        addMessageToUI(messageData);
+        
+        // Marcar como leído
+        socket.emit('mark_as_read', {
+            userId: currentUser.id,
+            otherUserId: messageData.from
+        });
+    } else {
+        console.log('⚠️ Mensaje privado ya existe, ignorando');
+    }
 }
 
+// CORREGIDA: Manejar nuevos mensajes grupales SIN DUPLICACIÓN
 function handleNewGroupMessage(messageData) {
-    addGroupMessageToUI(messageData);
+    console.log('📨 Procesando nuevo mensaje grupal:', messageData.id);
     
-    // Marcar como leído
-    socket.emit('mark_group_as_read', {
-        userId: currentUser.id,
-        groupId: messageData.groupId
-    });
+    // Verificar si ya existe
+    const existingMessage = document.querySelector(`[data-message-id="${messageData.id}"]`);
+    if (!existingMessage) {
+        addGroupMessageToUI(messageData);
+        
+        // Marcar como leído
+        socket.emit('mark_group_as_read', {
+            userId: currentUser.id,
+            groupId: messageData.groupId
+        });
+    } else {
+        console.log('⚠️ Mensaje grupal ya existe, ignorando');
+    }
 }
 
 // Limpiar cache cada 24 horas
