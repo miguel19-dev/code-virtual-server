@@ -5,3 +5,5 @@ gunicorn
 aiohttp
 yt-dlp
 python-telegram-bot
+telethon
+python-dotenv
